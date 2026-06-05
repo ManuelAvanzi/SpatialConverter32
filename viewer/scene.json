@@ -1,0 +1,609 @@
+{
+  "meta": {
+    "convertedAt": "2026-06-05T18:39:03.191Z",
+    "source": "SpatialCreativeToolkit/Unity"
+  },
+  "interactables": [
+    {
+      "id": "54227528",
+      "name": "Interactable-materiali in movimento",
+      "position": {
+        "x": -8.349,
+        "y": 1,
+        "z": 17.22
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio caduta materiali",
+      "interactiveRadius": 7.6388016,
+      "visibilityRadius": 8.76881,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "fallingObj",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "71381987",
+      "name": "Interactable-scivolamento",
+      "position": {
+        "x": -8.66,
+        "y": 1.112,
+        "z": 28.99
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio di scivolamento",
+      "interactiveRadius": 3.745308,
+      "visibilityRadius": 3.8766484,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "slipping",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "89108653",
+      "name": "Interactable - provvedimenti rischio rumore",
+      "position": {
+        "x": 5.98,
+        "y": 1.514,
+        "z": 5.41
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Applica misure preventive",
+      "interactiveRadius": 3.5276341,
+      "visibilityRadius": 3.5276341,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onExit": []
+    },
+    {
+      "id": "260529785",
+      "name": "Interactable-materiali in movimento (1)",
+      "position": {
+        "x": -8.349,
+        "y": 1,
+        "z": 19.42
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Mantovana parasassi",
+      "interactiveRadius": 7.6388016,
+      "visibilityRadius": 8.76881,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "306456822",
+      "name": "Interactable-parapetti3",
+      "position": {
+        "x": -42.03,
+        "y": 7.44,
+        "z": 17.87
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Aggiungi parapetti",
+      "interactiveRadius": 6.7738447,
+      "visibilityRadius": 7.3093843,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "522420458",
+      "name": "Interactable-lavori in quota2",
+      "position": {
+        "x": -17.4,
+        "y": 20.944,
+        "z": 33.48
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio di caduta dal alto",
+      "interactiveRadius": 1.3457298,
+      "visibilityRadius": 1.666462,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "Anim02",
+          "boolArg": false
+        },
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "829454493",
+      "name": "Interactable-crollo ponteggio",
+      "position": {
+        "x": 3.23,
+        "y": 0.8,
+        "z": 38.62
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio di crollo",
+      "interactiveRadius": 8.330156,
+      "visibilityRadius": 8.330156,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "Crollo",
+          "boolArg": false
+        },
+        {
+          "method": "Play",
+          "stringArg": "falling",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "970394826",
+      "name": "Rischio da scarica elettrica",
+      "position": {
+        "x": -8.59,
+        "y": 0.626,
+        "z": 54.23
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Interact",
+      "interactiveRadius": 5.07388,
+      "visibilityRadius": 5.44617,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "Electric",
+          "boolArg": false
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "975353591",
+      "name": "Interactable-lavori in quota",
+      "position": {
+        "x": -44.21,
+        "y": 13.84,
+        "z": 36.75
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio di lavori in quota",
+      "interactiveRadius": 5,
+      "visibilityRadius": 6.0532303,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "1014545327",
+      "name": "Aggiungi parapetti",
+      "position": {
+        "x": -43.45,
+        "y": 7.42,
+        "z": 37.46
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Aggiungi parapetti",
+      "interactiveRadius": 6.7738447,
+      "visibilityRadius": 7.3093843,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "1244152541",
+      "name": "Interactable - parapetti",
+      "position": {
+        "x": -29.713,
+        "y": 7.249,
+        "z": 16.72
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Aggiungi parapetti",
+      "interactiveRadius": 2.2676945,
+      "visibilityRadius": 2.408884,
+      "onInteract": [
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "Play",
+          "stringArg": "New State-hammering",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "1256969358",
+      "name": "Interactable- macchinari in movimento",
+      "position": {
+        "x": 0.45,
+        "y": 1.126,
+        "z": 6.263
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio macchinari in movimento",
+      "interactiveRadius": 5.807295,
+      "visibilityRadius": 6.0472856,
+      "onInteract": [
+        {
+          "method": "Play",
+          "stringArg": "macchinariInMov",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "1291108341",
+      "name": "Interactable-caduta dal alto",
+      "position": {
+        "x": -46.1,
+        "y": 14.117,
+        "z": 35.48
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Rischio di lavori in quota",
+      "interactiveRadius": 8.342449,
+      "visibilityRadius": 8.562092,
+      "onInteract": [
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "Play",
+          "stringArg": "scala",
+          "boolArg": false
+        },
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "set_isKinematic",
+          "stringArg": "",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    },
+    {
+      "id": "1616947412",
+      "name": "Interactable-Avatar",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Personale autorizzato",
+      "interactiveRadius": 4.8935704,
+      "visibilityRadius": 4.8935704,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": false
+        },
+        {
+          "method": "Play",
+          "stringArg": "DoorOpen",
+          "boolArg": false
+        }
+      ],
+      "onEnter": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onExit": []
+    },
+    {
+      "id": "1776354731",
+      "name": "Interactable-parapetti2",
+      "position": {
+        "x": -42.664,
+        "y": 4.42,
+        "z": 20.11
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "interactText": "Aggiungi parapetti",
+      "interactiveRadius": 6.7738447,
+      "visibilityRadius": 7.3093843,
+      "onInteract": [
+        {
+          "method": "SetActive",
+          "stringArg": "",
+          "boolArg": true
+        }
+      ],
+      "onEnter": [],
+      "onExit": []
+    }
+  ],
+  "teleports": [],
+  "quests": [
+    {
+      "id": "417932008",
+      "name": "Button-logo quest",
+      "goName": "Button-logo quest"
+    },
+    {
+      "id": "594711118",
+      "name": "Ispezione di sicurezza",
+      "goName": "Quest-Ispezione di sicurezza"
+    },
+    {
+      "id": "718986032",
+      "name": "Button-Checklist (1)",
+      "goName": "Button-Checklist (1)"
+    },
+    {
+      "id": "1735639205",
+      "name": "Button-Checklist",
+      "goName": "Button-Checklist"
+    },
+    {
+      "id": "2097350288",
+      "name": "Button-logo quest",
+      "goName": "Button-logo quest"
+    }
+  ],
+  "models": [
+    {
+      "guid": "e68f8701c86a2d34c8359aae8ece7654",
+      "originalPath": "Assets/Examples/Space_SpatialIsland/Scenes/Construction Worker Motions Pack 1 - Copia/Res/Animation_FBX/Spanner_02_FINAL2.FBX",
+      "fileName": "Spanner_02_FINAL2.FBX",
+      "localPath": "models\\Spanner_02_FINAL2.FBX"
+    },
+    {
+      "guid": "5b68cf6a61d89c349a292306f5c8eebc",
+      "originalPath": "Assets/Examples/Space_SpatialIsland/Scenes/Under_Construction_Scene/construction_scene.fbx",
+      "fileName": "construction_scene.fbx",
+      "localPath": "models\\construction_scene.fbx"
+    }
+  ],
+  "animations": [
+    {
+      "clip": "fallingObj",
+      "triggeredBy": "Rischio caduta materiali"
+    },
+    {
+      "clip": "slipping",
+      "triggeredBy": "Rischio di scivolamento"
+    },
+    {
+      "clip": "Anim02",
+      "triggeredBy": "Rischio di caduta dal alto"
+    },
+    {
+      "clip": "Crollo",
+      "triggeredBy": "Rischio di crollo"
+    },
+    {
+      "clip": "falling",
+      "triggeredBy": "Rischio di crollo"
+    },
+    {
+      "clip": "Electric",
+      "triggeredBy": "Interact"
+    },
+    {
+      "clip": "New State-hammering",
+      "triggeredBy": "Aggiungi parapetti"
+    },
+    {
+      "clip": "macchinariInMov",
+      "triggeredBy": "Rischio macchinari in movimento"
+    },
+    {
+      "clip": "scala",
+      "triggeredBy": "Rischio di lavori in quota"
+    },
+    {
+      "clip": "DoorOpen",
+      "triggeredBy": "Personale autorizzato"
+    }
+  ]
+}

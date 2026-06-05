@@ -1,0 +1,41 @@
+{
+  "glb": "models/environment.glb",
+  "sizeMB": 100.1,
+  "pieces": [
+    {
+      "name": "Sawing_03_FINAL2",
+      "file": "Sawing_03_FINAL2.fbx",
+      "objects": 53
+    },
+    {
+      "name": "Spade_01_FINAL2",
+      "file": "Spade_01_FINAL2.fbx",
+      "objects": 50
+    },
+    {
+      "name": "Spade_02_FINAL2",
+      "file": "Spade_02_FINAL2.fbx",
+      "objects": 50
+    },
+    {
+      "name": "TERRITORIO",
+      "file": "TERRITORIO.fbx",
+      "objects": 730
+    },
+    {
+      "name": "Untitled",
+      "file": "Untitled.fbx",
+      "objects": 319
+    },
+    {
+      "name": "construction_scene",
+      "file": "construction_scene.fbx",
+      "objects": 129
+    },
+    {
+      "name": "rischio da macchinari in movimento",
+      "file": "rischio da macchinari in movimento.fbx",
+      "objects": 116
+    }
+  ]
+}

@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spatial Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+    canvas { display: block; cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+
+    /* HUD caricamento */
+    #loader {
+      position: fixed; inset: 0; background: #0d0d1a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 100; color: #fff;
+    }
+    #loader h1 { font-size: 1.4rem; margin-bottom: 1.5rem; opacity: .8; }
+    #progress-bar { width: 320px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+    #progress-fill { height: 100%; background: #4a9eff; width: 0%; transition: width .2s; }
+    #progress-label { margin-top: .6rem; font-size: .85rem; opacity: .5; }
+
+    /* Mirino centrale */
+    #crosshair {
+      position: fixed; top: 50%; left: 50%;
+      width: 20px; height: 20px;
+      transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 10;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: rgba(255,255,255,.7);
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+    /* Pannello interactable */
+    #interact-panel {
+      position: fixed; bottom: 100px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(0,0,0,.75); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 12px; padding: 14px 24px;
+      color: #fff; text-align: center;
+      opacity: 0; transition: all .25s ease;
+      pointer-events: none; z-index: 20;
+      max-width: 400px;
+    }
+    #interact-panel.visible {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+    #interact-panel .icon {
+      font-size: 1.6rem; margin-bottom: 6px;
+    }
+    #interact-panel .label {
+      font-size: 1rem; font-weight: 600; margin-bottom: 4px;
+    }
+    #interact-panel .hint {
+      font-size: .75rem; opacity: .5;
+    }
+
+    /* Notifica azione */
+    #notification {
+      position: fixed; top: 30px; left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(74,158,255,.9); color: #fff;
+      border-radius: 8px; padding: 10px 20px;
+      font-size: .9rem; opacity: 0;
+      transition: all .3s ease; z-index: 30;
+      pointer-events: none;
+    }
+    #notification.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+
+    /* HUD Quest */
+    #quest-panel {
+      position: fixed; top: 20px; right: 20px;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 10px; padding: 12px 16px;
+      color: #fff; min-width: 200px; z-index: 20;
+      display: none;
+    }
+    #quest-panel h3 { font-size: .8rem; opacity: .5; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+    #quest-title { font-size: .95rem; font-weight: 600; margin-bottom: 8px; }
+    #quest-progress { font-size: .8rem; opacity: .7; }
+    #quest-bar { height: 4px; background: #333; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+    #quest-fill { height: 100%; background: #4a9eff; transition: width .4s; }
+
+    /* Teleport list */
+    #teleport-panel {
+      position: fixed; bottom: 20px; left: 20px;
+      display: flex; flex-direction: column; gap: 8px; z-index: 20;
+    }
+    .tp-btn {
+      background: rgba(0,0,0,.65); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.15);
+      color: #fff; padding: 8px 14px; border-radius: 8px;
+      cursor: pointer; font-size: .8rem;
+      transition: background .2s;
+    }
+    .tp-btn:hover { background: rgba(74,158,255,.4); }
+
+    /* Istruzioni */
+    #instructions {
+      position: fixed; bottom: 20px; right: 20px;
+      color: rgba(255,255,255,.35); font-size: .72rem;
+      line-height: 1.7; text-align: right; z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Pulsante VR */
+    #vr-btn {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(74,158,255,.85); color: #fff;
+      border: none; border-radius: 10px; padding: 10px 24px;
+      font-size: .9rem; cursor: pointer; z-index: 20;
+      display: none;
+    }
+    #vr-btn:hover { background: #4a9eff; }
+
+    /* Toolbar in basso a sinistra */
+    #toolbar {
+      position: fixed; bottom: 20px; left: 20px;
+      display: flex; flex-direction: column; gap: 8px; z-index: 20;
+    }
+    .tool-btn {
+      background: rgba(0,0,0,.65); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.15); color: #fff;
+      padding: 9px 14px; border-radius: 8px; cursor: pointer;
+      font-size: .82rem; display: flex; align-items: center; gap: 8px;
+      transition: background .2s; white-space: nowrap;
+    }
+    .tool-btn:hover { background: rgba(74,158,255,.35); }
+    .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
+
+    /* Pannello modelli */
+    #models-panel {
+      position: fixed; top: 20px; left: 20px;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+      padding: 12px 16px; color: #fff; z-index: 20;
+      min-width: 220px; display: none;
+    }
+    #models-panel h3 { font-size: .75rem; opacity: .5; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 10px; }
+    .model-item { display: flex; align-items: center; gap: 8px;
+      font-size: .82rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .model-item:last-child { border-bottom: none; }
+    .model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .model-info { opacity: .55; font-size: .72rem; margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<!-- Loader -->
+<div id="loader">
+  <h1 id="loader-title">Caricamento ambiente...</h1>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="progress-label">Inizializzazione...</div>
+</div>
+
+<!-- UI -->
+<div id="crosshair"></div>
+<div id="interact-panel">
+  <div class="icon">☝️</div>
+  <div class="label" id="interact-label"></div>
+  <div class="hint">Clicca per interagire</div>
+</div>
+<div id="notification"></div>
+<div id="quest-panel">
+  <h3>Missione attiva</h3>
+  <div id="quest-title"></div>
+  <div id="quest-progress"></div>
+  <div id="quest-bar"><div id="quest-fill" style="width:0%"></div></div>
+</div>
+<div id="teleport-panel"></div>
+
+<!-- Pannello modelli -->
+<div id="models-panel">
+  <h3>Modelli caricati</h3>
+  <div id="models-list"></div>
+</div>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <button class="tool-btn" id="btn-overhead" title="Vista dall'alto">🗺️ Vista aerea</button>
+  <button class="tool-btn" id="btn-models"   title="Modelli caricati">📦 Modelli</button>
+</div>
+<div id="instructions">
+  WASD · Muoviti<br>
+  Tieni premuto + trascina · Ruota vista<br>
+  Click su 🖐 · Interagisci
+</div>
+<button id="vr-btn">🥽 Entra in VR</button>
+
+<!-- Three.js via CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+// ─── Stato globale ─────────────────────────────────────────────────────────
+let scene, camera, renderer;
+let sceneData = null;
+let interactableMeshes = [];
+let animationMixers = [];
+let clock = new THREE.Clock();
+let questCompleted = new Set();
+
+// ─── Modalità camera ──────────────────────────────────────────────────────
+let cameraMode = 'fps';   // 'fps' | 'overhead'
+let orbitControls = null;
+const fpsCameraState = { pos: new THREE.Vector3(), yaw: 0, pitch: 0 };
+const loadedModels = [];
+const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee'];
+let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
+
+// ─── Navigazione drag-to-look ──────────────────────────────────────────────
+let isDragging = false;
+let dragMoved = false;          // distingue drag da click
+let dragPrev = { x: 0, y: 0 };
+let cameraYaw = 0;              // rotazione orizzontale (Y)
+let cameraPitch = -0.1;         // rotazione verticale (X)
+const LOOK_SPEED = 0.003;
+const MOVE_SPEED = 8;
+const keys = {};
+const moveDir = new THREE.Vector3();
+// Vettori di direzione calcolati dal yaw
+const fwdVec  = new THREE.Vector3();
+const rightVec = new THREE.Vector3();
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+  camera.position.set(0, 1.7, 0);
+
+  // Luce ambiente
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(10, 20, 10);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  dirLight.shadow.camera.far = 200;
+  scene.add(dirLight);
+
+  // Posiziona camera direttamente nella scena
+  camera.rotation.order = 'YXZ'; // importante: yaw poi pitch
+  scene.add(camera);
+
+  // ── Drag-to-look ──────────────────────────────────────────────────────────
+  const canvas = renderer.domElement;
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    dragMoved  = false;
+    dragPrev   = { x: e.clientX, y: e.clientY };
+    canvas.classList.add('dragging');
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragPrev.x;
+    const dy = e.clientY - dragPrev.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragMoved = true;
+    dragPrev = { x: e.clientX, y: e.clientY };
+
+    cameraYaw   -= dx * LOOK_SPEED;
+    cameraPitch -= dy * LOOK_SPEED;
+    cameraPitch  = Math.max(-1.4, Math.min(1.4, cameraPitch));
+
+    camera.rotation.y = cameraYaw;
+    camera.rotation.x = cameraPitch;
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (e.button !== 0) return;
+    canvas.classList.remove('dragging');
+    // Se il mouse non si è mosso = click → interagisci
+    if (!dragMoved) onInteract();
+    isDragging = false;
+  });
+
+  // Touch per mobile/visore
+  canvas.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    isDragging = true; dragMoved = false;
+    dragPrev = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - dragPrev.x;
+    const dy = t.clientY - dragPrev.y;
+    dragMoved = true;
+    dragPrev = { x: t.clientX, y: t.clientY };
+    cameraYaw   -= dx * LOOK_SPEED;
+    cameraPitch -= dy * LOOK_SPEED;
+    cameraPitch  = Math.max(-1.4, Math.min(1.4, cameraPitch));
+    camera.rotation.y = cameraYaw;
+    camera.rotation.x = cameraPitch;
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', () => {
+    if (!dragMoved) onInteract();
+    isDragging = false;
+  });
+
+  // Movimento tastiera
+  document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    document.getElementById('instructions').style.display = 'none';
+  });
+  document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  // Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // WebXR VR
+  await setupVR();
+
+  // ── Pulsante Vista Aerea ─────────────────────────────────────────────────
+  document.getElementById('btn-overhead').addEventListener('click', toggleOverhead);
+
+  // ── Pulsante Modelli ─────────────────────────────────────────────────────
+  document.getElementById('btn-models').addEventListener('click', () => {
+    const panel = document.getElementById('models-panel');
+    const isVisible = panel.style.display === 'block';
+    panel.style.display = isVisible ? 'none' : 'block';
+    document.getElementById('btn-models').classList.toggle('active', !isVisible);
+  });
+
+  // Carica scena
+  await loadScene();
+
+  // Avvia render loop
+  renderer.setAnimationLoop(animate);
+}
+
+// ─── WebXR ────────────────────────────────────────────────────────────────
+async function setupVR() {
+  if (!('xr' in navigator)) return;
+  const supported = await navigator.xr?.isSessionSupported?.('immersive-vr').catch(() => false);
+  if (!supported) return;
+
+  const vrBtn = document.getElementById('vr-btn');
+  vrBtn.style.display = 'block';
+
+  // Usa il VRButton ufficiale di Three.js come fallback,
+  // ma noi gestiamo il click manualmente per più controllo
+  vrBtn.addEventListener('click', async () => {
+    if (renderer.xr.isPresenting) {
+      await renderer.xr.getSession()?.end();
+    } else {
+      const session = await navigator.xr.requestSession('immersive-vr', {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+      });
+      renderer.xr.setSession(session);
+      vrBtn.textContent = '❌ Esci da VR';
+      session.addEventListener('end', () => { vrBtn.textContent = '🥽 Entra in VR'; });
+    }
+  });
+
+  // Controller VR per interazione
+  const controllerFactory = new XRControllerModelFactory();
+  for (let i = 0; i < 2; i++) {
+    const controller = renderer.xr.getController(i);
+    controller.addEventListener('selectstart', onVRInteract);
+    scene.add(controller);
+
+    const controllerGrip = renderer.xr.getControllerGrip(i);
+    controllerGrip.add(controllerFactory.createControllerModel(controllerGrip));
+    scene.add(controllerGrip);
+
+    // Ray pointer
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)
+    ]);
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x4a9eff, opacity: 0.6, transparent: true }));
+    controller.add(line);
+  }
+}
+
+// ─── Caricamento scena ────────────────────────────────────────────────────
+async function loadScene() {
+  setProgress(5, 'Lettura dati scena...');
+
+  // Carica scene.json
+  try {
+    const res = await fetch('./scene.json');
+    sceneData = await res.json();
+  } catch (e) {
+    console.warn('scene.json non trovato, uso dati demo');
+    sceneData = getDemoScene();
+  }
+
+  updateQuestUI();
+
+  // Carica modello — prova GLB cache → GLB file → FBX auto-conversione
+  const loaded = await loadModel();
+  if (!loaded) {
+    console.warn('Nessun modello caricato — creo ambiente placeholder');
+    createPlaceholderEnvironment();
+  }
+
+  setProgress(85, 'Posizionamento interactable...');
+  placeInteractables();
+
+  setProgress(95, 'Posizionamento teleport...');
+  placeTeleports();
+
+  // Aggiorna bounding box e pannello modelli
+  updateSceneBoundingBox();
+  await loadManifestAndUpdatePanel();
+
+  setProgress(100, 'Pronto!');
+  setTimeout(() => {
+    document.getElementById('loader').style.opacity = '0';
+    document.getElementById('loader').style.transition = 'opacity .5s';
+    setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+  }, 400);
+}
+
+function loadGLTF(loader, url, onProgress) {
+  return new Promise((resolve, reject) => {
+    loader.load(url, resolve, e => onProgress(e.loaded / e.total), reject);
+  });
+}
+
+// ─── Cache IndexedDB ───────────────────────────────────────────────────────
+const IDB_NAME = 'spat-model-cache', IDB_STORE = 'glb';
+
+function idbGet(key) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => {
+      const tx = e.target.result.transaction(IDB_STORE, 'readonly');
+      const r  = tx.objectStore(IDB_STORE).get(key);
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function idbSet(key, value) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => {
+      const tx = e.target.result.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => res();
+      tx.onerror    = () => rej(tx.error);
+    };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ─── Carica modello (GLB cache → GLB file → FBX auto) ────────────────────
+async function loadModel() {
+  const gltfLoader = new GLTFLoader();
+
+  // 1. Prova dalla cache IndexedDB (conversione FBX precedente)
+  setProgress(15, 'Controllo cache locale...');
+  try {
+    const cached = await idbGet('environment.glb');
+    if (cached) {
+      setProgress(20, 'Caricamento da cache...');
+      const url = URL.createObjectURL(new Blob([cached], { type: 'model/gltf-binary' }));
+      const gltf = await loadGLTF(gltfLoader, url, p => setProgress(20 + p * 60, `Cache: ${Math.round(p*100)}%`));
+      URL.revokeObjectURL(url);
+      addModelToScene(gltf);
+      setProgress(82, 'Modello caricato dalla cache ✓');
+      return true;
+    }
+  } catch(e) { console.warn('Cache miss:', e.message); }
+
+  // 2. Prova GLB già convertiti
+  const glbCandidates = ['models/environment.glb', 'models/construction_scene.glb'];
+  for (const path of glbCandidates) {
+    try {
+      setProgress(20, `Provo ${path}...`);
+      const gltf = await loadGLTF(gltfLoader, path, p => setProgress(20 + p * 60, `GLB: ${Math.round(p*100)}%`));
+      addModelToScene(gltf);
+      return true;
+    } catch(e) { /* non trovato, continua */ }
+  }
+
+  // 3. Carica FBX direttamente (con auto-conversione e cache)
+  const fbxCandidates = sceneData?.models?.map(m => m.localPath?.replace(/\\/g, '/')) || [];
+  // Aggiungi fallback noti
+  fbxCandidates.push('models/construction_scene.fbx', 'models/landscape.fbx');
+  const fbxUnique = [...new Set(fbxCandidates.filter(Boolean))];
+
+  for (const fbxPath of fbxUnique) {
+    try {
+      setProgress(20, `Caricamento FBX: ${fbxPath}...`);
+      const fbxLoader = new FBXLoader();
+      const object = await new Promise((resolve, reject) => {
+        fbxLoader.load(
+          fbxPath,
+          resolve,
+          e => { if (e.total) setProgress(20 + (e.loaded/e.total) * 40, `FBX: ${Math.round(e.loaded/e.total*100)}%`); },
+          reject
+        );
+      });
+
+      setProgress(62, 'FBX caricato — conversione in GLB...');
+      addFBXToScene(object);
+
+      // Converti e salva in cache in background (non blocca il rendering)
+      convertAndCache(object).catch(e => console.warn('Cache write fallita:', e.message));
+
+      return true;
+    } catch(e) {
+      console.log(`${fbxPath} non caricato:`, e.message);
+    }
+  }
+
+  return false;
+}
+
+function addModelToScene(gltf, label) {
+  scene.add(gltf.scene);
+  let meshCount = 0;
+  gltf.scene.traverse(child => {
+    if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; meshCount++; }
+  });
+  if (gltf.animations.length > 0) {
+    const mixer = new THREE.AnimationMixer(gltf.scene);
+    animationMixers.push({ mixer, clips: gltf.animations });
+    gltf.animations.forEach(clip => mixer.clipAction(clip).play());
+  }
+  registerModel(label || 'environment.glb', meshCount, gltf.animations.length);
+}
+
+function addFBXToScene(object, label) {
+  scene.add(object);
+  let meshCount = 0;
+  object.traverse(child => {
+    if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; meshCount++; }
+  });
+  if (object.animations?.length > 0) {
+    const mixer = new THREE.AnimationMixer(object);
+    animationMixers.push({ mixer, clips: object.animations });
+    object.animations.forEach(clip => mixer.clipAction(clip).play());
+  }
+  registerModel(label || 'fbx', meshCount, object.animations?.length || 0);
+}
+
+function registerModel(name, meshCount, animCount) {
+  const color = MODEL_COLORS[loadedModels.length % MODEL_COLORS.length];
+  loadedModels.push({ name, meshCount, animCount, color });
+  // Non aggiornare subito — il manifest sovrascriverà
+}
+
+async function loadManifestAndUpdatePanel() {
+  const list = document.getElementById('models-list');
+  list.innerHTML = '';
+  try {
+    const res = await fetch('./manifest.json');
+    if (!res.ok) throw new Error('no manifest');
+    const manifest = await res.json();
+
+    // Header con totale
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:.72rem;opacity:.4;margin-bottom:8px;';
+    header.textContent = `${manifest.sizeMB} MB · ${manifest.pieces.length} pezzi`;
+    list.appendChild(header);
+
+    manifest.pieces.forEach((piece, i) => {
+      const color = MODEL_COLORS[i % MODEL_COLORS.length];
+      const item = document.createElement('div');
+      item.className = 'model-item';
+      item.innerHTML = `
+        <div class="model-dot" style="background:${color}"></div>
+        <span>${piece.name}</span>
+        <span class="model-info">${piece.objects} obj</span>
+      `;
+      list.appendChild(item);
+    });
+  } catch(e) {
+    // Fallback: mostra quello che è stato registrato
+    for (const m of loadedModels) {
+      const item = document.createElement('div');
+      item.className = 'model-item';
+      item.innerHTML = `
+        <div class="model-dot" style="background:${m.color}"></div>
+        <span>${m.name}</span>
+        <span class="model-info">${m.meshCount} mesh</span>
+      `;
+      list.appendChild(item);
+    }
+  }
+}
+
+// ─── Vista Aerea (Orbit stile Blender) ────────────────────────────────────
+function updateSceneBoundingBox() {
+  const box = new THREE.Box3();
+  scene.traverse(obj => {
+    if (obj.isMesh) box.expandByObject(obj);
+  });
+  if (!box.isEmpty()) sceneBoundingBox = box;
+}
+
+function toggleOverhead() {
+  const btn = document.getElementById('btn-overhead');
+  const canvas = renderer.domElement;
+
+  if (cameraMode === 'fps') {
+    fpsCameraState.pos.copy(camera.position);
+    fpsCameraState.yaw   = cameraYaw;
+    fpsCameraState.pitch = cameraPitch;
+
+    // Calcola bounding box reale della scena
+    updateSceneBoundingBox();
+    const box    = sceneBoundingBox || new THREE.Box3(new THREE.Vector3(-50,0,-50), new THREE.Vector3(50,50,50));
+    const center = box.getCenter(new THREE.Vector3());
+    const size   = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    // OrbitControls completo — nessun limite polare (come Blender)
+    orbitControls = new OrbitControls(camera, canvas);
+    orbitControls.target.copy(new THREE.Vector3(center.x, 0, center.z));
+    orbitControls.enableDamping   = true;
+    orbitControls.dampingFactor   = 0.06;
+    orbitControls.screenSpacePanning = true;
+    orbitControls.minDistance = 2;
+    orbitControls.maxDistance = maxDim * 4;
+    orbitControls.mouseButtons = {
+      LEFT:   THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT:  THREE.MOUSE.PAN
+    };
+
+    // Posiziona come "View All" di Blender — dall'alto leggermente inclinato
+    const dist = maxDim * 0.9;
+    camera.position.set(
+      center.x,
+      center.y + dist * 0.7,
+      center.z + dist * 0.7
+    );
+    camera.lookAt(center.x, center.y, center.z);
+    orbitControls.update();
+
+    canvas.style.cursor = 'default';
+    cameraMode = 'overhead';
+    btn.classList.add('active');
+    btn.textContent = '🎮 Vista FPS';
+    document.getElementById('crosshair').style.display = 'none';
+  } else {
+    if (orbitControls) { orbitControls.dispose(); orbitControls = null; }
+    camera.position.copy(fpsCameraState.pos);
+    cameraYaw   = fpsCameraState.yaw;
+    cameraPitch = fpsCameraState.pitch;
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = cameraYaw;
+    camera.rotation.x = cameraPitch;
+
+    canvas.style.cursor = 'grab';
+    cameraMode = 'fps';
+    btn.classList.remove('active');
+    btn.textContent = '🗺️ Vista aerea';
+    document.getElementById('crosshair').style.display = '';
+  }
+}
+
+async function convertAndCache(object) {
+  return new Promise((resolve, reject) => {
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      object,
+      async (glb) => {
+        try {
+          await idbSet('environment.glb', glb);
+          console.log(`✅ GLB salvato in cache (${(glb.byteLength/1024/1024).toFixed(1)} MB) — ricarica più veloce`);
+          resolve();
+        } catch(e) { reject(e); }
+      },
+      reject,
+      { binary: true, animations: object.animations || [] }
+    );
+  });
+}
+
+// ─── Interactable hotspot ─────────────────────────────────────────────────
+function placeInteractables() {
+  if (!sceneData?.interactables) return;
+
+  const geo = new THREE.SphereGeometry(0.3, 8, 8);
+
+  for (const data of sceneData.interactables) {
+    // Sfera invisibile come collider
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    mesh.position.set(data.position.x, data.position.y, data.position.z);
+    mesh.userData = { interactable: data };
+    scene.add(mesh);
+    interactableMeshes.push(mesh);
+
+    // Marker visivo (cerchio flottante)
+    addHotspotMarker(data.position, data.interactText);
+  }
+}
+
+function addHotspotMarker(pos, label) {
+  // Sprite cerchio
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  // Cerchio esterno
+  ctx.beginPath();
+  ctx.arc(128, 128, 100, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  // Icona mano
+  ctx.font = 'bold 90px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('✋', 128, 128);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  sprite.position.set(pos.x, pos.y + 1.2, pos.z);
+  sprite.scale.set(0.8, 0.8, 0.8);
+  sprite.userData = { isMarker: true, baseY: pos.y + 1.2 };
+  scene.add(sprite);
+}
+
+function placeTeleports() {
+  if (!sceneData?.teleports?.length) return;
+
+  const panel = document.getElementById('teleport-panel');
+  for (const tp of sceneData.teleports) {
+    const btn = document.createElement('button');
+    btn.className = 'tp-btn';
+    btn.textContent = `⬡ ${tp.name || 'Teleport'}`;
+    btn.addEventListener('click', () => teleportTo(tp.position));
+    panel.appendChild(btn);
+  }
+}
+
+function teleportTo(pos) {
+  camera.position.set(pos.x, pos.y + 1.7, pos.z);
+  showNotification(`Teletrasportato: ${pos.x.toFixed(1)}, ${pos.z.toFixed(1)}`);
+}
+
+// ─── Interazione ──────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+let currentInteractable = null;
+
+function checkInteractables() {
+  if (renderer.xr && renderer.xr.isPresenting === false && isDragging) return;
+
+  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+  const hits = raycaster.intersectObjects(interactableMeshes);
+
+  if (hits.length > 0) {
+    const data = hits[0].object.userData.interactable;
+    if (data) {
+      showInteractPanel(data.interactText);
+      currentInteractable = data;
+      return;
+    }
+  }
+
+  // Controlla anche per prossimità (interactiveRadius)
+  const camPos = camera.position;
+  for (const mesh of interactableMeshes) {
+    const data = mesh.userData.interactable;
+    const dist = camPos.distanceTo(mesh.position);
+    if (dist < (data.interactiveRadius || 4)) {
+      showInteractPanel(data.interactText);
+      currentInteractable = data;
+      return;
+    }
+  }
+
+  hideInteractPanel();
+  currentInteractable = null;
+}
+
+function onInteract() {
+  if (!currentInteractable) return;
+  triggerInteractable(currentInteractable);
+}
+
+function onVRInteract() {
+  if (currentInteractable) triggerInteractable(currentInteractable);
+}
+
+function triggerInteractable(data) {
+  showNotification(data.interactText);
+  questCompleted.add(data.id);
+  updateQuestUI();
+
+  // Esegui azioni
+  for (const action of (data.onInteract || [])) {
+    if (action.method === 'Play' && action.stringArg) {
+      playAnimation(action.stringArg);
+    } else if (action.method === 'SetActive') {
+      // Prova a trovare l'oggetto per nome nella scena Three.js
+      const obj = scene.getObjectByName(action.stringArg);
+      if (obj) obj.visible = action.boolArg;
+    }
+  }
+}
+
+function playAnimation(clipName) {
+  for (const { mixer, clips } of animationMixers) {
+    const clip = THREE.AnimationClip.findByName(clips, clipName);
+    if (clip) {
+      const action = mixer.clipAction(clip);
+      action.reset().play();
+      console.log(`▶️  Animazione: ${clipName}`);
+      return;
+    }
+  }
+  console.log(`⚠️  Clip non trovata: ${clipName}`);
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+function showInteractPanel(text) {
+  const panel = document.getElementById('interact-panel');
+  document.getElementById('interact-label').textContent = text;
+  panel.classList.add('visible');
+}
+function hideInteractPanel() {
+  document.getElementById('interact-panel').classList.remove('visible');
+}
+
+function showNotification(text) {
+  const el = document.getElementById('notification');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function updateQuestUI() {
+  if (!sceneData?.quests?.length) return;
+  const panel = document.getElementById('quest-panel');
+  panel.style.display = 'block';
+
+  const quest = sceneData.quests[0];
+  document.getElementById('quest-title').textContent = quest.name;
+
+  const total = sceneData.interactables.length;
+  const done  = questCompleted.size;
+  document.getElementById('quest-progress').textContent = `${done} / ${total} elementi esplorati`;
+  document.getElementById('quest-fill').style.width = total > 0 ? (done / total * 100) + '%' : '0%';
+}
+
+// ─── Animazione markers (floating) ───────────────────────────────────────
+function animateMarkers(t) {
+  scene.traverse(obj => {
+    if (obj.isSprite && obj.userData.isMarker) {
+      obj.position.y = obj.userData.baseY + Math.sin(t * 1.5) * 0.08;
+    }
+  });
+}
+
+// ─── Placeholder se nessun GLB ────────────────────────────────────────────
+function createPlaceholderEnvironment() {
+  // Pavimento
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(100, 100),
+    new THREE.MeshLambertMaterial({ color: 0x888888 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Alcune pareti di esempio
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
+  for (let i = 0; i < 4; i++) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 5, 0.5), wallMat);
+    const a = (i / 4) * Math.PI * 2;
+    wall.position.set(Math.sin(a) * 15, 2.5, Math.cos(a) * 15);
+    wall.lookAt(0, 2.5, 0);
+    wall.castShadow = true;
+    scene.add(wall);
+  }
+
+  showNotification('Modalità demo — nessun GLB caricato');
+}
+
+// ─── Dati demo ─────────────────────────────────────────────────────────────
+function getDemoScene() {
+  return {
+    interactables: [
+      { id: '1', name: 'Test', position: { x: 0, y: 1, z: -5 }, interactText: 'Interactable demo', interactiveRadius: 4, onInteract: [] }
+    ],
+    teleports: [],
+    quests: [{ id: 'q1', name: 'Ispezione demo' }]
+  };
+}
+
+// ─── Loop principale ──────────────────────────────────────────────────────
+function animate(timestamp, frame) {
+  const delta = clock.getDelta();
+  const t = clock.getElapsedTime();
+
+  // OrbitControls (vista aerea)
+  if (cameraMode === 'overhead' && orbitControls) {
+    orbitControls.update();
+  }
+
+  // Movimento WASD — solo in modalità FPS
+  if (!renderer.xr.isPresenting && cameraMode === 'fps') {
+    moveDir.set(0, 0, 0);
+    if (keys['KeyW'] || keys['ArrowUp'])    moveDir.z -= 1;
+    if (keys['KeyS'] || keys['ArrowDown'])  moveDir.z += 1;
+    if (keys['KeyA'] || keys['ArrowLeft'])  moveDir.x -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
+
+    if (moveDir.length() > 0) {
+      moveDir.normalize().multiplyScalar(MOVE_SPEED * delta);
+      // Vettori forward/right dal yaw (ignora pitch per il movimento orizzontale)
+      fwdVec.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
+      rightVec.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+      camera.position.addScaledVector(fwdVec,   moveDir.z);
+      camera.position.addScaledVector(rightVec, moveDir.x);
+    }
+  }
+
+  // Aggiorna animatori
+  for (const { mixer } of animationMixers) {
+    mixer.update(delta);
+  }
+
+  // Controlla interactable a ogni frame
+  checkInteractables();
+
+  // Anima markers
+  animateMarkers(t);
+
+  renderer.render(scene, camera);
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────
+init().catch(console.error);
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "claud-spat-converter",
+  "version": "1.0.0",
+  "description": "Converte ambienti Spatial/Unity in viewer web Three.js + WebXR",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js",
+    "extract": "node extract.js",
+    "serve": "npx serve viewer-output"
+  },
+  "dependencies": {}
+}

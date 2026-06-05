@@ -1,0 +1,16 @@
+# Modelli 3D pesanti — non su git, si rigenerano con il workflow
+viewer/models/*.fbx
+viewer/models/*.FBX
+viewer/models/*.glb
+viewer/models/*.obj
+viewer/models/*.mtl
+viewer/textures/
+
+# Cache Blender e temp
+_spat_tmp_*/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
