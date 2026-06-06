@@ -278,8 +278,15 @@ def consolidate_skinned_meshes(before_snapshot):
 fbx_files = [f for f in os.listdir(MODELS_DIR) if f.lower().endswith('.fbx')]
 imported = []
 
+# Solo scena STATICA da Blender. I personaggi animati ora vengono da Unity
+# (UnityGLTF), quindi qui saltiamo tutti gli FBX dei personaggi.
+STATIC_KEEP = ['TERRITORIO', 'construction_scene']
+
 for fname in sorted(fbx_files):
     fpath = os.path.join(MODELS_DIR, fname)
+    if not any(k.lower() in fname.lower() for k in STATIC_KEEP):
+        print(f"  SKIP (personaggio → da Unity glTF): {fname}")
+        continue
     ver = fbx_version(fpath)
     if ver < 7000:
         print(f"  SKIP (v{ver}): {fname}")

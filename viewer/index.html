@@ -61,7 +61,7 @@
 
     /* Notifica azione */
     #notification {
-      position: fixed; top: 30px; left: 50%;
+      position: fixed; top: 68px; left: 50%;
       transform: translateX(-50%) translateY(-10px);
       background: rgba(74,158,255,.9); color: #fff;
       border-radius: 8px; padding: 10px 20px;
@@ -121,10 +121,10 @@
     }
     #vr-btn:hover { background: #4a9eff; }
 
-    /* Toolbar in basso a sinistra */
+    /* Toolbar in alto al centro */
     #toolbar {
-      position: fixed; bottom: 20px; left: 20px;
-      display: flex; flex-direction: column; gap: 8px; z-index: 20;
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: row; gap: 8px; z-index: 30;
     }
     .tool-btn {
       background: rgba(0,0,0,.65); backdrop-filter: blur(8px);
@@ -146,16 +146,44 @@
       pointer-events: none; line-height: 1.6;
     }
 
-    /* Pannello modelli */
+    /* Editor coordinate manuale */
+    #coord-editor {
+      position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.8); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,159,74,.5); border-radius: 10px;
+      padding: 10px 14px; color: #fff; z-index: 40; display: none;
+      font-size: .8rem;
+    }
+    #coord-editor .ce-title { font-size: .75rem; color: #ffb060; margin-bottom: 8px; font-weight: 600; }
+    #coord-editor .ce-row { display: flex; align-items: center; gap: 6px; }
+    #coord-editor .ce-row label { color: #ff9f4a; font-weight: 600; width: 12px; }
+    #coord-editor .ce-row input {
+      width: 88px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 5px; padding: 4px 6px; font-size: .8rem; font-family: monospace;
+    }
+    #coord-editor .ce-actions { display: flex; gap: 6px; margin-top: 8px; }
+    #coord-editor .ce-actions button {
+      flex: 1; background: rgba(255,159,74,.25); border: 1px solid rgba(255,159,74,.5);
+      color: #ffd0a0; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: .72rem;
+    }
+    #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
+    #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
+
+    /* Pannello modelli — si apre sotto la toolbar al centro */
     #models-panel {
-      position: fixed; top: 20px; left: 20px;
+      position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
       padding: 12px 16px; color: #fff; z-index: 20;
-      min-width: 220px; display: none;
+      min-width: 320px; max-width: 440px;
+      max-height: calc(100vh - 80px); overflow-y: auto;
+      display: none;
     }
     #models-panel h3 { font-size: .75rem; color: #ffd400; opacity: 1; text-transform: uppercase;
       letter-spacing: .06em; margin-bottom: 10px; }
+    #models-panel::-webkit-scrollbar { width: 4px; }
+    #models-panel::-webkit-scrollbar-track { background: transparent; }
+    #models-panel::-webkit-scrollbar-thumb { background: rgba(255,212,0,.35); border-radius: 2px; }
     .model-item { display: flex; align-items: center; gap: 8px;
       font-size: .82rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
     .model-item:last-child { border-bottom: none; }
@@ -177,6 +205,19 @@
       transition: background .15s;
     }
     .goto-btn:hover { background: rgba(74,255,138,.35); }
+    .gizmo-btn {
+      background: rgba(255,159,74,.18); border: 1px solid rgba(255,159,74,.4);
+      color: #ffb060; border-radius: 4px; padding: 2px 7px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
+    }
+    .gizmo-btn:hover { background: rgba(255,159,74,.4); }
+    .gizmo-btn.active { background: rgba(255,159,74,.6); border-color: #ff9f4a; color: #fff; }
+    .confirm-btn {
+      background: rgba(74,255,138,.18); border: 1px solid rgba(74,255,138,.4);
+      color: #6bffa0; border-radius: 4px; padding: 2px 7px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
+    }
+    .confirm-btn:hover { background: rgba(74,255,138,.45); }
   </style>
 </head>
 <body>
@@ -223,6 +264,21 @@
 <button id="vr-btn">🥽 Entra in VR</button>
 <div id="cam-hud">X 0.00 &nbsp; Y 0.00 &nbsp; Z 0.00</div>
 
+<!-- Editor coordinate manuale (appare con il gizmo) -->
+<div id="coord-editor">
+  <div class="ce-title">✥ <span id="ce-name">oggetto</span></div>
+  <div class="ce-row">
+    <label>X</label><input id="ce-x" type="number" step="0.5" />
+    <label>Y</label><input id="ce-y" type="number" step="0.5" />
+    <label>Z</label><input id="ce-z" type="number" step="0.5" />
+  </div>
+  <div class="ce-actions">
+    <button id="ce-apply">Applica &amp; salva</button>
+    <button id="ce-here">Porta davanti a me</button>
+    <button id="ce-close">Chiudi</button>
+  </div>
+</div>
+
 <!-- Three.js via CDN -->
 <script type="importmap">
 {
@@ -239,6 +295,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
@@ -258,6 +315,54 @@ const fpsCameraState = { pos: new THREE.Vector3(), yaw: 0, pitch: 0 };
 const loadedModels = [];
 const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee'];
 let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
+
+// ─── Gizmo posizionamento (TransformControls) ───────────────────────────────
+let transformControls = null;
+let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
+let gizmoDragging = false;         // true mentre si trascina un handle
+const POS_STORE_KEY = 'sc32-positions';   // localStorage: { nome: [x,y,z] }
+function loadSavedPositions() {
+  try { return JSON.parse(localStorage.getItem(POS_STORE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveObjectPosition(name, obj) {
+  const all = loadSavedPositions();
+  const p = obj.position;
+  all[name] = [ +p.x.toFixed(4), +p.y.toFixed(4), +p.z.toFixed(4) ];
+  localStorage.setItem(POS_STORE_KEY, JSON.stringify(all));
+  SAVED_POSITIONS[name] = all[name];
+  showNotification(`💾 Posizione salvata: ${name}`);
+}
+
+// Posizioni salvate (positions.json permanente + localStorage live), caricate all'avvio
+let SAVED_POSITIONS = {};
+const staticRoots = {};            // nome pezzo statico → Object3D (posizionabile)
+let environmentScene = null;       // gltf.scene della scena statica
+
+async function loadAllSavedPositions() {
+  let base = {};
+  try {
+    const r = await fetch('./models/gltfModels/positions.json?t=' + Date.now());
+    if (r.ok) base = await r.json();
+  } catch {}
+  return { ...base, ...loadSavedPositions() };
+}
+function applySavedToObject(obj, name) {
+  obj.userData.gizmoName = name;
+  const s = SAVED_POSITIONS[name];
+  if (s) obj.position.set(s[0], s[1], s[2]);
+}
+// Collega i pulsanti ✥/✓ di una riga del pannello a un oggetto posizionabile
+function wireGizmoControls(item, name, root) {
+  const gb = item.querySelector('.gizmo-btn');
+  if (gb) gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(root, gb); });
+  const cb = item.querySelector('.confirm-btn');
+  if (cb) cb.addEventListener('click', e => {
+    e.stopPropagation();
+    saveObjectPosition(name, root);
+    if (gizmoTarget === root) toggleGizmo(root, gb);
+  });
+}
 
 // ─── Navigazione drag-to-look ──────────────────────────────────────────────
 let isDragging = false;
@@ -309,11 +414,31 @@ async function init() {
   camera.rotation.order = 'YXZ'; // importante: yaw poi pitch
   scene.add(camera);
 
+  // ── Gizmo di posizionamento (TransformControls) ──
+  transformControls = new TransformControls(camera, renderer.domElement);
+  transformControls.setMode('translate');
+  transformControls.setSize(1.1);
+  // compat: nelle versioni recenti il gizmo si aggiunge via getHelper()
+  scene.add(transformControls.getHelper ? transformControls.getHelper() : transformControls);
+  transformControls.addEventListener('dragging-changed', e => {
+    gizmoDragging = e.value;
+    if (orbitControls) orbitControls.enabled = !e.value; // non ruotare mentre sposti (vista aerea)
+    // al RILASCIO (e.value=false) salva la nuova posizione
+    if (!e.value && gizmoTarget && gizmoTarget.userData.gizmoName)
+      saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+  });
+  // mentre trascini il gizmo, aggiorna i campi X/Y/Z
+  transformControls.addEventListener('objectChange', () => {
+    if (gizmoTarget) updateCoordEditorFields(gizmoTarget);
+  });
+  setupCoordEditor();
+
   // ── Drag-to-look ──────────────────────────────────────────────────────────
   const canvas = renderer.domElement;
 
   canvas.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
+    if (gizmoDragging || (transformControls && transformControls.axis)) return; // gizmo ha priorità
     isDragging = true;
     dragMoved  = false;
     dragPrev   = { x: e.clientX, y: e.clientY };
@@ -321,6 +446,7 @@ async function init() {
   });
 
   window.addEventListener('mousemove', e => {
+    if (gizmoDragging) { isDragging = false; return; }
     if (!isDragging) return;
     const dx = e.clientX - dragPrev.x;
     const dy = e.clientY - dragPrev.y;
@@ -482,6 +608,9 @@ async function loadScene() {
 
   updateQuestUI();
 
+  // Carica le posizioni salvate (servono già al caricamento dei modelli)
+  SAVED_POSITIONS = await loadAllSavedPositions();
+
   // Carica modello — prova GLB cache → GLB file → FBX auto-conversione
   const loaded = await loadModel();
   if (!loaded) {
@@ -501,9 +630,8 @@ async function loadScene() {
   updateSceneBoundingBox();
   await loadManifestAndUpdatePanel(manifest);
 
-  // Auto-play: con la mesh combinata (bind coerente) l'animazione deforma
-  // correttamente → i personaggi si alzano nella posa d'azione come in Unity.
-  autoPlayActionPoses();
+  // Personaggi animati ora da Unity (glTF), non più dal GLB Blender.
+  await loadGltfCharacters();
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
@@ -642,6 +770,16 @@ function addModelToScene(gltf, label) {
   }
   // Applica le posizioni degli NPC in Three.js
   applyNPCTransforms(gltf.scene);
+
+  // Registra i root statici (TERRITORIO_root, construction_scene_root) come
+  // posizionabili col gizmo + applica eventuali posizioni salvate
+  environmentScene = gltf.scene;
+  if (loadedManifest?.pieces) {
+    for (const piece of loadedManifest.pieces) {
+      const root = gltf.scene.getObjectByName(piece.name + '_root');
+      if (root) { applySavedToObject(root, piece.name); staticRoots[piece.name] = root; }
+    }
+  }
   registerModel(label || 'environment.glb', meshCount, gltf.animations.length);
 }
 
@@ -774,7 +912,13 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
           }
         });
       } else {
-        item.innerHTML = `${dot}${name}${info}`;
+        const root = staticRoots[piece.name];
+        const btns = root
+          ? `<button class="gizmo-btn" title="Sposta col gizmo">✥</button>`
+            + `<button class="confirm-btn" title="Conferma e salva">✓</button>`
+          : '';
+        item.innerHTML = `${dot}${name}${btns}${info}`;
+        if (root) wireGizmoControls(item, piece.name, root);
       }
       list.appendChild(item);
     });
@@ -831,6 +975,212 @@ function autoPlayActionPoses() {
     }
   }
   console.log(`🎬 Auto-play: ${n} animazioni avviate (posa d'azione)`);
+}
+
+// ─── Personaggi Unity (glTF da UnityGLTF) ────────────────────────────────────
+// I personaggi animati vengono esportati da Unity in glTF (skinning+anim intatti)
+// e caricati qui sopra la scena statica. Niente più Blender per i personaggi.
+// Lista fissa di fallback (se l'autodiscovery non funziona)
+const CHARACTER_GLTFS = [
+  'models/gltfModels/Axe_Wield_01_FINAL2.gltf',
+  'models/gltfModels/Environment.gltf',                       // i 3 Hammering
+  'models/gltfModels/rischio da macchinari in movimento.gltf', // escavatore + infortunato
+  'models/gltfModels/rischio eletrico.gltf',                  // rischio elettrico
+  'models/gltfModels/Spade_02_FINAL2.gltf',
+  'models/gltfModels/sliping.gltf',
+  'models/gltfModels/falling from loosing balance.gltf',
+];
+
+// Scopre da solo tutti i .gltf nella cartella (legge la directory listing del server)
+async function discoverCharacterGltfs() {
+  try {
+    const res = await fetch('models/gltfModels/');
+    if (!res.ok) return [];
+    const html = await res.text();
+    const found = [...html.matchAll(/href="([^"]+\.gltf)"/gi)]
+      .map(m => 'models/gltfModels/' + decodeURIComponent(m[1].split(/[\\/]/).pop()));
+    return [...new Set(found)];
+  } catch { return []; }
+}
+// UnityGLTF nega solo X; la scena statica Blender nega X e Z → riallineo il Z.
+let CHAR_FLIP_Z = true;
+
+const gltfCharacters = [];   // {name, root, action}
+
+async function loadGltfCharacters() {
+  const loader = new GLTFLoader();
+  // unisci lista fissa + autodiscovery (così i nuovi file compaiono da soli)
+  const discovered = await discoverCharacterGltfs();
+  const fileList = [...new Set([...CHARACTER_GLTFS, ...discovered])];
+  console.log(`📂 glTF personaggi da caricare (${fileList.length}):`, fileList);
+
+  for (const url of fileList) {
+    try {
+      const gltf = await new Promise((res, rej) =>
+        loader.load(encodeURI(url) + '?v=' + Date.now(), res, undefined, rej));
+      gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+
+      const chars = gltf.scene.children.slice();   // root personaggi (top-level)
+      const anims = gltf.animations || [];
+      // un mixer per file (binding glTF corretto), una clip per personaggio (per indice)
+      const mixer = anims.length ? new THREE.AnimationMixer(gltf.scene) : null;
+      chars.forEach((charRoot, i) => {
+        if (CHAR_FLIP_Z) charRoot.position.z = -charRoot.position.z;
+        // posizione salvata col gizmo ha la precedenza (+ imposta gizmoName)
+        const saved = SAVED_POSITIONS[charRoot.name];
+        applySavedToObject(charRoot, charRoot.name);
+
+        let action = null;
+        const clip = anims[i] || null;
+        if (clip && mixer) {
+          action = mixer.clipAction(clip);
+          action.reset(); action.setLoop(THREE.LoopRepeat); action.play();
+        }
+        gltfCharacters.push({ name: charRoot.name, root: charRoot, action });
+        const p = charRoot.position;
+        console.log(`🧍 ${charRoot.name} @ (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})${saved?' [salvata]':''}`);
+      });
+      if (mixer) animationMixers.push({ mixer, clips: anims });
+      scene.add(gltf.scene);
+    } catch (e) {
+      console.warn(`Personaggio non caricato: ${url}`, e);
+    }
+  }
+  console.log(`✅ Personaggi Unity caricati: ${gltfCharacters.length}`);
+  addCharactersToPanel();
+}
+
+// Aggancia/sgancia il gizmo di posizionamento a un personaggio
+function toggleGizmo(charRoot, btn) {
+  if (gizmoTarget === charRoot) {
+    transformControls.detach();
+    gizmoTarget = null;
+    document.querySelectorAll('.gizmo-btn').forEach(b => b.classList.remove('active'));
+    hideCoordEditor();
+    showNotification('Gizmo disattivato');
+  } else {
+    transformControls.attach(charRoot);
+    gizmoTarget = charRoot;
+    document.querySelectorAll('.gizmo-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    showCoordEditor(charRoot, charRoot.userData.gizmoName);
+    showNotification(`✥ Sposta: ${charRoot.userData.gizmoName} — frecce o coordinate manuali`);
+  }
+}
+
+// ─── Editor coordinate manuale ───────────────────────────────────────────────
+function updateCoordEditorFields(obj) {
+  document.getElementById('ce-x').value = obj.position.x.toFixed(2);
+  document.getElementById('ce-y').value = obj.position.y.toFixed(2);
+  document.getElementById('ce-z').value = obj.position.z.toFixed(2);
+}
+function showCoordEditor(obj, name) {
+  document.getElementById('ce-name').textContent = name || 'oggetto';
+  updateCoordEditorFields(obj);
+  document.getElementById('coord-editor').style.display = 'block';
+}
+function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
+function applyCoordEditor() {
+  if (!gizmoTarget) return;
+  const x = parseFloat(document.getElementById('ce-x').value);
+  const y = parseFloat(document.getElementById('ce-y').value);
+  const z = parseFloat(document.getElementById('ce-z').value);
+  if ([x, y, z].some(v => Number.isNaN(v))) { showNotification('Coordinate non valide'); return; }
+  gizmoTarget.position.set(x, y, z);
+  if (gizmoTarget.userData.gizmoName) saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+}
+function setupCoordEditor() {
+  ['ce-x', 'ce-y', 'ce-z'].forEach(id =>
+    document.getElementById(id).addEventListener('change', applyCoordEditor));
+  document.getElementById('ce-apply').addEventListener('click', applyCoordEditor);
+  document.getElementById('ce-close').addEventListener('click', () => {
+    if (gizmoTarget) toggleGizmo(gizmoTarget, null);
+  });
+  // "Porta davanti a me": utile per oggetti lontanissimi (es. Z 39780)
+  document.getElementById('ce-here').addEventListener('click', () => {
+    if (!gizmoTarget) return;
+    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+    const p = camera.position.clone().add(fwd.multiplyScalar(5));
+    gizmoTarget.position.set(p.x, 0, p.z);   // a terra, 5m davanti
+    updateCoordEditorFields(gizmoTarget);
+    if (gizmoTarget.userData.gizmoName) saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+    showNotification('Portato davanti alla camera');
+  });
+}
+
+// Esporta tutte le posizioni salvate come file positions.json
+function exportPositions() {
+  const data = { ...SAVED_POSITIONS, ...loadSavedPositions() };
+  if (!Object.keys(data).length) { showNotification('Nessuna posizione salvata'); return; }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'positions.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showNotification('📥 positions.json scaricato');
+}
+
+// Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa
+function addCharactersToPanel() {
+  const list = document.getElementById('models-list');
+  if (!list || !gltfCharacters.length) return;
+
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size:.72rem;color:#4a9eff;margin:12px 0 6px;'
+    + 'text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
+  header.textContent = `🧍 Personaggi (${gltfCharacters.length})`;
+  list.appendChild(header);
+
+  const exp = document.createElement('button');
+  exp.textContent = '💾 Esporta posizioni';
+  exp.style.cssText = 'background:rgba(74,158,255,.2);border:1px solid rgba(74,158,255,.4);'
+    + 'color:#9ccfff;border-radius:5px;padding:5px 8px;cursor:pointer;font-size:.72rem;'
+    + 'margin-bottom:8px;width:100%;';
+  exp.addEventListener('click', e => { e.stopPropagation(); exportPositions(); });
+  list.appendChild(exp);
+
+  for (const ch of gltfCharacters) {
+    const item = document.createElement('div');
+    item.className = 'model-item';
+    item.innerHTML =
+      `<div class="model-dot" style="background:#4a9eff"></div>`
+      + `<span class="model-name">${ch.name}</span>`
+      + `<button class="goto-btn" title="Vai al personaggio">🎯</button>`
+      + `<button class="gizmo-btn" title="Sposta col gizmo">✥</button>`
+      + `<button class="confirm-btn" title="Conferma e salva posizione">✓</button>`
+      + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">⏹</button>` : '');
+
+    item.querySelector('.goto-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      if (cameraMode !== 'fps') toggleOverhead();
+      const p = ch.root.getWorldPosition(new THREE.Vector3());
+      camera.position.set(p.x, p.y + 1.7, p.z + 4);
+      cameraYaw = 0; cameraPitch = 0;
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = 0; camera.rotation.x = 0;
+      showNotification(`📍 ${ch.name}`);
+    });
+
+    const gb = item.querySelector('.gizmo-btn');
+    gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ch.root, gb); });
+
+    item.querySelector('.confirm-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      saveObjectPosition(ch.name, ch.root);     // salva la posizione corrente
+      if (gizmoTarget === ch.root) toggleGizmo(ch.root, gb);   // stacca il gizmo
+    });
+
+    const pb = item.querySelector('.play-btn');
+    if (pb) pb.addEventListener('click', e => {
+      e.stopPropagation();
+      ch.action.paused = !ch.action.paused;
+      pb.classList.toggle('playing', !ch.action.paused);
+      pb.textContent = ch.action.paused ? '▶' : '⏹';
+    });
+
+    list.appendChild(item);
+  }
 }
 
 // ─── Centro utile della scena (usato da vista aerea) ─────────────────────

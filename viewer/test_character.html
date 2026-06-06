@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test Personaggio — Unity glTF</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { overflow:hidden; background:#222; font-family:'Segoe UI',sans-serif; }
+    #info {
+      position:fixed; top:12px; left:12px; z-index:10;
+      color:#fff; background:rgba(0,0,0,.6); backdrop-filter:blur(6px);
+      padding:10px 16px; border-radius:8px; font-size:.9rem; line-height:1.5;
+      border:1px solid rgba(255,255,255,.15); max-width:360px;
+    }
+    #info b { color:#4aff8a; }
+    #hint { position:fixed; bottom:12px; left:12px; z-index:10;
+      color:rgba(255,255,255,.5); font-size:.78rem; }
+  </style>
+</head>
+<body>
+<div id="info">Caricamento personaggio…</div>
+<div id="hint">Trascina per ruotare · rotella per zoom · tasto destro per spostare</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const info = document.getElementById('info');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.01, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const dir = new THREE.DirectionalLight(0xffffff, 1.8);
+dir.position.set(4, 8, 6);
+scene.add(dir);
+
+// pavimento
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(60, 60),
+  new THREE.MeshStandardMaterial({ color:0xbfbfbf })
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+scene.add(new THREE.GridHelper(60, 60, 0x888888, 0x999999));
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+let mixer = null;
+const clock = new THREE.Clock();
+
+const URL = './models/gltfModels/Axe_Wield_01_FINAL2.gltf';
+new GLTFLoader().load(URL, (gltf) => {
+  const obj = gltf.scene;
+  obj.position.set(0, 0, 0);          // all'origine per inquadrare facile
+  obj.rotation.set(0, 0, 0);
+  scene.add(obj);
+
+  // appoggia i piedi a terra
+  let box = new THREE.Box3().setFromObject(obj);
+  obj.position.y -= box.min.y;
+
+  box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  camera.position.set(center.x + maxDim*0.6, center.y + maxDim*0.1, center.z + maxDim*2.0);
+  controls.target.copy(center);
+  controls.update();
+
+  if (gltf.animations && gltf.animations.length) {
+    mixer = new THREE.AnimationMixer(obj);
+    gltf.animations.forEach(c => mixer.clipAction(c).play());
+    info.innerHTML = `<b>✓ Personaggio caricato e animato</b><br>` +
+      `Animazioni: ${gltf.animations.length} (${gltf.animations.map(a=>a.name).join(', ')})<br>` +
+      `Altezza: ${size.y.toFixed(2)} m`;
+  } else {
+    info.innerHTML = `<b>Caricato</b> (nessuna animazione nel file)`;
+  }
+  console.log('glTF caricato:', gltf);
+},
+(e) => { if (e.total) info.textContent = `Caricamento ${Math.round(e.loaded/e.total*100)}%`; },
+(err) => { info.innerHTML = '❌ ERRORE: ' + (err?.message || err); console.error(err); });
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  if (mixer) mixer.update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
