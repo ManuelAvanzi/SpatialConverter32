@@ -149,6 +149,13 @@ total_mesh = sum(1 for o in bpy.data.objects if o.type == 'MESH')
 total_anim = len(bpy.data.actions)
 print(f"\nTotale: {total_mesh} mesh, {total_anim} animazioni da {len(imported)} file")
 
+# ── Forza REST pose su tutti gli armature prima dell'export ──────────────────
+# Senza questo i personaggi Mixamo/Biped vengono esportati nella posa animata corrente
+for obj in bpy.data.objects:
+    if obj.type == 'ARMATURE':
+        obj.data.pose_position = 'REST'
+print(f"REST pose applicata a {sum(1 for o in bpy.data.objects if o.type=='ARMATURE')} armature")
+
 # ── Esporta GLB unificato ────────────────────────────────────────────────────
 print(f"\nEsporto → {OUTPUT_GLB}")
 bpy.ops.export_scene.gltf(

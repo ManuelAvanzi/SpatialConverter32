@@ -59,6 +59,10 @@ print(f"\nAnimazioni: {len(bpy.data.actions)}")
 for a in bpy.data.actions:
     print(f"  {a.name}")
 
+for obj in bpy.data.objects:
+    if obj.type == 'ARMATURE':
+        obj.data.pose_position = 'REST'
+
 print(f"\nEsporto → {OUTPUT_GLB}")
 bpy.ops.export_scene.gltf(
     filepath=OUTPUT_GLB,
