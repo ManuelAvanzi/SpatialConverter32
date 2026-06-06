@@ -1,0 +1,18 @@
+{
+  "_comment": "Posizioni Unity world space (Inspector). TX=-UX, TY=UY, TZ=-UZ applicato in Three.js.",
+  "Axe_Wield_01_FINAL2.fbx": {
+    "position": [-37.24, 0.1005578, 17.27],
+    "rotation": [0, 0, 0],
+    "scale": [0.8, 0.8, 0.8]
+  },
+  "Broom_01_FINAL2.fbx": {
+    "position": [-14.21, 0.1, 29.15],
+    "rotation": [0, 0, 0],
+    "scale": [1, 1, 1]
+  },
+  "contenitore di hammer_drill_03_FINAL2.fbx": {
+    "position": [-6.856, 3.424, 32.587],
+    "rotation": [0, 0, 0],
+    "scale": [1, 1, 1]
+  }
+}

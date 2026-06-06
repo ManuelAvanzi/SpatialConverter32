@@ -54,6 +54,18 @@ def fbx_version(filepath):
         pass
     return 0
 
+# ── Carica transforms.json (posizioni Unity world space per ogni modello) ─────
+import json, math
+TRANSFORMS_PATH = os.path.join(MODELS_DIR, "transforms.json")
+transforms = {}
+if os.path.exists(TRANSFORMS_PATH):
+    with open(TRANSFORMS_PATH, 'r', encoding='utf-8') as f:
+        raw = json.load(f)
+    transforms = {k: v for k, v in raw.items() if not k.startswith('_')}
+    print(f"Transforms caricati per: {list(transforms.keys())}")
+else:
+    print("transforms.json non trovato — tutti i modelli all'origine")
+
 # ── Pulisci scena ────────────────────────────────────────────────────────────
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
@@ -71,6 +83,8 @@ for fname in sorted(fbx_files):
 
     print(f"  Importo (v{ver}): {fname}")
     before = set(o.name for o in bpy.data.objects)
+    before_actions = set(a.name for a in bpy.data.actions)
+    model_prefix = os.path.splitext(fname)[0]
 
     # Prova 1: import standard
     ok = False
@@ -91,9 +105,34 @@ for fname in sorted(fbx_files):
             after = set(o.name for o in bpy.data.objects)
             new_objs = after - before
             if new_objs:
-                imported.append({'file': fname, 'objects': list(new_objs)})
+                # Rinomina le nuove action con prefisso modello per identificarle nel GLB
+                after_actions = set(a.name for a in bpy.data.actions)
+                new_clips_raw = list(after_actions - before_actions)
+                new_clips = []
+                for aname in new_clips_raw:
+                    action = bpy.data.actions.get(aname)
+                    if action:
+                        new_name = f"{model_prefix}|{aname}"
+                        action.name = new_name
+                        new_clips.append(new_name)
+                imported.append({'file': fname, 'objects': list(new_objs), 'clips': new_clips})
+
+                # Rinomina i root objects con il prefisso modello
+                # Il posizionamento avviene in Three.js, non in Blender
+                roots = [bpy.data.objects[n] for n in new_objs
+                         if bpy.data.objects.get(n) and
+                         (bpy.data.objects[n].parent is None or
+                          bpy.data.objects[n].parent.name not in new_objs)]
+                root_names = []
+                for i, obj in enumerate(roots):
+                    suffix = f'_{i}' if i > 0 else ''
+                    obj.name = f"{model_prefix}_root{suffix}"
+                    root_names.append(obj.name)
+                if root_names:
+                    print(f"    Root rinominati: {root_names}")
+
                 suffix = '' if attempt == 0 else f' (tentativo {attempt+1})'
-                print(f"    → {len(new_objs)} oggetti importati{suffix}")
+                print(f"    → {len(new_objs)} oggetti, {len(new_clips)} clip{suffix}")
                 ok = True
                 break
         except Exception as e:
@@ -128,18 +167,34 @@ print(f"FATTO — environment.glb: {size_mb:.1f} MB")
 print(f"File importati: {[x['file'] for x in imported]}")
 
 # Scrivi manifest.json per il viewer
-import json
+import json, time
+
+STATIC_KEYWORDS = ['TERRITORIO', 'Untitled', 'construction_scene']
+
+def get_model_type(fname, has_clips):
+    if any(k.lower() in fname.lower() for k in STATIC_KEYWORDS):
+        return 'static'
+    return 'animated' if has_clips else 'static'
+
 manifest = {
     "glb": "models/environment.glb",
     "sizeMB": round(size_mb, 1),
+    "buildId": str(int(time.time())),
     "pieces": [
-        {"name": x['file'].replace('.fbx','').replace('.FBX',''),
-         "file": x['file'],
-         "objects": len(x['objects'])}
+        {
+            "name": x['file'].replace('.fbx','').replace('.FBX',''),
+            "file": x['file'],
+            "objects": len(x['objects']),
+            "type": get_model_type(x['file'], bool(x['clips'])),
+            "clips": x['clips'],
+            "position": transforms.get(x['file'], {}).get('position', None),
+            "scale":    transforms.get(x['file'], {}).get('scale', None)
+        }
         for x in imported
     ]
 }
 manifest_path = os.path.join(os.path.dirname(MODELS_DIR), "manifest.json")
-with open(manifest_path, 'w') as f:
-    json.dump(manifest, f, indent=2)
+with open(manifest_path, 'w', encoding='utf-8') as f:
+    json.dump(manifest, f, indent=2, ensure_ascii=False)
 print(f"Manifest scritto: {manifest_path}")
+print(f"BuildId: {manifest['buildId']}")

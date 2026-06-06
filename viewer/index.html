@@ -136,6 +136,16 @@
     .tool-btn:hover { background: rgba(74,158,255,.35); }
     .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
 
+    /* HUD coordinate camera */
+    #cam-hud {
+      position: fixed; bottom: 20px; right: 20px;
+      background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
+      padding: 6px 12px; color: rgba(255,255,255,.75);
+      font-size: .72rem; font-family: monospace; z-index: 20;
+      pointer-events: none; line-height: 1.6;
+    }
+
     /* Pannello modelli */
     #models-panel {
       position: fixed; top: 20px; left: 20px;
@@ -150,7 +160,23 @@
       font-size: .82rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
     .model-item:last-child { border-bottom: none; }
     .model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .model-info { opacity: .55; font-size: .72rem; margin-left: auto; }
+    .model-info { opacity: .55; font-size: .72rem; }
+    .model-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .play-btn {
+      background: rgba(74,158,255,.2); border: 1px solid rgba(74,158,255,.4);
+      color: #4a9eff; border-radius: 4px; padding: 2px 8px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0;
+      transition: background .15s;
+    }
+    .play-btn:hover { background: rgba(74,158,255,.45); }
+    .play-btn.playing { background: rgba(255,100,100,.25); border-color: rgba(255,100,100,.5); color: #ff8080; }
+    .goto-btn {
+      background: rgba(74,255,138,.15); border: 1px solid rgba(74,255,138,.35);
+      color: #4aff8a; border-radius: 4px; padding: 2px 7px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0;
+      transition: background .15s;
+    }
+    .goto-btn:hover { background: rgba(74,255,138,.35); }
   </style>
 </head>
 <body>
@@ -195,6 +221,7 @@
   Click su 🖐 · Interagisci
 </div>
 <button id="vr-btn">🥽 Entra in VR</button>
+<div id="cam-hud">X 0.00 &nbsp; Y 0.00 &nbsp; Z 0.00</div>
 
 <!-- Three.js via CDN -->
 <script type="importmap">
@@ -218,6 +245,7 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
 let sceneData = null;
+let loadedManifest = null;   // manifest caricato prima del GLB
 let interactableMeshes = [];
 let animationMixers = [];
 let clock = new THREE.Clock();
@@ -433,6 +461,24 @@ async function loadScene() {
     sceneData = getDemoScene();
   }
 
+  // Carica manifest (prima del modello, serve il buildId per la cache)
+  let manifest = null;
+  try {
+    const res = await fetch('./manifest.json');
+    if (res.ok) manifest = await res.json();
+  } catch (e) {}
+  loadedManifest = manifest;
+
+  // Cache-busting: se il buildId è cambiato, invalida la cache IDB
+  if (manifest?.buildId) {
+    const storedBuild = localStorage.getItem('sc32-build-id');
+    if (storedBuild !== manifest.buildId) {
+      await idbDelete('environment.glb').catch(() => {});
+      localStorage.setItem('sc32-build-id', manifest.buildId);
+      console.log('🔄 Cache invalidata — nuovo build:', manifest.buildId);
+    }
+  }
+
   updateQuestUI();
 
   // Carica modello — prova GLB cache → GLB file → FBX auto-conversione
@@ -442,6 +488,8 @@ async function loadScene() {
     createPlaceholderEnvironment();
   }
 
+  // Camera rimane alla posizione di default (0, 1.7, 0) impostata in init()
+
   setProgress(85, 'Posizionamento interactable...');
   placeInteractables();
 
@@ -450,7 +498,7 @@ async function loadScene() {
 
   // Aggiorna bounding box e pannello modelli
   updateSceneBoundingBox();
-  await loadManifestAndUpdatePanel();
+  await loadManifestAndUpdatePanel(manifest);
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
@@ -490,6 +538,20 @@ function idbSet(key, value) {
     req.onsuccess = e => {
       const tx = e.target.result.transaction(IDB_STORE, 'readwrite');
       tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => res();
+      tx.onerror    = () => rej(tx.error);
+    };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function idbDelete(key) {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => {
+      const tx = e.target.result.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
       tx.oncomplete = () => res();
       tx.onerror    = () => rej(tx.error);
     };
@@ -570,9 +632,33 @@ function addModelToScene(gltf, label) {
   if (gltf.animations.length > 0) {
     const mixer = new THREE.AnimationMixer(gltf.scene);
     animationMixers.push({ mixer, clips: gltf.animations });
-    gltf.animations.forEach(clip => mixer.clipAction(clip).play());
+    // Animazioni spente di default
   }
+  // Applica le posizioni degli NPC in Three.js
+  applyNPCTransforms(gltf.scene);
   registerModel(label || 'environment.glb', meshCount, gltf.animations.length);
+}
+
+// ─── Posizionamento NPC da manifest ──────────────────────────────────────────
+function applyNPCTransforms(sceneRoot) {
+  if (!loadedManifest?.pieces) return;
+  for (const piece of loadedManifest.pieces) {
+    if (!piece.position) continue;
+    const [px, py, pz] = piece.position;
+
+    const rootName = piece.name + '_root';
+    const obj = sceneRoot.getObjectByName(rootName);
+    if (obj) {
+      // Mapping Unity → Three.js: TX=-UX, TY=UY, TZ=-UZ
+      // (asse Z invertito per conversione left→right handed)
+      obj.position.set(-px, py, -pz);
+      console.log(`✅ ${piece.name} → Three.js(${(-px).toFixed(2)}, ${py.toFixed(2)}, ${(-pz).toFixed(2)}) scale(${obj.scale.toArray().map(v=>v.toFixed(3)).join(',')})`);
+    } else {
+      console.warn(`⚠️  Root non trovato: "${rootName}" — oggetti disponibili nella scena:`);
+      // Stampa i nomi dei figli diretti per debug
+      sceneRoot.children.slice(0, 20).forEach(c => console.log('  •', c.name));
+    }
+  }
 }
 
 function addFBXToScene(object, label) {
@@ -584,7 +670,7 @@ function addFBXToScene(object, label) {
   if (object.animations?.length > 0) {
     const mixer = new THREE.AnimationMixer(object);
     animationMixers.push({ mixer, clips: object.animations });
-    object.animations.forEach(clip => mixer.clipAction(clip).play());
+    // Animazioni spente di default — si attivano solo via interactable
   }
   registerModel(label || 'fbx', meshCount, object.animations?.length || 0);
 }
@@ -595,44 +681,140 @@ function registerModel(name, meshCount, animCount) {
   // Non aggiornare subito — il manifest sovrascriverà
 }
 
-async function loadManifestAndUpdatePanel() {
+async function loadManifestAndUpdatePanel(preloadedManifest) {
   const list = document.getElementById('models-list');
   list.innerHTML = '';
-  try {
-    const res = await fetch('./manifest.json');
-    if (!res.ok) throw new Error('no manifest');
-    const manifest = await res.json();
 
-    // Header con totale
+  // Legenda fissa
+  const legend = document.createElement('div');
+  legend.style.cssText = 'display:flex;gap:10px;margin-bottom:8px;font-size:.7rem;opacity:.55;flex-wrap:wrap;';
+  legend.innerHTML = `
+    <span><span style="color:#4a9eff">●</span> Animato</span>
+    <span><span style="color:#4aff8a">●</span> Statico</span>
+    <span><span style="color:#888">●</span> Altro</span>
+  `;
+  list.appendChild(legend);
+
+  // Usa manifest già caricato, altrimenti rifetch
+  let manifest = preloadedManifest;
+  if (!manifest) {
+    try {
+      const res = await fetch('./manifest.json');
+      if (res.ok) manifest = await res.json();
+    } catch(e) {}
+  }
+
+  if (manifest?.pieces) {
     const header = document.createElement('div');
     header.style.cssText = 'font-size:.72rem;opacity:.4;margin-bottom:8px;';
     header.textContent = `${manifest.sizeMB} MB · ${manifest.pieces.length} pezzi`;
     list.appendChild(header);
 
-    manifest.pieces.forEach((piece, i) => {
-      const color = MODEL_COLORS[i % MODEL_COLORS.length];
+    manifest.pieces.forEach(piece => {
+      const color = piece.type === 'animated' ? '#4a9eff'
+                  : piece.type === 'static'   ? '#4aff8a'
+                  : '#888';
       const item = document.createElement('div');
       item.className = 'model-item';
-      item.innerHTML = `
-        <div class="model-dot" style="background:${color}"></div>
-        <span>${piece.name}</span>
-        <span class="model-info">${piece.objects} obj</span>
-      `;
+
+      const dot  = `<div class="model-dot" style="background:${color}"></div>`;
+      const name = `<span class="model-name">${piece.name}</span>`;
+      const info = `<span class="model-info">${piece.objects} obj</span>`;
+
+      if (piece.type === 'animated' && piece.clips?.length) {
+        const clipsJson = JSON.stringify(piece.clips).replace(/'/g, '&#39;');
+        const posLabel = piece.position
+          ? `<span style="font-size:.65rem;opacity:.45;font-family:monospace;margin-left:2px">(${piece.position.map(v=>v.toFixed(1)).join(', ')})</span>`
+          : '';
+        const gotoBtn = piece.position
+          ? `<button class="goto-btn" data-pos='${JSON.stringify(piece.position)}'>🎯</button>`
+          : '';
+        item.innerHTML = `${dot}${name}${posLabel}
+          ${gotoBtn}
+          <button class="play-btn" data-clips='${clipsJson}'>▶</button>
+          ${info}`;
+
+        // Teleport al modello
+        item.querySelector('.goto-btn')?.addEventListener('click', e => {
+          e.stopPropagation();
+          const pos = JSON.parse(e.currentTarget.dataset.pos);
+          // Passa al modo FPS se in overhead
+          if (cameraMode !== 'fps') toggleOverhead();
+          // Stessa conversione Unity→Three.js: TX=-UX, TY=UY, TZ=-UZ
+          camera.position.set(-pos[0], pos[1] + 1.7, -pos[2] + 4);
+          cameraYaw = 0; // guarda in -Z verso il modello
+          cameraPitch = 0;
+          camera.rotation.y = cameraYaw;
+          camera.rotation.x = cameraPitch;
+          showNotification(`📍 ${piece.name}`);
+        });
+
+        item.querySelector('.play-btn').addEventListener('click', e => {
+          e.stopPropagation();
+          const btn = e.currentTarget;
+          const clips = JSON.parse(btn.dataset.clips);
+          if (btn.classList.contains('playing')) {
+            stopAllAnimations();
+            document.querySelectorAll('.play-btn').forEach(b => {
+              b.classList.remove('playing'); b.textContent = '▶';
+            });
+          } else {
+            document.querySelectorAll('.play-btn').forEach(b => {
+              b.classList.remove('playing'); b.textContent = '▶';
+            });
+            playClipsForModel(clips);
+            btn.classList.add('playing');
+            btn.textContent = '⏹';
+          }
+        });
+      } else {
+        item.innerHTML = `${dot}${name}${info}`;
+      }
       list.appendChild(item);
     });
-  } catch(e) {
+  } else {
     // Fallback: mostra quello che è stato registrato
     for (const m of loadedModels) {
       const item = document.createElement('div');
       item.className = 'model-item';
       item.innerHTML = `
         <div class="model-dot" style="background:${m.color}"></div>
-        <span>${m.name}</span>
+        <span class="model-name">${m.name}</span>
         <span class="model-info">${m.meshCount} mesh</span>
       `;
       list.appendChild(item);
     }
   }
+}
+
+// ─── Play / Stop animazioni per modello ──────────────────────────────────────
+function stopAllAnimations() {
+  for (const { mixer } of animationMixers) mixer.stopAllAction();
+}
+
+function playClipsForModel(clipNames) {
+  stopAllAnimations();
+  let played = 0;
+  for (const { mixer, clips } of animationMixers) {
+    for (const name of clipNames) {
+      const clip = THREE.AnimationClip.findByName(clips, name);
+      if (clip) { mixer.clipAction(clip).reset().play(); played++; }
+    }
+  }
+  console.log(`▶️ ${played} clip avviate:`, clipNames);
+}
+
+// ─── Centro utile della scena (usato da vista aerea) ─────────────────────
+function getSceneActionCenter() {
+  const all = sceneData?.interactables || [];
+  const ground = all.filter(ia => ia.position.y < 10);
+  const arr = ground.length ? ground : all;
+  if (!arr.length) return new THREE.Vector3(0, 2, 20);
+  return new THREE.Vector3(
+    arr.reduce((s, ia) => s + ia.position.x, 0) / arr.length,
+    arr.reduce((s, ia) => s + ia.position.y, 0) / arr.length,
+    arr.reduce((s, ia) => s + ia.position.z, 0) / arr.length
+  );
 }
 
 // ─── Vista Aerea (Orbit stile Blender) ────────────────────────────────────
@@ -653,18 +835,14 @@ function toggleOverhead() {
     fpsCameraState.yaw   = cameraYaw;
     fpsCameraState.pitch = cameraPitch;
 
-    // Calcola bounding box reale della scena
-    updateSceneBoundingBox();
-    const box    = sceneBoundingBox || new THREE.Box3(new THREE.Vector3(-50,0,-50), new THREE.Vector3(50,50,50));
-    const center = box.getCenter(new THREE.Vector3());
-    const size   = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    // Usa il centro degli interactable come target (ignora bounding box del territorio)
+    const center = getSceneActionCenter();
+    const maxDim = 80;   // dimensione approssimativa del cantiere in unità world
 
-    // OrbitControls completo — nessun limite polare (come Blender)
     orbitControls = new OrbitControls(camera, canvas);
-    orbitControls.target.copy(new THREE.Vector3(center.x, 0, center.z));
-    orbitControls.enableDamping   = true;
-    orbitControls.dampingFactor   = 0.06;
+    orbitControls.target.copy(center);
+    orbitControls.enableDamping      = true;
+    orbitControls.dampingFactor      = 0.06;
     orbitControls.screenSpacePanning = true;
     orbitControls.minDistance = 2;
     orbitControls.maxDistance = maxDim * 4;
@@ -674,14 +852,13 @@ function toggleOverhead() {
       RIGHT:  THREE.MOUSE.PAN
     };
 
-    // Posiziona come "View All" di Blender — dall'alto leggermente inclinato
+    // Vista dall'alto leggermente inclinata
     const dist = maxDim * 0.9;
     camera.position.set(
       center.x,
       center.y + dist * 0.7,
       center.z + dist * 0.7
     );
-    camera.lookAt(center.x, center.y, center.z);
     orbitControls.update();
 
     canvas.style.cursor = 'default';
@@ -798,38 +975,13 @@ const raycaster = new THREE.Raycaster();
 let currentInteractable = null;
 
 function checkInteractables() {
-  if (renderer.xr && renderer.xr.isPresenting === false && isDragging) return;
-
-  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-  const hits = raycaster.intersectObjects(interactableMeshes);
-
-  if (hits.length > 0) {
-    const data = hits[0].object.userData.interactable;
-    if (data) {
-      showInteractPanel(data.interactText);
-      currentInteractable = data;
-      return;
-    }
-  }
-
-  // Controlla anche per prossimità (interactiveRadius)
-  const camPos = camera.position;
-  for (const mesh of interactableMeshes) {
-    const data = mesh.userData.interactable;
-    const dist = camPos.distanceTo(mesh.position);
-    if (dist < (data.interactiveRadius || 4)) {
-      showInteractPanel(data.interactText);
-      currentInteractable = data;
-      return;
-    }
-  }
-
+  // Interactable temporaneamente disattivati (posizioni NPC non ancora verificate)
   hideInteractPanel();
   currentInteractable = null;
 }
 
 function onInteract() {
-  if (!currentInteractable) return;
+  if (!currentInteractable || cameraMode !== 'fps') return;
   triggerInteractable(currentInteractable);
 }
 
@@ -856,11 +1008,12 @@ function triggerInteractable(data) {
 
 function playAnimation(clipName) {
   for (const { mixer, clips } of animationMixers) {
-    const clip = THREE.AnimationClip.findByName(clips, clipName);
+    // Cerca match esatto oppure con prefisso modello (es. "Spade_01|clipName")
+    const clip = clips.find(c => c.name === clipName || c.name.endsWith('|' + clipName));
     if (clip) {
       const action = mixer.clipAction(clip);
       action.reset().play();
-      console.log(`▶️  Animazione: ${clipName}`);
+      console.log(`▶️  Animazione: ${clip.name}`);
       return;
     }
   }
@@ -984,6 +1137,13 @@ function animate(timestamp, frame) {
 
   // Controlla interactable a ogni frame
   checkInteractables();
+
+  // Aggiorna HUD coordinate camera
+  const hud = document.getElementById('cam-hud');
+  if (hud) {
+    const p = camera.position;
+    hud.textContent = `X ${p.x.toFixed(1)}  Y ${p.y.toFixed(1)}  Z ${p.z.toFixed(1)}`;
+  }
 
   // Anima markers
   animateMarkers(t);
