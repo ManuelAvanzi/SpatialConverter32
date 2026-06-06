@@ -169,14 +169,14 @@
     #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
     #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
 
-    /* Pannello modelli — si apre sotto la toolbar al centro */
+    /* Pannello modelli — a sinistra, scrollabile */
     #models-panel {
-      position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: 20px; left: 20px;
       background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
       padding: 12px 16px; color: #fff; z-index: 20;
       min-width: 320px; max-width: 440px;
-      max-height: calc(100vh - 80px); overflow-y: auto;
+      max-height: calc(100vh - 40px); overflow-y: auto;
       display: none;
     }
     #models-panel h3 { font-size: .75rem; color: #ffd400; opacity: 1; text-transform: uppercase;
