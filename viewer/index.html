@@ -154,7 +154,7 @@
       padding: 12px 16px; color: #fff; z-index: 20;
       min-width: 220px; display: none;
     }
-    #models-panel h3 { font-size: .75rem; opacity: .5; text-transform: uppercase;
+    #models-panel h3 { font-size: .75rem; color: #ffd400; opacity: 1; text-transform: uppercase;
       letter-spacing: .06em; margin-bottom: 10px; }
     .model-item { display: flex; align-items: center; gap: 8px;
       font-size: .82rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -462,9 +462,10 @@ async function loadScene() {
   }
 
   // Carica manifest (prima del modello, serve il buildId per la cache)
+  // cache-bust con timestamp: il manifest deve essere SEMPRE fresco
   let manifest = null;
   try {
-    const res = await fetch('./manifest.json');
+    const res = await fetch('./manifest.json?t=' + Date.now(), { cache: 'no-store' });
     if (res.ok) manifest = await res.json();
   } catch (e) {}
   loadedManifest = manifest;
@@ -499,6 +500,10 @@ async function loadScene() {
   // Aggiorna bounding box e pannello modelli
   updateSceneBoundingBox();
   await loadManifestAndUpdatePanel(manifest);
+
+  // Auto-play: con la mesh combinata (bind coerente) l'animazione deforma
+  // correttamente → i personaggi si alzano nella posa d'azione come in Unity.
+  autoPlayActionPoses();
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
@@ -578,12 +583,13 @@ async function loadModel() {
     }
   } catch(e) { console.warn('Cache miss:', e.message); }
 
-  // 2. Prova GLB già convertiti
+  // 2. Prova GLB già convertiti (cache-bust con buildId per evitare GLB vecchio)
+  const bust = loadedManifest?.buildId ? `?v=${loadedManifest.buildId}` : `?t=${Date.now()}`;
   const glbCandidates = ['models/environment.glb', 'models/construction_scene.glb'];
   for (const path of glbCandidates) {
     try {
       setProgress(20, `Provo ${path}...`);
-      const gltf = await loadGLTF(gltfLoader, path, p => setProgress(20 + p * 60, `GLB: ${Math.round(p*100)}%`));
+      const gltf = await loadGLTF(gltfLoader, path + bust, p => setProgress(20 + p * 60, `GLB: ${Math.round(p*100)}%`));
       addModelToScene(gltf);
       return true;
     } catch(e) { /* non trovato, continua */ }
@@ -802,6 +808,29 @@ function playClipsForModel(clipNames) {
     }
   }
   console.log(`▶️ ${played} clip avviate:`, clipNames);
+}
+
+// ─── Auto-play: mette ogni personaggio nella sua posa d'azione (come Unity) ──
+// La posa REST/bind non è quella di Unity: i personaggi vanno messi sul loro
+// frame d'animazione. Avviamo la prima clip di ogni modello animato.
+function autoPlayActionPoses() {
+  if (!loadedManifest?.pieces) return;
+  let n = 0;
+  for (const piece of loadedManifest.pieces) {
+    if (piece.type !== 'animated' || !piece.clips?.length) continue;
+    const clipName = piece.clips[0];
+    for (const { mixer, clips } of animationMixers) {
+      const clip = THREE.AnimationClip.findByName(clips, clipName);
+      if (clip) {
+        const action = mixer.clipAction(clip);
+        action.reset();
+        action.setLoop(THREE.LoopRepeat);
+        action.play();
+        n++;
+      }
+    }
+  }
+  console.log(`🎬 Auto-play: ${n} animazioni avviate (posa d'azione)`);
 }
 
 // ─── Centro utile della scena (usato da vista aerea) ─────────────────────
