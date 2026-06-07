@@ -1156,15 +1156,15 @@ function hidePlaceBanner()    { const b = document.getElementById('place-banner'
 // Controlla se il player è su un pad → teletrasporta sulla destinazione
 function checkTeleports() {
   if (!teleports.length || performance.now() < teleportCooldownUntil) return;
+  const pw = playerWorld();   // posizione world (corretta anche in VR)
   for (const tp of teleports) {
     const p = tp.padGroup.position;
-    const dx = camera.position.x - p.x;
-    const dz = camera.position.z - p.z;
+    const dx = pw.x - p.x;
+    const dz = pw.z - p.z;
     if (dx * dx + dz * dz > TP_TRIGGER_R * TP_TRIGGER_R) continue;
-    if (Math.abs(camera.position.y - (p.y + PLAYER_HEIGHT)) > 2.2) continue; // non da piani sopra
+    if (Math.abs(pw.y - (p.y + PLAYER_HEIGHT)) > 2.2) continue; // non da piani sopra
     const t = tp.targetGroup.position;
-    camera.position.set(t.x, t.y + PLAYER_HEIGHT, t.z);
-    playerGroundY = t.y + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
+    teleportPlayerTo(t.x, t.y, t.z);
     teleportCooldownUntil = performance.now() + 1200;
     showNotification(`🌀 Teleport ${tp.id}`);
     break;
@@ -1542,9 +1542,10 @@ function addInteractableInFront() {
 // Prossimità: mostra il prompt sull'interactable più vicino entro il raggio
 function checkSpatialInteractables() {
   let best = null, bestD = Infinity;
+  const pw = playerWorld();   // world (corretta anche in VR)
   for (const ia of interactables) {
     const p = ia.group.position;
-    const dx = camera.position.x - p.x, dz = camera.position.z - p.z;
+    const dx = pw.x - p.x, dz = pw.z - p.z;
     const d = dx * dx + dz * dz;
     if (d < ia.radius * ia.radius && d < bestD) { best = ia; bestD = d; }
   }
@@ -1609,6 +1610,15 @@ const moveDir = new THREE.Vector3();
 // Vettori di direzione calcolati dal yaw
 const fwdVec   = new THREE.Vector3();
 const rightVec = new THREE.Vector3();
+
+// ─── VR / player rig ────────────────────────────────────────────────────────
+let playerRig = null;            // contiene la camera; lo muoviamo per la locomozione VR
+let _vrSnapReady = true;
+const VR_SPEED = 3.0;            // m/s in VR
+const _upVec   = new THREE.Vector3(0, 1, 0);
+const _playerPos = new THREE.Vector3();
+const _vrA = new THREE.Vector3(), _vrB = new THREE.Vector3(), _vrHead = new THREE.Vector3();
+function playerWorld() { return camera.getWorldPosition(_playerPos); }
 
 // ─── Fisica salto ─────────────────────────────────────────────────────────
 let velocityY     = 0;
@@ -1697,7 +1707,10 @@ async function init() {
 
   // Posiziona camera direttamente nella scena
   camera.rotation.order = 'YXZ'; // importante: yaw poi pitch
-  scene.add(camera);
+  // Player rig: la camera è figlia del rig (in VR muoviamo il rig per spostarci)
+  playerRig = new THREE.Group();
+  playerRig.add(camera);
+  scene.add(playerRig);
 
   // ── Gizmo di posizionamento (TransformControls) ──
   transformControls = new TransformControls(camera, renderer.domElement);
@@ -1902,30 +1915,106 @@ async function setupVR() {
       const session = await navigator.xr.requestSession('immersive-vr', {
         optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
       });
-      renderer.xr.setSession(session);
+      // Porta il rig dove sta il personaggio (FPS) prima di entrare
+      const fx = camera.position.x, fy = camera.position.y, fz = camera.position.z;
+      await renderer.xr.setSession(session);
+      playerRig.position.set(fx, Math.max(0, fy - PLAYER_HEIGHT), fz);
+      playerRig.rotation.set(0, cameraYaw, 0);
       vrBtn.textContent = '❌ Esci da VR';
-      session.addEventListener('end', () => { vrBtn.textContent = '🥽 Entra in VR'; });
+      session.addEventListener('end', () => {
+        vrBtn.textContent = '🥽 Entra in VR';
+        // riprendi la modalità FPS dove era il rig
+        camera.position.set(playerRig.position.x, playerRig.position.y + PLAYER_HEIGHT, playerRig.position.z);
+        cameraYaw = playerRig.rotation.y;
+        playerRig.position.set(0, 0, 0); playerRig.rotation.set(0, 0, 0);
+        camera.rotation.order = 'YXZ'; camera.rotation.y = cameraYaw; camera.rotation.x = 0;
+      });
     }
   });
 
-  // Controller VR per interazione
+  // Controller VR — figli del rig (seguono il giocatore)
   const controllerFactory = new XRControllerModelFactory();
   for (let i = 0; i < 2; i++) {
     const controller = renderer.xr.getController(i);
     controller.addEventListener('selectstart', onVRInteract);
-    scene.add(controller);
+    playerRig.add(controller);
 
     const controllerGrip = renderer.xr.getControllerGrip(i);
     controllerGrip.add(controllerFactory.createControllerModel(controllerGrip));
-    scene.add(controllerGrip);
+    playerRig.add(controllerGrip);
 
-    // Ray pointer
     const geometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)
     ]);
     const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x4a9eff, opacity: 0.6, transparent: true }));
     controller.add(line);
   }
+}
+
+// ─── Locomozione VR: stick sx = muovi, stick dx = snap turn 30° ──────────────
+function vrLocomotion(dt) {
+  if (!renderer.xr.isPresenting || !playerRig) return;
+  const session = renderer.xr.getSession(); if (!session) return;
+
+  let moveX = 0, moveZ = 0;
+  for (const src of session.inputSources) {
+    const ax = src.gamepad && src.gamepad.axes;
+    if (!ax || ax.length < 4) continue;
+    const sx = Math.abs(ax[2]) > 0.18 ? ax[2] : 0;
+    const sy = Math.abs(ax[3]) > 0.18 ? ax[3] : 0;
+    if (src.handedness === 'left') { moveX = sx; moveZ = sy; }
+    else if (src.handedness === 'right') {
+      if (Math.abs(sx) > 0.7 && _vrSnapReady) {
+        camera.getWorldPosition(_vrA);                 // testa prima
+        playerRig.rotateY(-Math.sign(sx) * Math.PI / 6);
+        camera.getWorldPosition(_vrB);                 // testa dopo
+        playerRig.position.x += _vrA.x - _vrB.x;        // ruota attorno alla testa
+        playerRig.position.z += _vrA.z - _vrB.z;
+        _vrSnapReady = false;
+      } else if (Math.abs(sx) <= 0.2) _vrSnapReady = true;
+    }
+  }
+
+  if (moveX !== 0 || moveZ !== 0) {
+    camera.getWorldDirection(_vrA); _vrA.y = 0; _vrA.normalize();          // fwd
+    _vrB.crossVectors(_vrA, _upVec).normalize();                          // right
+    let dx = (_vrA.x * -moveZ + _vrB.x * moveX) * VR_SPEED * dt;
+    let dz = (_vrA.z * -moveZ + _vrB.z * moveX) * VR_SPEED * dt;
+    // Wall collision se ci sono collider attivi
+    if (collidableMeshes.length > 0) {
+      camera.getWorldPosition(_vrHead);
+      const len = Math.hypot(dx, dz);
+      if (len > 0) {
+        colRaycaster.near = 0; colRaycaster.far = PLAYER_RADIUS + len;
+        colRaycaster.set(_vrHead, _vrA.set(dx, 0, dz).normalize());
+        if (colRaycaster.intersectObjects(collidableMeshes, false).length > 0) { dx = 0; dz = 0; }
+      }
+    }
+    playerRig.position.x += dx;
+    playerRig.position.z += dz;
+  }
+
+  // Floor following (collider attivi)
+  if (collidableMeshes.length > 0) {
+    camera.getWorldPosition(_vrHead);
+    colRaycaster.near = 0; colRaycaster.far = 3.0;
+    colRaycaster.set(_vrHead, _downVec);
+    const fh = colRaycaster.intersectObjects(collidableMeshes, false);
+    if (fh.length > 0) playerRig.position.y = fh[0].point.y;
+  }
+}
+
+// Sposta il giocatore a una posizione (gestisce VR via rig + FPS via camera)
+function teleportPlayerTo(x, groundY, z) {
+  if (renderer.xr.isPresenting && playerRig) {
+    camera.getWorldPosition(_vrHead);
+    playerRig.position.x += x - _vrHead.x;
+    playerRig.position.z += z - _vrHead.z;
+    playerRig.position.y = groundY;
+  } else {
+    camera.position.set(x, groundY + PLAYER_HEIGHT, z);
+  }
+  playerGroundY = groundY + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
 }
 
 // ─── Caricamento scena ────────────────────────────────────────────────────
@@ -3292,8 +3381,11 @@ function animate(timestamp, frame) {
     }
   }
 
-  // Teleport: controlla se il player è su un pad (solo FPS, no VR)
-  if (cameraMode === 'fps' && !renderer.xr.isPresenting) checkTeleports();
+  // Locomozione VR (rig: stick sx muovi, stick dx snap-turn)
+  if (renderer.xr.isPresenting) vrLocomotion(delta);
+
+  // Teleport: controlla se il player è su un pad (FPS o VR, non in vista aerea)
+  if (renderer.xr.isPresenting || cameraMode === 'fps') checkTeleports();
 
   // Aggiorna animatori
   for (const { mixer } of animationMixers) {
