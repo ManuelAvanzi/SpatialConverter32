@@ -424,6 +424,12 @@ function toggleCollider(root, btn) {
       const idx = collidableMeshes.indexOf(o);
       if (idx !== -1) collidableMeshes.splice(idx, 1);
     });
+    // Forza verifica caduta: se il player è in quota senza supporto ora precipita.
+    // Se ci sono altri collider attivi, il raycast del frame dopo ri-atterrerà sulla
+    // superficie corretta quasi istantaneamente (< 1 frame di caduta).
+    playerGroundY = PLAYER_HEIGHT;   // livello suolo di default
+    isOnGround    = false;
+    velocityY     = 0;
     btn.classList.remove('active');
     btn.title = 'Attiva mesh collider';
     showNotification(`⬡ Collider disattivato: ${root.userData.gizmoName || root.name}`);
