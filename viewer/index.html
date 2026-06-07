@@ -214,6 +214,10 @@
       font-size: .8rem;
     }
     #coord-editor .ce-title { font-size: .75rem; color: #ffb060; margin-bottom: 8px; font-weight: 600; }
+    #coord-editor .ce-modes { display: flex; gap: 5px; margin-bottom: 8px; }
+    #coord-editor .ce-mode { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+      color: #ccc; border-radius: 5px; padding: 4px 6px; cursor: pointer; font-size: .7rem; }
+    #coord-editor .ce-mode.active { background: rgba(255,159,74,.3); border-color: rgba(255,159,74,.5); color: #ffd0a0; }
     #coord-editor .ce-row { display: flex; align-items: center; gap: 6px; }
     #coord-editor .ce-row label { color: #ff9f4a; font-weight: 600; width: 12px; }
     #coord-editor .ce-row input {
@@ -549,6 +553,11 @@
 <!-- Editor coordinate manuale (appare con il gizmo) -->
 <div id="coord-editor">
   <div class="ce-title">✥ <span id="ce-name">oggetto</span></div>
+  <div class="ce-modes">
+    <button id="ce-mode-t" class="ce-mode active">✥ Sposta</button>
+    <button id="ce-mode-r" class="ce-mode">⟳ Ruota</button>
+    <button id="ce-mode-s" class="ce-mode">⤢ Scala</button>
+  </div>
   <div class="ce-row">
     <label>X</label><input id="ce-x" type="number" step="0.5" />
     <label>Y</label><input id="ce-y" type="number" step="0.5" />
@@ -667,11 +676,15 @@ function loadSavedPositions() {
 }
 function saveObjectPosition(name, obj) {
   const all = loadSavedPositions();
-  const p = obj.position;
-  all[name] = [ +p.x.toFixed(4), +p.y.toFixed(4), +p.z.toFixed(4) ];
+  const r4 = v => +v.toFixed(4);
+  all[name] = {
+    p: obj.position.toArray().map(r4),
+    r: [obj.rotation.x, obj.rotation.y, obj.rotation.z].map(r4),
+    s: obj.scale.toArray().map(r4),
+  };
   localStorage.setItem(POS_STORE_KEY, JSON.stringify(all));
   SAVED_POSITIONS[name] = all[name];
-  showNotification(`💾 Posizione salvata: ${name}`);
+  showNotification(`💾 Salvato: ${name}`);
 }
 
 // Posizioni salvate (positions.json permanente + localStorage live), caricate all'avvio
@@ -740,7 +753,14 @@ async function loadAllSavedPositions() {
 function applySavedToObject(obj, name) {
   obj.userData.gizmoName = name;
   const s = SAVED_POSITIONS[name];
-  if (s) obj.position.set(s[0], s[1], s[2]);
+  if (!s) return;
+  if (Array.isArray(s)) {                       // formato vecchio: solo posizione
+    obj.position.set(s[0], s[1], s[2]);
+  } else {                                        // formato nuovo: pos + rot + scala
+    if (s.p) obj.position.set(s.p[0], s.p[1], s.p[2]);
+    if (s.r) obj.rotation.set(s.r[0], s.r[1], s.r[2]);
+    if (s.s) obj.scale.set(s.s[0], s.s[1], s.s[2]);
+  }
 }
 // Collega i pulsanti ✥/✓ di una riga del pannello a un oggetto posizionabile
 function wireGizmoControls(item, name, root) {
@@ -1816,6 +1836,8 @@ async function setupVR() {
   if (!supported) return;
 
   const vrBtn = document.getElementById('vr-btn');
+  // VR solo in play mode (non in editor)
+  if (EDIT_MODE) return;
   vrBtn.style.display = 'block';
 
   // Usa il VRButton ufficiale di Three.js come fallback,
@@ -1915,6 +1937,9 @@ async function loadScene() {
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
   for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false);
+
+  // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
+  applyLighting(SCENE_CONFIG.lighting);
 
   // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
   applySpawn();
@@ -2214,11 +2239,10 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
         item.innerHTML = `${dot}${name}${btns}${info}`;
         if (root) {
           wireGizmoControls(item, piece.name, root);
-          // Pulsante collider
-          item.querySelector('.collider-btn')?.addEventListener('click', e => {
-            e.stopPropagation();
-            toggleCollider(root, e.currentTarget);
-          });
+          // Pulsante collider (+ ripristino da scene-config)
+          const _cob = item.querySelector('.collider-btn');
+          _cob?.addEventListener('click', e => { e.stopPropagation(); toggleCollider(root, _cob); });
+          if (_cob && (SCENE_CONFIG.colliders || []).includes(piece.name)) toggleCollider(root, _cob);
           // Pulsante nascondi/mostra
           item.querySelector('.delete-btn')?.addEventListener('click', e => {
             e.stopPropagation();
@@ -2399,6 +2423,7 @@ function updateCoordEditorFields(obj) {
 function showCoordEditor(obj, name) {
   document.getElementById('ce-name').textContent = name || 'oggetto';
   updateCoordEditorFields(obj);
+  setGizmoMode('translate', 'ce-mode-t');   // ogni volta riparte da Sposta
   document.getElementById('coord-editor').style.display = 'block';
 }
 function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
@@ -2411,9 +2436,17 @@ function applyCoordEditor() {
   gizmoTarget.position.set(x, y, z);
   persistGizmoTarget(gizmoTarget);
 }
+function setGizmoMode(mode, btnId) {
+  if (transformControls) transformControls.setMode(mode);
+  document.querySelectorAll('#coord-editor .ce-mode').forEach(b => b.classList.remove('active'));
+  const b = document.getElementById(btnId); if (b) b.classList.add('active');
+}
 function setupCoordEditor() {
   ['ce-x', 'ce-y', 'ce-z'].forEach(id =>
     document.getElementById(id).addEventListener('change', applyCoordEditor));
+  document.getElementById('ce-mode-t').addEventListener('click', () => setGizmoMode('translate', 'ce-mode-t'));
+  document.getElementById('ce-mode-r').addEventListener('click', () => setGizmoMode('rotate', 'ce-mode-r'));
+  document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
   document.getElementById('ce-apply').addEventListener('click', applyCoordEditor);
   document.getElementById('ce-close').addEventListener('click', () => {
     if (gizmoTarget) toggleGizmo(gizmoTarget, null);
@@ -2627,6 +2660,41 @@ function downloadJSON(filename, obj) {
 
 // Esporta l'INTERA configurazione della scena in un solo file (engine/contenuto split).
 // Da committare in viewer/scene-config.json → diventa ciò che vedono tutti online.
+// Cattura lo stato attuale dell'illuminazione
+function captureLighting() {
+  if (!scene || !ambientLight || !dirLight || !renderer) return SCENE_CONFIG.lighting || null;
+  return {
+    bg: '#' + scene.background.getHexString(),
+    ambInt: +ambientLight.intensity.toFixed(3), ambCol: '#' + ambientLight.color.getHexString(),
+    sunInt: +dirLight.intensity.toFixed(3), sunCol: '#' + dirLight.color.getHexString(),
+    sunPos: dirLight.position.toArray().map(v => +v.toFixed(2)),
+    exposure: +renderer.toneMappingExposure.toFixed(3),
+    fogDens: scene.fog ? +scene.fog.density.toFixed(4) : null,
+  };
+}
+// Applica un'illuminazione salvata (oggetti + sincronizza i campi del pannello Luce)
+function applyLighting(L) {
+  if (!L) return;
+  if (L.bg) scene.background = new THREE.Color(L.bg);
+  if (L.ambInt != null) ambientLight.intensity = L.ambInt;
+  if (L.ambCol) ambientLight.color.set(L.ambCol);
+  if (L.sunInt != null) dirLight.intensity = L.sunInt;
+  if (L.sunCol) dirLight.color.set(L.sunCol);
+  if (Array.isArray(L.sunPos)) dirLight.position.fromArray(L.sunPos);
+  if (L.exposure != null) renderer.toneMappingExposure = L.exposure;
+  scene.fog = (L.fogDens != null) ? new THREE.FogExp2(scene.background.clone(), L.fogDens) : null;
+  const v = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+  const t = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  v('lp-bg-color', L.bg); v('lp-amb-int', L.ambInt); v('lp-amb-col', L.ambCol);
+  v('lp-sun-int', L.sunInt); v('lp-sun-col', L.sunCol); v('lp-exposure', L.exposure);
+  const fo = document.getElementById('lp-fog-on'); if (fo) fo.checked = L.fogDens != null;
+  if (L.fogDens != null) v('lp-fog-dens', L.fogDens);
+  if (L.ambInt != null) t('lp-amb-int-val', Number(L.ambInt).toFixed(2));
+  if (L.sunInt != null) t('lp-sun-int-val', Number(L.sunInt).toFixed(2));
+  if (L.exposure != null) t('lp-exposure-val', Number(L.exposure).toFixed(2));
+  if (L.fogDens != null) t('lp-fog-dens-val', Number(L.fogDens).toFixed(3));
+}
+
 function buildSceneConfigObject() {
   const safe = s => { try { return JSON.parse(s); } catch { return null; } };
   return {
@@ -2637,6 +2705,8 @@ function buildSceneConfigObject() {
     teleports:     loadSavedTeleports(),
     entrances:     loadSavedEntrances(),
     interactables: loadSavedInteractables(),
+    colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
+    lighting:      captureLighting(),
   };
 }
 function exportSceneConfig() {
@@ -2686,25 +2756,18 @@ function addCharactersToPanel() {
   header.textContent = `🧍 Personaggi (${gltfCharacters.length})`;
   list.appendChild(header);
 
-  const exp = document.createElement('button');
-  exp.textContent = '💾 Esporta posizioni';
-  exp.style.cssText = 'background:rgba(74,158,255,.2);border:1px solid rgba(74,158,255,.4);'
-    + 'color:#9ccfff;border-radius:5px;padding:5px 8px;cursor:pointer;font-size:.72rem;'
-    + 'margin-bottom:8px;width:100%;';
-  exp.addEventListener('click', e => { e.stopPropagation(); exportPositions(); });
-  list.appendChild(exp);
-
   for (const ch of gltfCharacters) {
     const item = document.createElement('div');
     item.className = 'model-item';
     item.innerHTML =
       `<div class="model-dot" style="background:#4a9eff"></div>`
       + `<span class="model-name">${ch.name}</span>`
-      + `<button class="goto-btn"    title="Vai al personaggio">🎯</button>`
-      + `<button class="gizmo-btn"   title="Sposta col gizmo">✥</button>`
-      + `<button class="confirm-btn" title="Conferma e salva posizione">✓</button>`
+      + `<button class="goto-btn"     title="Vai al personaggio">🎯</button>`
+      + `<button class="gizmo-btn"    title="Sposta/Ruota/Scala col gizmo">✥</button>`
+      + `<button class="collider-btn" title="Mesh collider (camminabile/ostacolo)">⬡</button>`
+      + `<button class="confirm-btn"  title="Salva posizione/rotazione/scala">✓</button>`
       + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">⏹</button>` : '')
-      + `<button class="delete-btn"  title="Rimuovi dalla scena">🗑</button>`;
+      + `<button class="delete-btn"   title="Rimuovi dalla scena">🗑</button>`;
 
     item.querySelector('.goto-btn').addEventListener('click', e => {
       e.stopPropagation();
@@ -2719,6 +2782,10 @@ function addCharactersToPanel() {
 
     const gb = item.querySelector('.gizmo-btn');
     gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ch.root, gb); });
+
+    const cob = item.querySelector('.collider-btn');
+    cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
+    if ((SCENE_CONFIG.colliders || []).includes(ch.name)) toggleCollider(ch.root, cob); // ripristina
 
     item.querySelector('.confirm-btn').addEventListener('click', e => {
       e.stopPropagation();
