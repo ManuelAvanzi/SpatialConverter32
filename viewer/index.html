@@ -647,6 +647,20 @@ async function loadSceneConfig() {
   return SCENE_CONFIG;
 }
 
+// Base degli asset 3D pesanti: cartella locale viewer/models in dev,
+// URL pubblico R2 in produzione (fornito dal server via /api/config).
+let ASSET_BASE = 'models';
+async function loadAppConfig() {
+  try {
+    const r = await fetch('./api/config', { cache: 'no-store' });
+    if (r.ok) {
+      const c = await r.json();
+      if (c.assetBase) ASSET_BASE = String(c.assetBase).replace(/\/+$/, '');
+    }
+  } catch {}
+  console.log('🌐 ASSET_BASE =', ASSET_BASE);
+}
+
 async function loadAllSavedPositions() {
   let base = {};
   try {
@@ -1488,8 +1502,9 @@ let   _beamTex = null;
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
-  // Configurazione pubblicata del progetto (serve già ad audio e modelli)
+  // Configurazione pubblicata del progetto + base-URL asset (serve già ad audio e modelli)
   await loadSceneConfig();
+  await loadAppConfig();
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1891,7 +1906,7 @@ async function loadModel() {
 
   // 2. Prova GLB già convertiti (cache-bust con buildId per evitare GLB vecchio)
   const bust = loadedManifest?.buildId ? `?v=${loadedManifest.buildId}` : `?t=${Date.now()}`;
-  const glbCandidates = ['models/environment.glb', 'models/construction_scene.glb'];
+  const glbCandidates = [`${ASSET_BASE}/environment.glb`, `${ASSET_BASE}/construction_scene.glb`];
   for (const path of glbCandidates) {
     try {
       setProgress(20, `Provo ${path}...`);
@@ -2181,26 +2196,34 @@ function autoPlayActionPoses() {
 // I personaggi animati vengono esportati da Unity in glTF (skinning+anim intatti)
 // e caricati qui sopra la scena statica. Niente più Blender per i personaggi.
 // Lista fissa di fallback (se l'autodiscovery non funziona)
-const CHARACTER_GLTFS = [
-  'models/gltfModels/Axe_Wield_01_FINAL2.gltf',
-  'models/gltfModels/Environment.gltf',                       // i 3 Hammering
-  'models/gltfModels/rischio da macchinari in movimento.gltf', // escavatore + infortunato
-  'models/gltfModels/rischio eletrico.gltf',                  // rischio elettrico
-  'models/gltfModels/Spade_02_FINAL2.gltf',
-  'models/gltfModels/sliping.gltf',
-  'models/gltfModels/falling from loosing balance.gltf',
+// Fallback (solo nomi file) se la discovery non trova nulla
+const CHARACTER_GLTF_FILES = [
+  'Axe_Wield_01_FINAL2.gltf', 'Environment.gltf', 'rischio da macchinari in movimento.gltf',
+  'rischio eletrico.gltf', 'Spade_02_FINAL2.gltf', 'sliping.gltf', 'falling from loosing balance.gltf',
 ];
 
-// Scopre da solo tutti i .gltf nella cartella (legge la directory listing del server)
+// Scopre i .gltf: 1) manifest models.json (ovunque), 2) directory listing (npx serve locale)
 async function discoverCharacterGltfs() {
+  // 1) Manifest statico — funziona con npx serve, Express e R2
   try {
-    const res = await fetch('models/gltfModels/');
-    if (!res.ok) return [];
-    const html = await res.text();
-    const found = [...html.matchAll(/href="([^"]+\.gltf)"/gi)]
-      .map(m => 'models/gltfModels/' + decodeURIComponent(m[1].split(/[\\/]/).pop()));
-    return [...new Set(found)];
-  } catch { return []; }
+    const r = await fetch(`${ASSET_BASE}/gltfModels/models.json?t=` + Date.now(), { cache: 'no-store' });
+    if (r.ok) {
+      const list = await r.json();
+      if (Array.isArray(list) && list.length)
+        return [...new Set(list.map(f => `${ASSET_BASE}/gltfModels/` + f))];
+    }
+  } catch {}
+  // 2) Directory listing (solo `npx serve` in locale)
+  try {
+    const res = await fetch(`${ASSET_BASE}/gltfModels/`);
+    if (res.ok) {
+      const html = await res.text();
+      const found = [...html.matchAll(/href="([^"]+\.gltf)"/gi)]
+        .map(m => `${ASSET_BASE}/gltfModels/` + decodeURIComponent(m[1].split(/[\\/]/).pop()));
+      if (found.length) return [...new Set(found)];
+    }
+  } catch {}
+  return [];
 }
 // UnityGLTF nega solo X; la scena statica Blender nega X e Z → riallineo il Z.
 let CHAR_FLIP_Z = true;
@@ -2210,8 +2233,8 @@ const gltfCharacters = [];   // {name, root, action}
 async function loadGltfCharacters() {
   const loader = new GLTFLoader();
   // unisci lista fissa + autodiscovery (così i nuovi file compaiono da soli)
-  const discovered = await discoverCharacterGltfs();
-  const fileList = [...new Set([...CHARACTER_GLTFS, ...discovered])];
+  let fileList = await discoverCharacterGltfs();
+  if (!fileList.length) fileList = CHARACTER_GLTF_FILES.map(f => `${ASSET_BASE}/gltfModels/` + f);
   console.log(`📂 glTF personaggi da caricare (${fileList.length}):`, fileList);
 
   for (const url of fileList) {

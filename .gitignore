@@ -1,10 +1,18 @@
-# Modelli 3D pesanti — non su git, si rigenerano con il workflow
+# Modelli 3D pesanti — non su git (vanno su Cloudflare R2), si rigenerano col workflow
 viewer/models/*.fbx
 viewer/models/*.FBX
 viewer/models/*.glb
 viewer/models/*.obj
 viewer/models/*.mtl
 viewer/textures/
+# Personaggi glTF pesanti su R2 — tengo solo il manifest models.json
+viewer/models/gltfModels/*
+!viewer/models/gltfModels/models.json
+
+# Node / deploy
+node_modules/
+.env
+diag_renders/
 
 # Cache Blender e temp
 _spat_tmp_*/
