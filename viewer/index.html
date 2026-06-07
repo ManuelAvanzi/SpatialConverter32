@@ -224,6 +224,39 @@
       cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
     }
     .delete-btn:hover { background: rgba(255,60,60,.5); color:#fff; }
+    /* Pannello illuminazione — destra */
+    #lighting-panel {
+      position: fixed; top: 60px; right: 20px;
+      background: rgba(0,0,0,.72); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+      padding: 12px 14px; color: #fff; z-index: 20;
+      width: 260px; max-height: calc(100vh - 80px); overflow-y: auto;
+      display: none;
+    }
+    #lighting-panel h3 { font-size: .75rem; color: #ffd400; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: 10px; }
+    #lighting-panel::-webkit-scrollbar { width: 4px; }
+    #lighting-panel::-webkit-scrollbar-thumb { background: rgba(255,212,0,.3); border-radius: 2px; }
+    .lp-section { border-bottom: 1px solid rgba(255,255,255,.07);
+      padding-bottom: 8px; margin-bottom: 8px; }
+    .lp-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .lp-section-title { font-size: .68rem; color: rgba(255,255,255,.4);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .lp-row { display: flex; align-items: center; gap: 6px;
+      font-size: .75rem; margin-bottom: 4px; }
+    .lp-row label { flex-shrink: 0; width: 68px; opacity: .65; font-size: .72rem; }
+    .lp-slider { flex: 1; accent-color: #4a9eff; cursor: pointer; height: 3px; }
+    .lp-val { width: 40px; text-align: right; font-size: .68rem;
+      opacity: .7; font-family: monospace; flex-shrink: 0; }
+    .lp-color { width: 30px; height: 22px; border: 1px solid rgba(255,255,255,.2);
+      border-radius: 4px; cursor: pointer; padding: 1px 2px; background: none; flex-shrink:0; }
+    .lp-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px; }
+    .preset-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+      color: rgba(255,255,255,.75); border-radius: 5px; padding: 5px 4px;
+      cursor: pointer; font-size: .72rem; transition: background .15s; }
+    .preset-btn:hover { background: rgba(255,255,255,.18); }
+    .preset-btn.active { background: rgba(255,212,0,.2); border-color: rgba(255,212,0,.5); color: #ffd400; }
+
     .collider-btn {
       background: rgba(74,200,255,.15); border: 1px solid rgba(74,200,255,.35);
       color: #4ac8ff; border-radius: 4px; padding: 2px 7px;
@@ -268,7 +301,90 @@
 <div id="toolbar">
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
   <button class="tool-btn" id="btn-models"    title="Modelli caricati">📦 Modelli</button>
+  <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Salva punto d'entrata (posizione iniziale del personaggio)">📍 Entrata</button>
+</div>
+
+<!-- Pannello illuminazione -->
+<div id="lighting-panel">
+  <h3>☀️ Illuminazione</h3>
+
+  <div class="lp-section">
+    <div class="lp-section-title">Preset cielo</div>
+    <div class="lp-presets">
+      <button class="preset-btn active" data-preset="day">☀️ Giorno</button>
+      <button class="preset-btn"        data-preset="sunset">🌅 Tramonto</button>
+      <button class="preset-btn"        data-preset="night">🌙 Notte</button>
+      <button class="preset-btn"        data-preset="overcast">☁️ Nuvoloso</button>
+    </div>
+  </div>
+
+  <div class="lp-section">
+    <div class="lp-section-title">Sfondo</div>
+    <div class="lp-row">
+      <label>Colore</label>
+      <input type="color" id="lp-bg-color" value="#87ceeb" class="lp-color">
+    </div>
+  </div>
+
+  <div class="lp-section">
+    <div class="lp-section-title">Luce ambiente</div>
+    <div class="lp-row">
+      <label>Intensità</label>
+      <input type="range" id="lp-amb-int" min="0" max="3" step="0.05" value="0.6" class="lp-slider">
+      <span id="lp-amb-int-val" class="lp-val">0.60</span>
+    </div>
+    <div class="lp-row">
+      <label>Colore</label>
+      <input type="color" id="lp-amb-col" value="#ffffff" class="lp-color">
+    </div>
+  </div>
+
+  <div class="lp-section">
+    <div class="lp-section-title">Sole (luce direzionale)</div>
+    <div class="lp-row">
+      <label>Intensità</label>
+      <input type="range" id="lp-sun-int" min="0" max="5" step="0.1" value="1.2" class="lp-slider">
+      <span id="lp-sun-int-val" class="lp-val">1.20</span>
+    </div>
+    <div class="lp-row">
+      <label>Colore</label>
+      <input type="color" id="lp-sun-col" value="#ffffff" class="lp-color">
+    </div>
+    <div class="lp-row">
+      <label>Elevazione</label>
+      <input type="range" id="lp-sun-elev" min="5" max="90" step="1" value="60" class="lp-slider">
+      <span id="lp-sun-elev-val" class="lp-val">60°</span>
+    </div>
+    <div class="lp-row">
+      <label>Azimut</label>
+      <input type="range" id="lp-sun-azim" min="0" max="360" step="1" value="45" class="lp-slider">
+      <span id="lp-sun-azim-val" class="lp-val">45°</span>
+    </div>
+  </div>
+
+  <div class="lp-section">
+    <div class="lp-section-title">Camera</div>
+    <div class="lp-row">
+      <label>Esposizione</label>
+      <input type="range" id="lp-exposure" min="0.3" max="3" step="0.05" value="1.2" class="lp-slider">
+      <span id="lp-exposure-val" class="lp-val">1.20</span>
+    </div>
+  </div>
+
+  <div class="lp-section">
+    <div class="lp-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      Nebbia
+      <label style="font-size:.72rem;font-weight:normal;cursor:pointer;">
+        <input type="checkbox" id="lp-fog-on" checked> Attiva
+      </label>
+    </div>
+    <div class="lp-row">
+      <label>Densità</label>
+      <input type="range" id="lp-fog-dens" min="0.001" max="0.04" step="0.001" value="0.008" class="lp-slider">
+      <span id="lp-fog-dens-val" class="lp-val">0.008</span>
+    </div>
+  </div>
 </div>
 <div id="instructions">
   WASD · Muoviti<br>
@@ -315,6 +431,8 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
+let ambientLight = null;   // accessibile dal pannello illuminazione
+let dirLight     = null;   // sole direzionale
 let sceneData = null;
 let loadedManifest = null;   // manifest caricato prima del GLB
 let interactableMeshes = [];
@@ -505,9 +623,9 @@ async function init() {
   camera.position.set(0, 1.7, 0);
 
   // Luce ambiente
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
   dirLight.position.set(10, 20, 10);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(2048, 2048);
@@ -636,6 +754,15 @@ async function init() {
     panel.style.display = isVisible ? 'none' : 'block';
     document.getElementById('btn-models').classList.toggle('active', !isVisible);
   });
+
+  // ── Pulsante Illuminazione ────────────────────────────────────────────────
+  document.getElementById('btn-lighting').addEventListener('click', () => {
+    const panel = document.getElementById('lighting-panel');
+    const isVisible = panel.style.display === 'block';
+    panel.style.display = isVisible ? 'none' : 'block';
+    document.getElementById('btn-lighting').classList.toggle('active', !isVisible);
+  });
+  setupLightingPanel();
 
   // ── Pulsante Entrata ──────────────────────────────────────────────────────
   document.getElementById('btn-entrance').addEventListener('click', () => {
@@ -1261,6 +1388,117 @@ function setupCoordEditor() {
     updateCoordEditorFields(gizmoTarget);
     if (gizmoTarget.userData.gizmoName) saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
     showNotification('Portato davanti alla camera');
+  });
+}
+
+// ─── Pannello Illuminazione ───────────────────────────────────────────────────
+function setupLightingPanel() {
+  const PRESETS = {
+    day:     { bg:'#87ceeb', fogDens:0.008,  fogOn:true,  ambInt:0.60, ambCol:'#ffffff', sunInt:1.2,  sunCol:'#ffffff', elev:60, azim:45,  exp:1.20 },
+    sunset:  { bg:'#ff6e40', fogDens:0.014,  fogOn:true,  ambInt:0.35, ambCol:'#ffb74d', sunInt:1.0,  sunCol:'#ff6f00', elev:10, azim:270, exp:1.00 },
+    night:   { bg:'#080818', fogDens:0.018,  fogOn:true,  ambInt:0.08, ambCol:'#304080', sunInt:0.20, sunCol:'#b0c4de', elev:25, azim:180, exp:0.55 },
+    overcast:{ bg:'#a8b4bc', fogDens:0.022,  fogOn:true,  ambInt:0.95, ambCol:'#ccd4dc', sunInt:0.25, sunCol:'#dce4ec', elev:45, azim:90,  exp:1.00 },
+  };
+
+  let _sunElev = 60, _sunAzim = 45;
+
+  function updateSunPos(elev, azim) {
+    const e = elev * Math.PI / 180;
+    const a = azim * Math.PI / 180;
+    const d = 80;
+    dirLight.position.set(
+      d * Math.cos(e) * Math.sin(a),
+      d * Math.sin(e),
+      d * Math.cos(e) * Math.cos(a)
+    );
+  }
+
+  function applyPreset(p) {
+    const bgCol = new THREE.Color(p.bg);
+    scene.background = bgCol;
+    scene.fog = p.fogOn ? new THREE.FogExp2(bgCol, p.fogDens) : null;
+    ambientLight.intensity = p.ambInt;  ambientLight.color.set(p.ambCol);
+    dirLight.intensity     = p.sunInt;  dirLight.color.set(p.sunCol);
+    _sunElev = p.elev; _sunAzim = p.azim;
+    updateSunPos(p.elev, p.azim);
+    renderer.toneMappingExposure = p.exp;
+    // Sincronizza UI
+    document.getElementById('lp-bg-color').value  = p.bg;
+    document.getElementById('lp-amb-int').value   = p.ambInt;
+    document.getElementById('lp-amb-int-val').textContent = p.ambInt.toFixed(2);
+    document.getElementById('lp-amb-col').value   = p.ambCol;
+    document.getElementById('lp-sun-int').value   = p.sunInt;
+    document.getElementById('lp-sun-int-val').textContent = p.sunInt.toFixed(2);
+    document.getElementById('lp-sun-col').value   = p.sunCol;
+    document.getElementById('lp-sun-elev').value  = p.elev;
+    document.getElementById('lp-sun-elev-val').textContent = p.elev + '°';
+    document.getElementById('lp-sun-azim').value  = p.azim;
+    document.getElementById('lp-sun-azim-val').textContent = p.azim + '°';
+    document.getElementById('lp-exposure').value  = p.exp;
+    document.getElementById('lp-exposure-val').textContent = p.exp.toFixed(2);
+    document.getElementById('lp-fog-on').checked  = p.fogOn;
+    document.getElementById('lp-fog-dens').value  = p.fogDens;
+    document.getElementById('lp-fog-dens-val').textContent = p.fogDens.toFixed(3);
+  }
+
+  // Preset
+  document.querySelectorAll('.preset-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyPreset(PRESETS[btn.dataset.preset]);
+    })
+  );
+
+  // Sfondo
+  document.getElementById('lp-bg-color').addEventListener('input', e => {
+    const col = new THREE.Color(e.target.value);
+    scene.background = col;
+    if (scene.fog) scene.fog.color.copy(col);
+  });
+
+  // Luce ambiente
+  document.getElementById('lp-amb-int').addEventListener('input', e => {
+    ambientLight.intensity = +e.target.value;
+    document.getElementById('lp-amb-int-val').textContent = (+e.target.value).toFixed(2);
+  });
+  document.getElementById('lp-amb-col').addEventListener('input', e => ambientLight.color.set(e.target.value));
+
+  // Sole
+  document.getElementById('lp-sun-int').addEventListener('input', e => {
+    dirLight.intensity = +e.target.value;
+    document.getElementById('lp-sun-int-val').textContent = (+e.target.value).toFixed(2);
+  });
+  document.getElementById('lp-sun-col').addEventListener('input', e => dirLight.color.set(e.target.value));
+  document.getElementById('lp-sun-elev').addEventListener('input', e => {
+    _sunElev = +e.target.value;
+    document.getElementById('lp-sun-elev-val').textContent = _sunElev + '°';
+    updateSunPos(_sunElev, _sunAzim);
+  });
+  document.getElementById('lp-sun-azim').addEventListener('input', e => {
+    _sunAzim = +e.target.value;
+    document.getElementById('lp-sun-azim-val').textContent = _sunAzim + '°';
+    updateSunPos(_sunElev, _sunAzim);
+  });
+
+  // Esposizione
+  document.getElementById('lp-exposure').addEventListener('input', e => {
+    renderer.toneMappingExposure = +e.target.value;
+    document.getElementById('lp-exposure-val').textContent = (+e.target.value).toFixed(2);
+  });
+
+  // Nebbia
+  document.getElementById('lp-fog-on').addEventListener('change', e => {
+    if (e.target.checked) {
+      const col = new THREE.Color(document.getElementById('lp-bg-color').value);
+      scene.fog = new THREE.FogExp2(col, +document.getElementById('lp-fog-dens').value);
+    } else {
+      scene.fog = null;
+    }
+  });
+  document.getElementById('lp-fog-dens').addEventListener('input', e => {
+    document.getElementById('lp-fog-dens-val').textContent = (+e.target.value).toFixed(3);
+    if (scene.fog) scene.fog.density = +e.target.value;
   });
 }
 
