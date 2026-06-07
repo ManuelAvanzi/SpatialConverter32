@@ -283,6 +283,14 @@
     .tp-target-btn:hover  { background:rgba(180,120,255,.4); }
     .tp-target-btn.active { background:rgba(180,120,255,.6); border-color:#b478ff; color:#fff; }
 
+    /* Entrance Point */
+    .face-btn { background:rgba(74,255,138,.15); border:1px solid rgba(74,255,138,.4);
+      color:#6bffa0; border-radius:4px; padding:2px 7px; cursor:pointer; font-size:.72rem;
+      flex-shrink:0; transition:background .15s; }
+    .face-btn:hover { background:rgba(74,255,138,.4); }
+    .ep-radius { width:46px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+      color:#fff; border-radius:4px; padding:2px 4px; font-size:.7rem; font-family:monospace; flex-shrink:0; }
+
     /* Palette Spatial Features (draggabili) */
     .spatial-feature { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.05);
       border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:8px 10px; margin-bottom:8px;
@@ -348,6 +356,8 @@
     <div id="spatial-palette"></div>
     <h3 style="margin-top:14px">Teleport piazzati</h3>
     <div id="teleport-list"></div>
+    <h3 style="margin-top:14px">Entrance Points</h3>
+    <div id="entrance-list"></div>
   </div>
 </div>
 
@@ -356,7 +366,7 @@
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
   <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
-  <button class="tool-btn" id="btn-entrance"  title="Salva punto d'entrata (posizione iniziale del personaggio)">📍 Entrata</button>
+  <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
 </div>
 
 <!-- Pannello illuminazione -->
@@ -790,24 +800,33 @@ function addTeleportRow(tp) {
 }
 
 // Palette Spatial Features (draggabile)
+function featureCardHTML(kind, ico, name, desc) {
+  return `<div class="spatial-feature" draggable="true" data-feature="${kind}">`
+    +   `<span class="sf-ico">${ico}</span>`
+    +   `<div class="sf-txt"><div class="sf-name">${name}</div><div class="sf-desc">${desc}</div></div>`
+    +   `<button class="sf-add" title="Aggiungi davanti a me">＋</button>`
+    + `</div>`;
+}
 function buildSpatialPalette() {
   const pal = document.getElementById('spatial-palette');
   if (!pal) return;
   pal.innerHTML =
-      `<div class="spatial-feature" draggable="true" data-feature="teleport">`
-    +   `<span class="sf-ico">🌀</span>`
-    +   `<div class="sf-txt"><div class="sf-name">Teleport</div>`
-    +     `<div class="sf-desc">Sali sul cilindro → ti sposti</div></div>`
-    +   `<button class="sf-add" title="Aggiungi davanti a me">＋</button>`
-    + `</div>`;
-  const feat = pal.querySelector('.spatial-feature');
-  feat.addEventListener('dragstart', e => {
-    _draggingFeature = 'teleport';
-    e.dataTransfer.setData('text/plain', 'teleport');
-    e.dataTransfer.effectAllowed = 'copy';
+      featureCardHTML('teleport', '🌀', 'Teleport', 'Sali sul cilindro → ti sposti')
+    + featureCardHTML('entrance', '📍', 'Entrance Point', 'Dove appari entrando nella scena');
+
+  pal.querySelectorAll('.spatial-feature').forEach(feat => {
+    const kind = feat.dataset.feature;
+    feat.addEventListener('dragstart', e => {
+      _draggingFeature = kind;
+      e.dataTransfer.setData('text/plain', kind);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    feat.addEventListener('dragend', () => { _draggingFeature = null; });
+    feat.querySelector('.sf-add').addEventListener('click', e => {
+      e.stopPropagation();
+      if (kind === 'teleport') addTeleportInFront(); else addEntranceAtMe();
+    });
   });
-  feat.addEventListener('dragend', () => { _draggingFeature = null; });
-  pal.querySelector('.sf-add').addEventListener('click', e => { e.stopPropagation(); addTeleportInFront(); });
 }
 
 function addTeleportInFront() {
@@ -835,14 +854,21 @@ function screenToScenePoint(clientX, clientY) {
 }
 
 function onCanvasDrop(e) {
-  if (_draggingFeature !== 'teleport') return;
+  const kind = _draggingFeature;
+  if (kind !== 'teleport' && kind !== 'entrance') return;
   e.preventDefault();
   const pt = screenToScenePoint(e.clientX, e.clientY);
   _draggingFeature = null;
   if (!pt) return;
-  const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
-  switchMenuTab('spatial');
-  enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
+  if (kind === 'teleport') {
+    const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
+    switchMenuTab('spatial');
+    enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
+  } else {
+    const ep = addEntrance([pt.x, pt.y, pt.z], cameraYaw, 1.5, null, true);
+    switchMenuTab('spatial');
+    showNotification(`📍 Entrance ${ep.id} piazzato — usa ⟳ per la direzione di spawn`);
+  }
 }
 
 function switchMenuTab(name) {
@@ -920,10 +946,184 @@ function animateTeleports(t) {
   }
 }
 
-// Salva la posizione del target del gizmo (teleport → saveTeleports, altrimenti posizione oggetto)
+// ─── Entrance Point: visual + logica ────────────────────────────────────────
+// Crea il visual: anello del raggio + disco + pin verticale + freccia direzione
+function createEntranceVisual(radius) {
+  const group = new THREE.Group();
+  const col = 0x4aff8a;
+  const add = THREE.AdditiveBlending;
+
+  // Anello del raggio (area di spawn)
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.04, 8, 48),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8, blending: add, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.scale.setScalar(radius);
+  group.add(ring); group.userData.ring = ring;
+
+  // Disco tenue
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 40),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.12, blending: add, depthWrite: false, side: THREE.DoubleSide }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = 0.02; disc.scale.setScalar(radius);
+  group.add(disc); group.userData.disc = disc;
+
+  // Pin: palo + testa
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 8),
+    new THREE.MeshBasicMaterial({ color: col }));
+  pole.position.y = 0.35; group.add(pole);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12),
+    new THREE.MeshBasicMaterial({ color: col }));
+  head.position.y = 0.8; group.add(head);
+
+  // Freccia di direzione (verso +Z locale → ruota con lo yaw del gruppo)
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 16),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9 }));
+  arrow.rotation.x = Math.PI / 2; arrow.position.set(0, 0.06, 0.75);
+  group.add(arrow);
+
+  group.userData.isEntrancePart = true;
+  return group;
+}
+
+function nextEntranceId() {
+  const m = entrances.reduce((a, e) => Math.max(a, e.id), 0);
+  return Math.max(m, _epSeq) + 1;
+}
+
+function addEntrance(posArr, yaw, radius, id, save) {
+  if (id == null) id = nextEntranceId();
+  _epSeq = Math.max(_epSeq, id);
+  radius = radius || 1.5;
+  yaw = yaw || 0;
+
+  const group = createEntranceVisual(radius);
+  group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
+  group.rotation.order = 'YXZ';
+  group.rotation.y = yaw;
+  group.userData.gizmoName = `Entrance ${id}`;
+  scene.add(group);
+
+  const ep = { id, group, yaw, radius, row: null };
+  entrances.push(ep);
+  addEntranceRow(ep);
+  if (save) saveEntrances();
+  return ep;
+}
+
+function removeEntrance(ep) {
+  if (gizmoTarget === ep.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+  scene.remove(ep.group);
+  ep.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+  const i = entrances.indexOf(ep); if (i !== -1) entrances.splice(i, 1);
+  if (ep.row) ep.row.remove();
+  saveEntrances();
+  showNotification(`🗑 Entrance ${ep.id} rimosso`);
+}
+
+function saveEntrances() {
+  const data = entrances.map(e => ({
+    id: e.id,
+    pos: e.group.position.toArray().map(v => +v.toFixed(3)),
+    yaw: +e.yaw.toFixed(4),
+    radius: +e.radius.toFixed(3),
+  }));
+  localStorage.setItem(EP_STORE_KEY, JSON.stringify(data));
+}
+function loadSavedEntrances() {
+  try { return JSON.parse(localStorage.getItem(EP_STORE_KEY) || '[]'); } catch { return []; }
+}
+
+function addEntranceRow(ep) {
+  const list = document.getElementById('entrance-list');
+  if (!list) return;
+  const item = document.createElement('div');
+  item.className = 'model-item';
+  item.innerHTML =
+      `<div class="model-dot" style="background:#4aff8a"></div>`
+    + `<span class="model-name">Entrance ${ep.id}</span>`
+    + `<button class="goto-btn"    title="Vai qui">🎯</button>`
+    + `<button class="gizmo-btn"   title="Sposta la posizione">✥</button>`
+    + `<button class="face-btn"    title="Direzione = dove sto guardando ora">⟳</button>`
+    + `<input  class="ep-radius" type="number" min="0.3" step="0.5" value="${ep.radius}" title="Raggio area">`
+    + `<button class="confirm-btn" title="Salva">✓</button>`
+    + `<button class="delete-btn"  title="Rimuovi">🗑</button>`;
+
+  item.querySelector('.goto-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (cameraMode !== 'fps') toggleOverhead();
+    const p = ep.group.position;
+    camera.position.set(p.x, p.y + 1.7, p.z);
+    cameraYaw = ep.yaw; cameraPitch = 0;
+    camera.rotation.order = 'YXZ'; camera.rotation.y = ep.yaw; camera.rotation.x = 0;
+    showNotification(`📍 Entrance ${ep.id}`);
+  });
+
+  const gb = item.querySelector('.gizmo-btn');
+  gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ep.group, gb); });
+
+  item.querySelector('.face-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    ep.yaw = cameraYaw; ep.group.rotation.y = cameraYaw; saveEntrances();
+    showNotification(`↻ Direzione Entrance ${ep.id} = vista attuale`);
+  });
+
+  const ri = item.querySelector('.ep-radius');
+  ri.addEventListener('click', e => e.stopPropagation());
+  ri.addEventListener('change', e => {
+    const r = Math.max(0.3, parseFloat(e.target.value) || 1.5);
+    ep.radius = r;
+    ep.group.userData.ring.scale.setScalar(r);
+    ep.group.userData.disc.scale.setScalar(r);
+    saveEntrances();
+  });
+
+  item.querySelector('.confirm-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    saveEntrances();
+    if (gizmoTarget === ep.group) {
+      transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+      document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+    }
+    showNotification(`💾 Entrance ${ep.id} salvato`);
+  });
+
+  item.querySelector('.delete-btn').addEventListener('click', e => { e.stopPropagation(); removeEntrance(ep); });
+
+  list.appendChild(item);
+  ep.row = item;
+}
+
+// Aggiunge un entrance point alla posizione/direzione attuale della camera
+function addEntranceAtMe() {
+  const p = camera.position;
+  const ep = addEntrance([p.x, Math.max(0, p.y - PLAYER_HEIGHT), p.z], cameraYaw, 1.5, null, true);
+  switchMenuTab('spatial');
+  showNotification(`📍 Entrance ${ep.id} qui — direzione = vista attuale`);
+}
+
+// Spawn iniziale: entrance point piazzato (random se più d'uno), altrimenti fallback singolo
+function applySpawn() {
+  if (entrances.length) {
+    const e = entrances[Math.floor(Math.random() * entrances.length)];
+    const p = e.group.position;
+    // punto casuale nel disco del raggio
+    const ang = Math.random() * Math.PI * 2;
+    const rr = Math.sqrt(Math.random()) * Math.max(0, e.radius - 0.2);
+    const x = p.x + Math.cos(ang) * rr, z = p.z + Math.sin(ang) * rr;
+    camera.position.set(x, p.y + PLAYER_HEIGHT, z);
+    cameraYaw = e.yaw; cameraPitch = 0;
+    camera.rotation.order = 'YXZ'; camera.rotation.y = cameraYaw; camera.rotation.x = 0;
+    playerGroundY = p.y + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
+    return;
+  }
+  applyEntrancePoint();   // fallback al vecchio entrance singolo (localStorage)
+}
+
+// Salva la posizione del target del gizmo (route per tipo: teleport / entrance / oggetto)
 function persistGizmoTarget(obj) {
   if (!obj) return;
-  if (obj.userData.isTeleportPart) { saveTeleports(); return; }
+  if (obj.userData.isTeleportPart) { saveTeleports();  return; }
+  if (obj.userData.isEntrancePart) { saveEntrances();  return; }
   if (obj.userData.gizmoName) saveObjectPosition(obj.userData.gizmoName, obj);
 }
 
@@ -966,6 +1166,11 @@ const TP_TRIGGER_R = 0.7;                // raggio del trigger (m)
 const teleports = [];                    // {id, padGroup, targetGroup, row}
 let   _tpSeq = 0;
 let   teleportCooldownUntil = 0;         // anti rimbalzo dopo il teletrasporto
+
+// ─── Entrance Point (Spatial Entrance Point) ────────────────────────────────
+const EP_STORE_KEY = 'sc32-entrances';   // localStorage: [{id, pos:[x,y,z], yaw, radius}]
+const entrances = [];                    // {id, group, yaw, radius, row}
+let   _epSeq = 0;
 let   _draggingFeature = null;           // feature in drag dalla palette
 let   placingTarget = null;              // teleport in modalità "clicca per posizionare destinazione"
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1152,22 +1357,8 @@ async function init() {
   });
   setupLightingPanel();
 
-  // ── Pulsante Entrata ──────────────────────────────────────────────────────
-  document.getElementById('btn-entrance').addEventListener('click', () => {
-    const btn = document.getElementById('btn-entrance');
-    if (btn.classList.contains('active')) {
-      // Secondo click: cancella il punto salvato
-      if (confirm('Cancellare il punto d\'entrata salvato?')) {
-        localStorage.removeItem(ENTRANCE_KEY);
-        btn.classList.remove('active');
-        showNotification('🗑 Punto d\'entrata rimosso — si ripartirà dall\'origine');
-      }
-    } else {
-      saveEntrance();
-    }
-  });
-  // Marca il pulsante come attivo se esiste già un punto salvato
-  if (loadSavedEntrance()) document.getElementById('btn-entrance').classList.add('active');
+  // ── Pulsante Entrata: aggiunge un Entrance Point dove sei ora ──────────────
+  document.getElementById('btn-entrance').addEventListener('click', addEntranceAtMe);
 
   // Carica scena
   await loadScene();
@@ -1282,8 +1473,11 @@ async function loadScene() {
   // Ricrea i teleport salvati (Spatial features)
   for (const t of loadSavedTeleports()) addTeleport(t.pad, t.target, t.id, false);
 
-  // Applica punto d'entrata salvato (sovrascrive la posizione default 0,1.7,0)
-  applyEntrancePoint();
+  // Ricrea gli entrance point salvati
+  for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
+
+  // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
+  applySpawn();
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
