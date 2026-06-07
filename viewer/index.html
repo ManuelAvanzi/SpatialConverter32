@@ -239,6 +239,22 @@
     .model-item { gap: 6px; }
     .model-name { font-weight: 500; }
 
+    /* Joystick movimento (mobile) */
+    #move-joy {
+      position: fixed; bottom: 26px; left: 26px; width: 124px; height: 124px;
+      border-radius: 50%; background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.18); z-index: 25; display: none;
+      touch-action: none; -webkit-user-select: none; user-select: none;
+    }
+    #move-knob {
+      position: absolute; top: 50%; left: 50%; width: 56px; height: 56px;
+      margin: -28px 0 0 -28px; border-radius: 50%;
+      background: rgba(74,158,255,.65); border: 1px solid rgba(255,255,255,.35);
+      box-shadow: 0 2px 10px rgba(0,0,0,.4);
+    }
+    body.has-touch #move-joy { display: block; }
+    body.has-touch.overhead #move-joy { display: none; }
+
     /* HUD coordinate camera */
     #cam-hud {
       position: fixed; bottom: 20px; right: 20px;
@@ -602,6 +618,9 @@
 </div>
 <button id="vr-btn">🥽 Entra in VR</button>
 <div id="cam-hud">X 0.00 &nbsp; Y 0.00 &nbsp; Z 0.00</div>
+
+<!-- Joystick movimento (mobile/touch) -->
+<div id="move-joy"><div id="move-knob"></div></div>
 
 <!-- Editor coordinate manuale (appare con il gizmo) -->
 <div id="coord-editor">
@@ -1551,8 +1570,9 @@ function checkSpatialInteractables() {
   }
   if (best !== currentSpatialIA) {
     currentSpatialIA = best;
-    if (best) showInteractPanel(best.text || 'Interagisci'); else hideInteractPanel();
+    if (!best) hideIaPrompt();
   }
+  if (currentSpatialIA) showIaPrompt(currentSpatialIA);   // DOM su desktop, etichetta 3D in VR
 }
 
 // Trigger: fa partire l'animazione scelta
@@ -1606,6 +1626,7 @@ const JUMP_FORCE        = 6.5;     // m/s velocità iniziale salto
 const MAX_JUMPS         = 2;       // doppio salto
 
 const keys = {};
+let touchMoveX = 0, touchMoveZ = 0;   // joystick mobile (-1..1)
 const moveDir = new THREE.Vector3();
 // Vettori di direzione calcolati dal yaw
 const fwdVec   = new THREE.Vector3();
@@ -1621,6 +1642,33 @@ const _upVec   = new THREE.Vector3(0, 1, 0);
 const _playerPos = new THREE.Vector3();
 const _vrA = new THREE.Vector3(), _vrB = new THREE.Vector3(), _vrHead = new THREE.Vector3();
 function playerWorld() { return camera.getWorldPosition(_playerPos); }
+
+// ─── Joystick movimento per mobile/touch ────────────────────────────────────
+function setupJoystick() {
+  const touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (!touch) return;
+  document.body.classList.add('has-touch');
+  const joy = document.getElementById('move-joy');
+  const knob = document.getElementById('move-knob');
+  const R = 52;
+  let id = null;
+  const setFrom = t => {
+    const r = joy.getBoundingClientRect();
+    let dx = t.clientX - (r.left + r.width / 2);
+    let dy = t.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > R) { dx = dx / len * R; dy = dy / len * R; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    touchMoveX = dx / R;
+    touchMoveZ = dy / R;   // su (dy<0) = avanti
+  };
+  const reset = () => { id = null; touchMoveX = 0; touchMoveZ = 0; knob.style.transform = 'translate(0,0)'; };
+  joy.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); id = e.changedTouches[0].identifier; setFrom(e.changedTouches[0]); }, { passive: false });
+  joy.addEventListener('touchmove',  e => { e.preventDefault(); e.stopPropagation(); for (const t of e.changedTouches) if (t.identifier === id) setFrom(t); }, { passive: false });
+  const end = e => { for (const t of e.changedTouches) if (t.identifier === id) reset(); };
+  joy.addEventListener('touchend', end);
+  joy.addEventListener('touchcancel', end);
+}
 // Teleport ad arco parabolico (squeeze)
 let _vrArcLine = null, _vrReticle = null, _vrTeleporting = false, _vrTeleCtrl = null, _vrLandingPt = null;
 const _vrArcN = 30, _arcRaycaster = new THREE.Raycaster();
@@ -1889,6 +1937,9 @@ async function init() {
 
   // ── Audio di sottofondo ───────────────────────────────────────────────────
   setupAudio();
+
+  // ── Joystick movimento (mobile) ───────────────────────────────────────────
+  setupJoystick();
 
   // ── Pulsante Entrata: aggiunge un Entrance Point dove sei ora ──────────────
   document.getElementById('btn-entrance').addEventListener('click', addEntranceAtMe);
@@ -3151,6 +3202,7 @@ function toggleOverhead() {
 
     canvas.style.cursor = 'default';
     cameraMode = 'overhead';
+    document.body.classList.add('overhead');
     btn.classList.add('active');
     btn.textContent = '🎮 Vista FPS';
     document.getElementById('crosshair').style.display = 'none';
@@ -3165,6 +3217,7 @@ function toggleOverhead() {
 
     canvas.style.cursor = 'grab';
     cameraMode = 'fps';
+    document.body.classList.remove('overhead');
     btn.classList.remove('active');
     btn.textContent = '🗺️ Vista aerea';
     document.getElementById('crosshair').style.display = '';
@@ -3319,6 +3372,61 @@ function hideInteractPanel() {
   document.getElementById('interact-panel').classList.remove('visible');
 }
 
+// ─── Prompt interactable 3D (per la VR, dove il DOM non si vede) ──────────────
+let _iaSprite = null, _iaSpriteText = null;
+function _roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function ensureIaSprite() {
+  if (_iaSprite) return _iaSprite;
+  const tex = new THREE.CanvasTexture(document.createElement('canvas'));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _iaSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  _iaSprite.renderOrder = 999; _iaSprite.visible = false;
+  scene.add(_iaSprite);
+  return _iaSprite;
+}
+function setIaSpriteText(text) {
+  if (text === _iaSpriteText) return;
+  _iaSpriteText = text;
+  const sp = ensureIaSprite();
+  const hint = '▶ premi il grilletto';
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  const FS = 46;
+  ctx.font = `bold ${FS}px 'Segoe UI', sans-serif`;
+  const tw = ctx.measureText(text).width;
+  ctx.font = `${FS * 0.6}px 'Segoe UI', sans-serif`;
+  const hw = ctx.measureText(hint).width;
+  const w = Math.ceil(Math.max(tw, hw) + 64), h = 168;
+  c.width = w; c.height = h;
+  ctx.fillStyle = 'rgba(0,0,0,0.8)'; _roundRect(ctx, 0, 0, w, h, 44); ctx.fill();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = `bold ${FS}px 'Segoe UI', sans-serif`;
+  ctx.fillText(text, w / 2, h * 0.38);
+  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = `${FS * 0.6}px 'Segoe UI', sans-serif`;
+  ctx.fillText(hint, w / 2, h * 0.72);
+  sp.material.map.image = c; sp.material.map.needsUpdate = true;
+  sp.scale.set((w / h) * 0.6, 0.6, 1);
+}
+function showIaPrompt(ia) {
+  if (renderer.xr.isPresenting) {
+    setIaSpriteText(ia.text || 'Interagisci');
+    _iaSprite.position.copy(ia.group.position); _iaSprite.position.y += 2.2;
+    _iaSprite.visible = true;
+    hideInteractPanel();
+  } else {
+    showInteractPanel(ia.text || 'Interagisci');
+    if (_iaSprite) _iaSprite.visible = false;
+  }
+}
+function hideIaPrompt() {
+  hideInteractPanel();
+  if (_iaSprite) _iaSprite.visible = false;
+}
+
 function showNotification(text) {
   const el = document.getElementById('notification');
   el.textContent = text;
@@ -3409,6 +3517,8 @@ function animate(timestamp, frame) {
     if (keys['KeyS'] || keys['ArrowDown'])  moveDir.z += 1;
     if (keys['KeyA'] || keys['ArrowLeft'])  moveDir.x -= 1;
     if (keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
+    // Joystick mobile (su = avanti)
+    if (touchMoveX || touchMoveZ) { moveDir.x += touchMoveX; moveDir.z += touchMoveZ; }
 
     // Vettori direzionali sempre aggiornati (servono anche per wall collision)
     fwdVec.set(  Math.sin(cameraYaw), 0,  Math.cos(cameraYaw));
