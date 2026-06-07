@@ -758,11 +758,11 @@ async function loadSceneConfig() {
         CURRENT_PROJECT = await r.json();
         SCENE_CONFIG = CURRENT_PROJECT.sceneConfig || { version: 1 };
         document.title = `${CURRENT_PROJECT.name} — SpatialConverter`;
-        return SCENE_CONFIG;
       }
     } catch {}
+    return SCENE_CONFIG;   // se non accessibile (bozza/404) → scena vuota, NON i contenuti del 32
   }
-  // 2) File statico (singolo progetto)
+  // 2) File statico (modalità singolo progetto, senza ?project)
   try {
     const r = await fetch('./scene-config.json?t=' + Date.now(), { cache: 'no-store' });
     if (r.ok) SCENE_CONFIG = await r.json();
@@ -1614,11 +1614,16 @@ const rightVec = new THREE.Vector3();
 // ─── VR / player rig ────────────────────────────────────────────────────────
 let playerRig = null;            // contiene la camera; lo muoviamo per la locomozione VR
 let _vrSnapReady = true;
+let _vrAPrev = false;            // stato precedente del tasto A (per il salto)
+let vrFloorY = 0;               // livello del pavimento sotto il giocatore in VR
 const VR_SPEED = 3.0;            // m/s in VR
 const _upVec   = new THREE.Vector3(0, 1, 0);
 const _playerPos = new THREE.Vector3();
 const _vrA = new THREE.Vector3(), _vrB = new THREE.Vector3(), _vrHead = new THREE.Vector3();
 function playerWorld() { return camera.getWorldPosition(_playerPos); }
+// Teleport ad arco parabolico (squeeze)
+let _vrArcLine = null, _vrReticle = null, _vrTeleporting = false, _vrTeleCtrl = null, _vrLandingPt = null;
+const _vrArcN = 30, _arcRaycaster = new THREE.Raycaster();
 
 // ─── Fisica salto ─────────────────────────────────────────────────────────
 let velocityY     = 0;
@@ -1920,6 +1925,7 @@ async function setupVR() {
       await renderer.xr.setSession(session);
       playerRig.position.set(fx, Math.max(0, fy - PLAYER_HEIGHT), fz);
       playerRig.rotation.set(0, cameraYaw, 0);
+      vrFloorY = playerRig.position.y; isOnGround = true; velocityY = 0; jumpCount = 0;
       vrBtn.textContent = '❌ Esci da VR';
       session.addEventListener('end', () => {
         vrBtn.textContent = '🥽 Entra in VR';
@@ -1932,11 +1938,16 @@ async function setupVR() {
     }
   });
 
+  // Visuali del teleport ad arco
+  initVrTeleportVisuals();
+
   // Controller VR — figli del rig (seguono il giocatore)
   const controllerFactory = new XRControllerModelFactory();
   for (let i = 0; i < 2; i++) {
     const controller = renderer.xr.getController(i);
-    controller.addEventListener('selectstart', onVRInteract);
+    controller.addEventListener('selectstart', onVRInteract);            // grilletto = interagisci
+    controller.addEventListener('squeezestart', () => { _vrTeleporting = true; _vrTeleCtrl = controller; });  // grip = teleport
+    controller.addEventListener('squeezeend',   () => { if (_vrTeleCtrl === controller) doVrTeleport(); });
     playerRig.add(controller);
 
     const controllerGrip = renderer.xr.getControllerGrip(i);
@@ -1949,6 +1960,100 @@ async function setupVR() {
     const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x4a9eff, opacity: 0.6, transparent: true }));
     controller.add(line);
   }
+}
+
+// ─── VR: salto (tasto A) + gravità sul rig ──────────────────────────────────
+function vrJumpAndGravity(dt) {
+  const session = renderer.xr.getSession();
+  if (session) for (const src of session.inputSources) {
+    if (src.handedness === 'right' && src.gamepad) {
+      const btn = src.gamepad.buttons[4];   // A su Meta Quest
+      const pressed = btn ? btn.pressed : false;
+      if (pressed && !_vrAPrev) {
+        if (isOnGround) { velocityY = JUMP_FORCE; isOnGround = false; jumpCount = 1; }
+        else if (jumpCount === 1) { velocityY = JUMP_FORCE; jumpCount = 2; }   // doppio salto
+      }
+      _vrAPrev = pressed;
+      break;
+    }
+  }
+  // pavimento sotto la testa
+  camera.getWorldPosition(_vrHead);
+  let floorY = vrFloorY;
+  if (collidableMeshes.length > 0) {
+    colRaycaster.near = 0; colRaycaster.far = PLAYER_HEIGHT + 3.0;
+    colRaycaster.set(_vrHead, _downVec);
+    const fh = colRaycaster.intersectObjects(collidableMeshes, false);
+    if (fh.length > 0) floorY = fh[0].point.y;
+  }
+  if (isOnGround) {
+    playerRig.position.y = floorY; vrFloorY = floorY;
+  } else {
+    velocityY = Math.max(velocityY + GRAVITY * dt, -25);
+    playerRig.position.y += velocityY * dt;
+    if (playerRig.position.y <= floorY) {
+      playerRig.position.y = floorY; vrFloorY = floorY;
+      velocityY = 0; isOnGround = true; jumpCount = 0;
+    }
+  }
+}
+
+// ─── VR: teleport ad arco parabolico ────────────────────────────────────────
+function initVrTeleportVisuals() {
+  if (_vrArcLine) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(_vrArcN * 3), 3));
+  _vrArcLine = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x4a9eff }));
+  _vrArcLine.frustumCulled = false; _vrArcLine.visible = false; scene.add(_vrArcLine);
+  const rg = new THREE.RingGeometry(0.2, 0.34, 28); rg.rotateX(-Math.PI / 2);
+  _vrReticle = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x4a9eff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+  _vrReticle.visible = false; scene.add(_vrReticle);
+}
+function updateVrTeleportArc() {
+  if (!_vrTeleporting || !_vrTeleCtrl) {
+    if (_vrArcLine) _vrArcLine.visible = false;
+    if (_vrReticle) _vrReticle.visible = false;
+    return;
+  }
+  const origin = _vrTeleCtrl.getWorldPosition(_vrA);
+  const dir = _vrTeleCtrl.getWorldDirection(_vrB).negate();   // forward del controller = -Z
+  const v = 8, g = 9.8;
+  const pos = _vrArcLine.geometry.attributes.position.array;
+  let landing = null;
+  let px = origin.x, py = origin.y, pz = origin.z;
+  for (let i = 0; i < _vrArcN; i++) {
+    const t = (i / _vrArcN) * 2.5;
+    const x = origin.x + dir.x * v * t;
+    const y = origin.y + dir.y * v * t - 0.5 * g * t * t;
+    const z = origin.z + dir.z * v * t;
+    pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+    if (!landing && i > 0) {
+      if (collidableMeshes.length > 0) {
+        _vrHead.set(x - px, y - py, z - pz);
+        const len = _vrHead.length();
+        if (len > 1e-4) {
+          _arcRaycaster.set(new THREE.Vector3(px, py, pz), _vrHead.divideScalar(len));
+          _arcRaycaster.far = len;
+          const hs = _arcRaycaster.intersectObjects(collidableMeshes, false);
+          if (hs.length) landing = hs[0].point.clone();
+        }
+      } else if (py > vrFloorY && y <= vrFloorY) {   // attraversa il piano del pavimento
+        const a = (py - vrFloorY) / (py - y);
+        landing = new THREE.Vector3(px + (x - px) * a, vrFloorY, pz + (z - pz) * a);
+      }
+    }
+    px = x; py = y; pz = z;
+  }
+  _vrArcLine.geometry.attributes.position.needsUpdate = true;
+  _vrArcLine.visible = true;
+  if (landing) { _vrReticle.position.copy(landing); _vrReticle.position.y += 0.02; _vrReticle.visible = true; _vrLandingPt = landing; }
+  else { _vrReticle.visible = false; _vrLandingPt = null; }
+}
+function doVrTeleport() {
+  _vrTeleporting = false;
+  if (_vrArcLine) _vrArcLine.visible = false;
+  if (_vrReticle) _vrReticle.visible = false;
+  if (_vrLandingPt) { teleportPlayerTo(_vrLandingPt.x, _vrLandingPt.y, _vrLandingPt.z); _vrLandingPt = null; }
 }
 
 // ─── Locomozione VR: stick sx = muovi, stick dx = snap turn 30° ──────────────
@@ -1994,14 +2099,8 @@ function vrLocomotion(dt) {
     playerRig.position.z += dz;
   }
 
-  // Floor following (collider attivi)
-  if (collidableMeshes.length > 0) {
-    camera.getWorldPosition(_vrHead);
-    colRaycaster.near = 0; colRaycaster.far = 3.0;
-    colRaycaster.set(_vrHead, _downVec);
-    const fh = colRaycaster.intersectObjects(collidableMeshes, false);
-    if (fh.length > 0) playerRig.position.y = fh[0].point.y;
-  }
+  // Gravità + salto (tasto A destro) sul rig
+  vrJumpAndGravity(dt);
 }
 
 // Sposta il giocatore a una posizione (gestisce VR via rig + FPS via camera)
@@ -3388,8 +3487,8 @@ function animate(timestamp, frame) {
     }
   }
 
-  // Locomozione VR (rig: stick sx muovi, stick dx snap-turn)
-  if (renderer.xr.isPresenting) vrLocomotion(delta);
+  // Locomozione VR (rig: stick sx muovi, stick dx snap-turn, A salta, grip teleport)
+  if (renderer.xr.isPresenting) { vrLocomotion(delta); updateVrTeleportArc(); }
 
   // Teleport: controlla se il player è su un pad (FPS o VR, non in vista aerea)
   if (renderer.xr.isPresenting || cameraMode === 'fps') checkTeleports();
