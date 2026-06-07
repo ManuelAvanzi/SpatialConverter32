@@ -192,6 +192,8 @@
     }
     .tool-btn:hover { background: rgba(74,158,255,.35); }
     .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
+    .tool-btn.save { background: rgba(74,255,138,.25); border-color: rgba(74,255,138,.5); color: #bfffd6; }
+    .tool-btn.save:hover { background: rgba(74,255,138,.42); }
 
     /* HUD coordinate camera */
     #cam-hud {
@@ -416,11 +418,12 @@
     <button class="menu-tab"        data-tab="spatial">🌀 Spatial</button>
   </div>
   <div id="tab-models" class="menu-tab-content active">
+    <button id="btn-upload-model" class="export-cfg-btn" style="display:none">📂 Carica contenuti (.glb)</button>
+    <input type="file" id="upload-input" accept=".glb,.gltf" style="display:none" />
     <h3>Modelli caricati</h3>
     <div id="models-list"></div>
   </div>
   <div id="tab-spatial" class="menu-tab-content">
-    <button id="btn-save-server" class="export-cfg-btn" style="display:none">💾 Salva in redazione</button>
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
     <h3>Spatial Features</h3>
     <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
@@ -441,6 +444,7 @@
   <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo">🔊 Audio</button>
+  <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione">💾 Salva</button>
 </div>
 
 <!-- Audio di sottofondo (loop) -->
@@ -1573,9 +1577,12 @@ async function init() {
   await loadSceneConfig();
   await loadAppConfig();
 
-  // Progetto vuoto: niente copertina (è quella del 32) → loader scuro pulito
-  if (isEmptyProject()) {
-    const lb = document.getElementById('loader-bg'); if (lb) lb.style.display = 'none';
+  // Copertina del loader: quella del progetto se impostata; vuoto = loader scuro
+  const _lb = document.getElementById('loader-bg');
+  if (PROJECT_SLUG && CURRENT_PROJECT && CURRENT_PROJECT.cover) {
+    if (_lb) _lb.style.backgroundImage = `url("${CURRENT_PROJECT.cover}")`;
+  } else if (isEmptyProject()) {
+    if (_lb) _lb.style.display = 'none';
   }
 
   // Renderer
@@ -1752,10 +1759,17 @@ async function init() {
   buildSpatialPalette();
   const _exportBtn = document.getElementById('btn-export-config');
   _exportBtn.addEventListener('click', exportSceneConfig);
-  const _saveBtn = document.getElementById('btn-save-server');
-  _saveBtn.addEventListener('click', saveSceneToServer);
-  // In modalità progetto: un solo pulsante "Salva in redazione" (niente export)
-  if (PROJECT_SLUG) { _saveBtn.style.display = ''; _exportBtn.style.display = 'none'; }
+  // Pulsante "Salva" in toolbar (solo in editor su un progetto)
+  const _saveTop = document.getElementById('btn-save-top');
+  _saveTop.addEventListener('click', saveSceneToServer);
+  if (PROJECT_SLUG && EDIT_MODE) { _saveTop.style.display = ''; _exportBtn.style.display = 'none'; }
+
+  // Pulsante "Carica contenuti" (upload modello) — solo in editor su un progetto
+  const _upBtn = document.getElementById('btn-upload-model');
+  const _upInput = document.getElementById('upload-input');
+  if (PROJECT_SLUG && EDIT_MODE) _upBtn.style.display = '';
+  _upBtn.addEventListener('click', () => _upInput.click());
+  _upInput.addEventListener('change', uploadModelFile);
 
   // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
   renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
@@ -2633,6 +2647,24 @@ async function saveSceneToServer() {
     else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
     else showNotification('❌ Salvataggio fallito (' + r.status + ')');
   } catch (e) { showNotification('❌ Errore: ' + e.message); }
+}
+
+// Carica un modello (.glb) dal PC nel progetto → R2 → ricarica per vederlo
+async function uploadModelFile(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file || !PROJECT_SLUG) return;
+  if (!/\.(glb|gltf)$/i.test(file.name)) { showNotification('Usa un file .glb'); return; }
+  showNotification(`📤 Carico ${file.name}… (${(file.size/1024/1024).toFixed(1)} MB)`);
+  const fd = new FormData();
+  fd.append('model', file);
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}/upload`, { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { showNotification(`✅ ${file.name} caricato — ricarico…`); setTimeout(() => location.reload(), 900); }
+    else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
+    else showNotification('❌ ' + (j.error || 'Upload fallito'));
+  } catch (err) { showNotification('❌ ' + err.message); }
 }
 
 // Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa

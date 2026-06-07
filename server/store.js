@@ -42,8 +42,19 @@ function summary(p) {
   return {
     slug: p.slug, name: p.name, status: p.status,
     assetPrefix: p.assetPrefix || '', tags: Array.isArray(p.tags) ? p.tags : [],
-    updatedAt: p.updatedAt,
+    cover: p.cover || '', updatedAt: p.updatedAt,
   };
+}
+
+// Asset (modelli/copertine) su R2 sotto il prefisso del progetto
+async function putAsset(key, body, contentType) {
+  const cl = r2(); if (!cl) throw new Error('R2 non configurato');
+  await cl.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: contentType }));
+}
+async function listAssetFiles(prefix) {
+  const cl = r2(); if (!cl) return [];
+  const out = await cl.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix }));
+  return (out.Contents || []).map(o => o.Key);
 }
 
 async function getProject(slug) {
@@ -99,6 +110,7 @@ async function saveProject(slug, patch) {
   if (patch.status != null) p.status = patch.status;
   if (patch.assetPrefix != null) p.assetPrefix = patch.assetPrefix;
   if (patch.tags != null) p.tags = Array.isArray(patch.tags) ? patch.tags : p.tags;
+  if (patch.cover != null) p.cover = patch.cover;
   if (patch.sceneConfig != null) p.sceneConfig = patch.sceneConfig;
   p.updatedAt = new Date().toISOString();
   return putProject(p);
@@ -109,4 +121,7 @@ async function deleteProject(slug) {
   await cl.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: keyOf(slug) }));
 }
 
-module.exports = { available, listProjects, getProject, createProject, saveProject, deleteProject, slugify };
+module.exports = {
+  available, listProjects, getProject, createProject, saveProject, deleteProject, slugify,
+  putAsset, listAssetFiles,
+};

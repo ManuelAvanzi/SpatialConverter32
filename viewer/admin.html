@@ -77,6 +77,12 @@
     border-radius:6px; padding:2px 8px; }
   .card .actions { display:flex; flex-wrap:wrap; gap:7px; border-top:1px solid var(--line); padding-top:11px; }
   .empty { color:var(--muted); text-align:center; padding:50px; grid-column:1/-1; }
+  .card .thumb { height:130px; border-radius:9px 9px 0 0; background-size:cover; background-position:center;
+    margin:-16px -16px 4px; background-color:#0b0b14; }
+  .cover-edit { display:flex; gap:10px; align-items:flex-start; }
+  .cover-prev { width:96px; height:54px; border-radius:7px; background:#0b0b14 center/cover no-repeat;
+    border:1px solid var(--line); flex-shrink:0; }
+  .cover-controls { flex:1; display:flex; flex-direction:column; gap:7px; }
 
   /* MODAL */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px);
@@ -133,6 +139,16 @@
     <input id="mName" type="text" placeholder="Nome del progetto">
     <label>Tag (separati da virgola)</label>
     <input id="mTags" type="text" placeholder="es. sicurezza, cantiere, VR">
+    <label>Copertina (mostrata durante il caricamento in play)</label>
+    <div class="cover-edit">
+      <div class="cover-prev" id="mCoverPrev"></div>
+      <div class="cover-controls">
+        <input id="mCover" type="text" placeholder="URL immagine (opzionale)">
+        <label class="btn ghost sm" style="cursor:pointer;text-align:center">📂 Carica immagine
+          <input type="file" id="mCoverFile" accept="image/*" style="display:none">
+        </label>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn primary" id="mSave">Salva</button>
       <button class="btn ghost" id="mCancel">Annulla</button>
@@ -160,6 +176,7 @@ let PROJECTS = [];
 let activeTag = null;
 let editingSlug = null;     // null = nuovo progetto
 let deletingSlug = null;
+let coverFile = null;       // file copertina selezionato nella modale
 
 async function refresh() {
   const me = await (await api('/api/me')).json();
@@ -204,7 +221,8 @@ function render() {
     const card = document.createElement('div');
     card.className = 'card';
     const tagsHtml = (p.tags || []).map(t => `<span class="tag"></span>`).join('');
-    card.innerHTML =
+    const coverHtml = p.cover ? `<div class="thumb" style="background-image:url('${p.cover.replace(/'/g, '%27')}')"></div>` : '';
+    card.innerHTML = coverHtml +
         `<div class="top"><div><div class="name"></div><div class="meta">${p.slug} · ${date}</div></div>`
       +   `<span class="status ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span></div>`
       + `<div class="tags">${tagsHtml}</div>`
@@ -231,9 +249,12 @@ function render() {
 /* ── Modal nuovo/modifica ── */
 function openModal(project) {
   editingSlug = project ? project.slug : null;
+  coverFile = null;
   $('#modalTitle').textContent = project ? 'Modifica progetto' : 'Nuovo progetto';
   $('#mName').value = project ? project.name : '';
   $('#mTags').value = project ? (project.tags || []).join(', ') : '';
+  $('#mCover').value = project ? (project.cover || '') : '';
+  $('#mCoverPrev').style.backgroundImage = project && project.cover ? `url('${project.cover}')` : 'none';
   $('#mSave').textContent = project ? 'Salva modifiche' : 'Crea e apri editor';
   $('#editModal').classList.add('show');
   setTimeout(() => $('#mName').focus(), 50);
@@ -241,18 +262,39 @@ function openModal(project) {
 function closeModal() { $('#editModal').classList.remove('show'); }
 $('#newBtn').onclick = () => openModal(null);
 $('#mCancel').onclick = closeModal;
+$('#mCoverFile').addEventListener('change', e => {
+  coverFile = e.target.files[0] || null;
+  if (coverFile) {
+    const reader = new FileReader();
+    reader.onload = () => $('#mCoverPrev').style.backgroundImage = `url('${reader.result}')`;
+    reader.readAsDataURL(coverFile);
+  }
+});
 $('#mSave').onclick = async () => {
   const name = $('#mName').value.trim();
   if (!name) { $('#mName').focus(); return; }
   const tags = $('#mTags').value.split(',').map(s => s.trim()).filter(Boolean);
-  if (editingSlug) {
-    await api('/api/projects/' + encodeURIComponent(editingSlug), { method: 'PUT', body: JSON.stringify({ name, tags }) });
-    closeModal(); load();
-  } else {
+  const coverUrl = $('#mCover').value.trim();
+  const isNew = !editingSlug;
+  let slug = editingSlug;
+
+  if (isNew) {
     const r = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name, tags }) });
-    if (r.ok) { const p = await r.json(); location.href = `/?project=${encodeURIComponent(p.slug)}&edit`; }
-    else alert('Errore nella creazione');
+    if (!r.ok) { alert('Errore nella creazione'); return; }
+    slug = (await r.json()).slug;
+  } else {
+    await api('/api/projects/' + encodeURIComponent(slug), { method: 'PUT', body: JSON.stringify({ name, tags }) });
   }
+  // Copertina: file caricato → upload; altrimenti URL
+  if (coverFile) {
+    const fd = new FormData(); fd.append('cover', coverFile);
+    await fetch('/api/projects/' + encodeURIComponent(slug) + '/cover', { method: 'POST', body: fd });
+  } else if (coverUrl) {
+    await api('/api/projects/' + encodeURIComponent(slug), { method: 'PUT', body: JSON.stringify({ cover: coverUrl }) });
+  }
+
+  if (isNew) location.href = `/?project=${encodeURIComponent(slug)}&edit`;
+  else { closeModal(); load(); }
 };
 
 /* ── Elimina ── */

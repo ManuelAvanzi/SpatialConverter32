@@ -3,12 +3,14 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const multer = require('multer');
 const { makeToken, checkPassword, isAuthed, requireAuth, COOKIE } = require('./auth');
 const store = require('./store');
 
 const app = express();
 const VIEWER_DIR = path.join(__dirname, '..', 'viewer');
-app.use(express.json({ limit: '6mb' }));
+app.use(express.json({ limit: '8mb' }));
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 // ─── Config viewer: base-URL asset (R2 in prod, vuoto in locale) ─────────────
 app.get('/api/config', (req, res) => {
@@ -58,6 +60,44 @@ app.put('/api/projects/:slug', requireAuth, async (req, res) => {
 app.delete('/api/projects/:slug', requireAuth, async (req, res) => {
   try { await store.deleteProject(req.params.slug); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Upload contenuti (modelli .glb) e copertina ─────────────────────────────
+app.post('/api/projects/:slug/upload', requireAuth, upload.single('model'), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const proj = await store.getProject(slug);
+    if (!proj) return res.status(404).json({ error: 'Progetto non trovato' });
+    if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+    const safe = req.file.originalname.replace(/[^a-zA-Z0-9._ -]/g, '_');
+    if (!/\.(glb|gltf)$/i.test(safe)) return res.status(400).json({ error: 'Formato non supportato (usa .glb)' });
+    const prefix = proj.assetPrefix || slug;   // usa il prefisso reale (non rompe il 32)
+    const ct = /\.glb$/i.test(safe) ? 'model/gltf-binary' : 'model/gltf+json';
+    await store.putAsset(`${prefix}/gltfModels/${safe}`, req.file.buffer, ct);
+    // rigenera il manifest models.json del progetto
+    const files = (await store.listAssetFiles(`${prefix}/gltfModels/`))
+      .map(k => k.split('/').pop()).filter(n => /\.(glb|gltf)$/i.test(n)).sort();
+    await store.putAsset(`${prefix}/gltfModels/models.json`, Buffer.from(JSON.stringify(files)), 'application/json');
+    if (!proj.assetPrefix) await store.saveProject(slug, { assetPrefix: prefix });
+    res.json({ ok: true, file: safe, count: files.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/projects/:slug/cover', requireAuth, upload.single('cover'), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const proj = await store.getProject(slug);
+    if (!proj) return res.status(404).json({ error: 'Progetto non trovato' });
+    if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+    const m = req.file.originalname.match(/\.(png|jpe?g|webp)$/i);
+    const ext = (m ? m[0] : '.png').toLowerCase().replace('.jpeg', '.jpg');
+    const key = `${slug}/cover${ext}`;
+    await store.putAsset(key, req.file.buffer, req.file.mimetype || 'image/png');
+    const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+    const url = `${base}/${key}?v=${Date.now()}`;
+    await store.saveProject(slug, { cover: url });
+    res.json({ ok: true, cover: url });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Dashboard redazione (URL pulito)
