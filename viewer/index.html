@@ -1946,7 +1946,7 @@ function animate(timestamp, frame) {
     // ── Gravità, salto, floor detection ──────────────────────────────────
     if (isOnGround) {
       if (collidableMeshes.length > 0) {
-        // Floor following: il personaggio segue la superficie (rampe, scale)
+        // Floor following: segue la superficie (rampe, scale)
         colRaycaster.near = 0;
         colRaycaster.far  = PLAYER_HEIGHT + 0.5;
         colRaycaster.set(camera.position, _downVec);
@@ -1954,22 +1954,29 @@ function animate(timestamp, frame) {
         if (fh.length > 0) {
           playerGroundY = fh[0].point.y + PLAYER_HEIGHT;
           camera.position.y = playerGroundY;
+        } else {
+          // Nessun pavimento sotto (bordo scala, precipizio) → CADE
+          isOnGround    = false;
+          velocityY     = 0;
+          // playerGroundY di fallback = suolo piatto (y=1.7); se ci sono
+          // altre mesh più in basso il raycast durante la caduta le rileverà.
+          playerGroundY = PLAYER_HEIGHT;
         }
-        // nessun pavimento rilevato → mantieni l'ultima quota (no caduta improvvisa)
       } else {
         playerGroundY = camera.position.y;   // suolo piatto senza collider
       }
     } else {
-      // Applica gravità
-      velocityY += GRAVITY * delta;
+      // Applica gravità — con terminal velocity per evitare tunneling
+      velocityY = Math.max(velocityY + GRAVITY * delta, -25);
       camera.position.y += velocityY * delta;
 
       // Controlla atterraggio: piano di default OPPURE mesh sotto i piedi
-      let landed   = camera.position.y <= playerGroundY;
-      let landedY  = playerGroundY;
-      if (!landed && collidableMeshes.length > 0 && velocityY < 0) {
+      let landed  = camera.position.y <= playerGroundY;
+      let landedY = playerGroundY;
+      if (collidableMeshes.length > 0 && velocityY < 0) {
+        // far dinamico: almeno 2 m, o abbastanza per coprire la velocità corrente
         colRaycaster.near = 0;
-        colRaycaster.far  = PLAYER_HEIGHT + 0.3;
+        colRaycaster.far  = PLAYER_HEIGHT + Math.min(Math.abs(velocityY) * delta + 0.5, 3.0);
         colRaycaster.set(camera.position, _downVec);
         const fh = colRaycaster.intersectObjects(collidableMeshes, false);
         if (fh.length > 0) {
@@ -1979,7 +1986,7 @@ function animate(timestamp, frame) {
       }
       if (landed) {
         camera.position.y = landedY;
-        playerGroundY = landedY;
+        playerGroundY     = landedY;
         velocityY = 0; isOnGround = true; jumpCount = 0;
       }
     }
