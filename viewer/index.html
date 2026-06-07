@@ -330,6 +330,17 @@ let gizmoDragging = false;         // true mentre si trascina un handle
 const POS_STORE_KEY  = 'sc32-positions';   // localStorage: { nome: [x,y,z] }
 const ENTRANCE_KEY   = 'sc32-entrance';    // localStorage: {x,y,z,yaw,pitch}
 
+// ── Migrazione una-tantum: ripristina entrance al default del progetto ──────
+// Gira solo la prima volta con questo build — poi il flag lo blocca.
+(function() {
+  const MIGR = 'sc32-entrance-reset-v1';
+  if (!localStorage.getItem(MIGR)) {
+    localStorage.setItem(ENTRANCE_KEY, JSON.stringify({ x:0, y:1.7, z:0, yaw:0, pitch:0 }));
+    localStorage.setItem(MIGR, '1');
+    console.log('↩️ Entrance point ripristinato al default del progetto (0, 1.7, 0)');
+  }
+})();
+
 function loadSavedEntrance() {
   try { return JSON.parse(localStorage.getItem(ENTRANCE_KEY) || 'null'); } catch { return null; }
 }
