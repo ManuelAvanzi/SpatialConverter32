@@ -8,7 +8,7 @@
     "dev": "node server/index.js",
     "manifest": "node scripts/build-manifest.js",
     "upload": "node scripts/upload-to-r2.js",
-    "build": "node build.js",
+    "convert": "node build.js",
     "extract": "node extract.js",
     "serve": "npx serve viewer -p 3003"
   },
