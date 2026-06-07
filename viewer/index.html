@@ -218,6 +218,12 @@
       cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
     }
     .confirm-btn:hover { background: rgba(74,255,138,.45); }
+    .delete-btn {
+      background: rgba(255,60,60,.18); border: 1px solid rgba(255,60,60,.4);
+      color: #ff8080; border-radius: 4px; padding: 2px 7px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
+    }
+    .delete-btn:hover { background: rgba(255,60,60,.5); color:#fff; }
   </style>
 </head>
 <body>
@@ -253,8 +259,9 @@
 
 <!-- Toolbar -->
 <div id="toolbar">
-  <button class="tool-btn" id="btn-overhead" title="Vista dall'alto">🗺️ Vista aerea</button>
-  <button class="tool-btn" id="btn-models"   title="Modelli caricati">📦 Modelli</button>
+  <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
+  <button class="tool-btn" id="btn-models"    title="Modelli caricati">📦 Modelli</button>
+  <button class="tool-btn" id="btn-entrance"  title="Salva punto d'entrata (posizione iniziale del personaggio)">📍 Entrata</button>
 </div>
 <div id="instructions">
   WASD · Muoviti<br>
@@ -320,7 +327,32 @@ let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
 let transformControls = null;
 let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
 let gizmoDragging = false;         // true mentre si trascina un handle
-const POS_STORE_KEY = 'sc32-positions';   // localStorage: { nome: [x,y,z] }
+const POS_STORE_KEY  = 'sc32-positions';   // localStorage: { nome: [x,y,z] }
+const ENTRANCE_KEY   = 'sc32-entrance';    // localStorage: {x,y,z,yaw,pitch}
+
+function loadSavedEntrance() {
+  try { return JSON.parse(localStorage.getItem(ENTRANCE_KEY) || 'null'); } catch { return null; }
+}
+function saveEntrance() {
+  const ep = {
+    x: camera.position.x, y: camera.position.y, z: camera.position.z,
+    yaw: cameraYaw, pitch: cameraPitch
+  };
+  localStorage.setItem(ENTRANCE_KEY, JSON.stringify(ep));
+  document.getElementById('btn-entrance').classList.add('active');
+  showNotification('📍 Punto d\'entrata salvato! Sarà la posizione iniziale ad ogni caricamento.');
+}
+function applyEntrancePoint() {
+  const ep = loadSavedEntrance();
+  if (!ep) return;
+  camera.position.set(ep.x, ep.y, ep.z);
+  cameraYaw   = ep.yaw   ?? 0;
+  cameraPitch = ep.pitch ?? 0;
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = cameraYaw;
+  camera.rotation.x = cameraPitch;
+}
+
 function loadSavedPositions() {
   try { return JSON.parse(localStorage.getItem(POS_STORE_KEY) || '{}'); }
   catch { return {}; }
@@ -523,6 +555,11 @@ async function init() {
     document.getElementById('btn-models').classList.toggle('active', !isVisible);
   });
 
+  // ── Pulsante Entrata ──────────────────────────────────────────────────────
+  document.getElementById('btn-entrance').addEventListener('click', saveEntrance);
+  // Marca il pulsante come attivo se esiste già un punto salvato
+  if (loadSavedEntrance()) document.getElementById('btn-entrance').classList.add('active');
+
   // Carica scena
   await loadScene();
 
@@ -632,6 +669,9 @@ async function loadScene() {
 
   // Personaggi animati ora da Unity (glTF), non più dal GLB Blender.
   await loadGltfCharacters();
+
+  // Applica punto d'entrata salvato (sovrascrive la posizione default 0,1.7,0)
+  applyEntrancePoint();
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
@@ -914,11 +954,24 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
       } else {
         const root = staticRoots[piece.name];
         const btns = root
-          ? `<button class="gizmo-btn" title="Sposta col gizmo">✥</button>`
+          ? `<button class="gizmo-btn"   title="Sposta col gizmo">✥</button>`
             + `<button class="confirm-btn" title="Conferma e salva">✓</button>`
+            + `<button class="delete-btn"  title="Nascondi dalla scena">🗑</button>`
           : '';
         item.innerHTML = `${dot}${name}${btns}${info}`;
-        if (root) wireGizmoControls(item, piece.name, root);
+        if (root) {
+          wireGizmoControls(item, piece.name, root);
+          item.querySelector('.delete-btn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            if (gizmoTarget === root) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+            root.visible = !root.visible;
+            const db = e.currentTarget;
+            db.textContent = root.visible ? '🗑' : '👁';
+            db.title = root.visible ? 'Nascondi dalla scena' : 'Mostra nella scena';
+            db.style.color = root.visible ? '' : '#aaa';
+            showNotification(root.visible ? `👁 ${piece.name} visibile` : `🙈 ${piece.name} nascosto`);
+          });
+        }
       }
       list.appendChild(item);
     });
@@ -1146,10 +1199,11 @@ function addCharactersToPanel() {
     item.innerHTML =
       `<div class="model-dot" style="background:#4a9eff"></div>`
       + `<span class="model-name">${ch.name}</span>`
-      + `<button class="goto-btn" title="Vai al personaggio">🎯</button>`
-      + `<button class="gizmo-btn" title="Sposta col gizmo">✥</button>`
+      + `<button class="goto-btn"    title="Vai al personaggio">🎯</button>`
+      + `<button class="gizmo-btn"   title="Sposta col gizmo">✥</button>`
       + `<button class="confirm-btn" title="Conferma e salva posizione">✓</button>`
-      + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">⏹</button>` : '');
+      + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">⏹</button>` : '')
+      + `<button class="delete-btn"  title="Rimuovi dalla scena">🗑</button>`;
 
     item.querySelector('.goto-btn').addEventListener('click', e => {
       e.stopPropagation();
@@ -1167,8 +1221,8 @@ function addCharactersToPanel() {
 
     item.querySelector('.confirm-btn').addEventListener('click', e => {
       e.stopPropagation();
-      saveObjectPosition(ch.name, ch.root);     // salva la posizione corrente
-      if (gizmoTarget === ch.root) toggleGizmo(ch.root, gb);   // stacca il gizmo
+      saveObjectPosition(ch.name, ch.root);
+      if (gizmoTarget === ch.root) toggleGizmo(ch.root, gb);
     });
 
     const pb = item.querySelector('.play-btn');
@@ -1177,6 +1231,24 @@ function addCharactersToPanel() {
       ch.action.paused = !ch.action.paused;
       pb.classList.toggle('playing', !ch.action.paused);
       pb.textContent = ch.action.paused ? '▶' : '⏹';
+    });
+
+    item.querySelector('.delete-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      // Stacca il gizmo se agganciato
+      if (gizmoTarget === ch.root) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+      // Ferma l'animazione
+      if (ch.action) ch.action.stop();
+      // Rimuovi dalla scena
+      if (ch.root.parent) ch.root.parent.remove(ch.root);
+      // Rimuovi dall'array
+      const idx = gltfCharacters.indexOf(ch);
+      if (idx !== -1) gltfCharacters.splice(idx, 1);
+      // Rimuovi la riga dal pannello
+      item.remove();
+      // Aggiorna contatore header
+      header.textContent = `🧍 Personaggi (${gltfCharacters.length})`;
+      showNotification(`🗑 ${ch.name} rimosso dalla scena`);
     });
 
     list.appendChild(item);
