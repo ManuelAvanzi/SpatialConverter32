@@ -91,6 +91,12 @@
       flex-shrink: 0; transition: background .15s; }
     .ring-btn:hover { background: rgba(255,255,255,.2); }
 
+    /* Esporta scene-config */
+    .export-cfg-btn { width: 100%; background: rgba(74,255,138,.18); border: 1px solid rgba(74,255,138,.45);
+      color: #9cffc0; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
+      font-weight: 600; margin-bottom: 12px; transition: background .15s; }
+    .export-cfg-btn:hover { background: rgba(74,255,138,.32); }
+
     /* Notifica azione */
     #notification {
       position: fixed; top: 68px; left: 50%;
@@ -395,6 +401,7 @@
     <div id="models-list"></div>
   </div>
   <div id="tab-spatial" class="menu-tab-content">
+    <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
     <h3>Spatial Features</h3>
     <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
     <div id="spatial-palette"></div>
@@ -628,13 +635,26 @@ let SAVED_POSITIONS = {};
 const staticRoots = {};            // nome pezzo statico → Object3D (posizionabile)
 let environmentScene = null;       // gltf.scene della scena statica
 
+// scene-config.json = configurazione "pubblicata" del progetto (split engine/contenuto)
+// Contiene posizioni, teleport, entrance, interactable, audio. È la fonte per chi apre
+// il sito (visitatore senza localStorage). localStorage resta la copia di lavoro dell'editor.
+let SCENE_CONFIG = {};
+async function loadSceneConfig() {
+  try {
+    const r = await fetch('./scene-config.json?t=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) SCENE_CONFIG = await r.json();
+  } catch {}
+  return SCENE_CONFIG;
+}
+
 async function loadAllSavedPositions() {
   let base = {};
   try {
     const r = await fetch('./models/gltfModels/positions.json?t=' + Date.now());
     if (r.ok) base = await r.json();
   } catch {}
-  return { ...base, ...loadSavedPositions() };
+  // priorità: positions.json (legacy) → scene-config.json → localStorage (edit live)
+  return { ...base, ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() };
 }
 function applySavedToObject(obj, name) {
   obj.userData.gizmoName = name;
@@ -801,7 +821,9 @@ function saveTeleports() {
   localStorage.setItem(TP_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedTeleports() {
-  try { return JSON.parse(localStorage.getItem(TP_STORE_KEY) || '[]'); } catch { return []; }
+  const ls = localStorage.getItem(TP_STORE_KEY);
+  if (ls) { try { return JSON.parse(ls); } catch {} }
+  return SCENE_CONFIG.teleports || [];
 }
 
 // Riga del teleport nel pannello (tab Spatial)
@@ -1094,7 +1116,9 @@ function saveEntrances() {
   localStorage.setItem(EP_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedEntrances() {
-  try { return JSON.parse(localStorage.getItem(EP_STORE_KEY) || '[]'); } catch { return []; }
+  const ls = localStorage.getItem(EP_STORE_KEY);
+  if (ls) { try { return JSON.parse(ls); } catch {} }
+  return SCENE_CONFIG.entrances || [];
 }
 
 function addEntranceRow(ep) {
@@ -1256,7 +1280,9 @@ function saveInteractables() {
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedInteractables() {
-  try { return JSON.parse(localStorage.getItem(IA_STORE_KEY) || '[]'); } catch { return []; }
+  const ls = localStorage.getItem(IA_STORE_KEY);
+  if (ls) { try { return JSON.parse(ls); } catch {} }
+  return SCENE_CONFIG.interactables || [];
 }
 
 // Opzioni animazione = personaggi glTF caricati
@@ -1462,6 +1488,9 @@ let   _beamTex = null;
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
+  // Configurazione pubblicata del progetto (serve già ad audio e modelli)
+  await loadSceneConfig();
+
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -1634,6 +1663,7 @@ async function init() {
   document.querySelectorAll('.menu-tab').forEach(tab =>
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
+  document.getElementById('btn-export-config').addEventListener('click', exportSceneConfig);
 
   // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
   renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
@@ -2394,8 +2424,8 @@ function setupAudio() {
   const audio = document.getElementById('bg-audio');
   if (!audio) return;
 
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem('sc32-audio') || '{}'); } catch {}
+  let saved = SCENE_CONFIG.audio || {};
+  try { const ls = localStorage.getItem('sc32-audio'); if (ls) saved = JSON.parse(ls); } catch {}
   let vol   = saved.volume != null ? saved.volume : 0.6;
   let muted = !!saved.muted;
   audio.volume = vol;
@@ -2458,6 +2488,30 @@ function exportPositions() {
   a.click();
   URL.revokeObjectURL(a.href);
   showNotification('📥 positions.json scaricato');
+}
+
+function downloadJSON(filename, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Esporta l'INTERA configurazione della scena in un solo file (engine/contenuto split).
+// Da committare in viewer/scene-config.json → diventa ciò che vedono tutti online.
+function exportSceneConfig() {
+  const safe = s => { try { return JSON.parse(s); } catch { return null; } };
+  const cfg = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    positions:     { ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() },
+    audio:         safe(localStorage.getItem('sc32-audio')) || SCENE_CONFIG.audio || { volume: 0.6, muted: false },
+    teleports:     loadSavedTeleports(),
+    entrances:     loadSavedEntrances(),
+    interactables: loadSavedInteractables(),
+  };
+  downloadJSON('scene-config.json', cfg);
+  showNotification('⬇️ scene-config.json esportato — mettilo in viewer/ e committa');
 }
 
 // Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa
