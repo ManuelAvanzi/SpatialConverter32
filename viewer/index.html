@@ -402,13 +402,24 @@ let dragMoved = false;          // distingue drag da click
 let dragPrev = { x: 0, y: 0 };
 let cameraYaw = 0;              // rotazione orizzontale (Y)
 let cameraPitch = -0.1;         // rotazione verticale (X)
-const LOOK_SPEED = 0.003;
-const MOVE_SPEED = 8;
+const LOOK_SPEED        = 0.003;
+const MOVE_SPEED        = 4;       // velocità base (walk)
+const SPRINT_MULTIPLIER = 2.5;     // moltiplicatore con Shift (come Spatial)
+const GRAVITY           = -18;     // m/s² verso il basso
+const JUMP_FORCE        = 6.5;     // m/s velocità iniziale salto
+const MAX_JUMPS         = 2;       // doppio salto
+
 const keys = {};
 const moveDir = new THREE.Vector3();
 // Vettori di direzione calcolati dal yaw
-const fwdVec  = new THREE.Vector3();
+const fwdVec   = new THREE.Vector3();
 const rightVec = new THREE.Vector3();
+
+// ─── Fisica salto ─────────────────────────────────────────────────────────
+let velocityY    = 0;
+let isOnGround   = true;
+let jumpCount    = 0;
+let playerGroundY = 1.7;   // aggiornato ogni frame quando si è a terra
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
@@ -531,6 +542,16 @@ async function init() {
   document.addEventListener('keydown', e => {
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
+
+    // Salto (Space) — solo in FPS
+    if (e.code === 'Space' && cameraMode === 'fps') {
+      e.preventDefault();   // evita lo scroll della pagina
+      if (jumpCount < MAX_JUMPS) {
+        velocityY  = JUMP_FORCE;
+        isOnGround = false;
+        jumpCount++;
+      }
+    }
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -1563,8 +1584,11 @@ function animate(timestamp, frame) {
     orbitControls.update();
   }
 
-  // Movimento WASD — solo in modalità FPS
+  // Movimento WASD + Shift sprint — solo in modalità FPS
   if (!renderer.xr.isPresenting && cameraMode === 'fps') {
+    const isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+    const speed = MOVE_SPEED * (isSprinting ? SPRINT_MULTIPLIER : 1);
+
     moveDir.set(0, 0, 0);
     if (keys['KeyW'] || keys['ArrowUp'])    moveDir.z -= 1;
     if (keys['KeyS'] || keys['ArrowDown'])  moveDir.z += 1;
@@ -1572,12 +1596,29 @@ function animate(timestamp, frame) {
     if (keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
 
     if (moveDir.length() > 0) {
-      moveDir.normalize().multiplyScalar(MOVE_SPEED * delta);
+      moveDir.normalize().multiplyScalar(speed * delta);
       // Vettori forward/right dal yaw (ignora pitch per il movimento orizzontale)
       fwdVec.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
       rightVec.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
       camera.position.addScaledVector(fwdVec,   moveDir.z);
       camera.position.addScaledVector(rightVec, moveDir.x);
+    }
+
+    // ── Gravità e salto ───────────────────────────────────────────────────
+    if (isOnGround) {
+      // Traccia il livello del suolo dalla posizione corrente (segue rampe/scale)
+      playerGroundY = camera.position.y;
+    } else {
+      // Applica gravità
+      velocityY += GRAVITY * delta;
+      camera.position.y += velocityY * delta;
+      // Atterraggio: torna al livello del suolo
+      if (camera.position.y <= playerGroundY) {
+        camera.position.y = playerGroundY;
+        velocityY  = 0;
+        isOnGround = true;
+        jumpCount  = 0;
+      }
     }
   }
 
