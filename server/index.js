@@ -60,6 +60,9 @@ app.delete('/api/projects/:slug', requireAuth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Dashboard redazione (URL pulito)
+app.get('/admin', (req, res) => res.sendFile(path.join(VIEWER_DIR, 'admin.html')));
+
 // ─── Static + fallback ───────────────────────────────────────────────────────
 app.use(express.static(VIEWER_DIR, {
   setHeaders(res, filePath) {
