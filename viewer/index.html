@@ -12,17 +12,28 @@
 
     /* HUD caricamento */
     #loader {
-      position: fixed; inset: 0;
+      position: fixed; inset: 0; overflow: hidden;
       background-color: #0d0d1a;
-      background-image:
-        linear-gradient(to bottom, rgba(13,13,26,.1) 0%, rgba(13,13,26,.25) 45%, rgba(13,13,26,.92) 100%),
-        url("copertina/Screenshot 2026-06-07 154051.png");
-      background-size: cover, cover;
-      background-position: center center, center center;
-      background-repeat: no-repeat, no-repeat;
       display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
       z-index: 100; color: #fff; padding-bottom: 12vh;
     }
+    /* Copertina animata (Ken Burns: lento zoom + pan) */
+    #loader-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background: url("copertina/Screenshot 2026-06-07 154051.png") center center / cover no-repeat;
+      transform: scale(1.15);
+      animation: coverKenBurns 24s ease-in-out infinite alternate;
+      will-change: transform;
+    }
+    @keyframes coverKenBurns {
+      from { transform: scale(1.16) translate(1.5%, -1.2%); }
+      to   { transform: scale(1.02) translate(-1.5%, 1.2%); }
+    }
+    #loader::after {
+      content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      background: linear-gradient(to bottom, rgba(13,13,26,.1) 0%, rgba(13,13,26,.28) 45%, rgba(13,13,26,.92) 100%);
+    }
+    #loader h1, #progress-bar, #progress-label { position: relative; z-index: 2; }
     #loader h1 { font-size: 1.5rem; margin-bottom: 1.2rem; opacity: .95; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
     #progress-bar { width: 320px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
     #progress-fill { height: 100%; background: #4a9eff; width: 0%; transition: width .2s; }
@@ -75,6 +86,10 @@
       color: #fff; border-radius: 4px; padding: 2px 4px; font-size: .7rem; font-family: monospace; }
     .ia-controls .ia-anim { flex: 1; min-width: 0; background: rgba(40,40,40,.95);
       border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 4px; padding: 3px 4px; font-size: .72rem; }
+    .ring-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2);
+      color: #ddd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: .72rem;
+      flex-shrink: 0; transition: background .15s; }
+    .ring-btn:hover { background: rgba(255,255,255,.2); }
 
     /* Notifica azione */
     #notification {
@@ -347,6 +362,7 @@
 
 <!-- Loader -->
 <div id="loader">
+  <div id="loader-bg"></div>
   <h1 id="loader-title">Caricamento ambiente...</h1>
   <div id="progress-bar"><div id="progress-fill"></div></div>
   <div id="progress-label">Inizializzazione...</div>
@@ -913,7 +929,7 @@ function onCanvasDrop(e) {
     switchMenuTab('spatial');
     showNotification(`📍 Entrance ${ep.id} piazzato — usa ⟳ per la direzione di spawn`);
   } else {
-    const ia = addInteractable([pt.x, pt.y, pt.z], '', 3, '', null, true);
+    const ia = addInteractable([pt.x, pt.y, pt.z], '', 3, '', true, null, true);
     switchMenuTab('spatial');
     showNotification(`👆 Interagibile ${ia.id} piazzato — scrivi il testo e scegli l'animazione`);
   }
@@ -1185,8 +1201,8 @@ function makeHandSprite() {
 function createInteractableVisual(radius) {
   const group = new THREE.Group();
   const col = 0xffb84a;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 8, 48),
-    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 48),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.scale.setScalar(radius);
   group.add(ring); group.userData.ring = ring;
   const sprite = makeHandSprite(); sprite.position.y = 1.4; group.add(sprite);
@@ -1200,15 +1216,17 @@ function nextInteractableId() {
   return Math.max(m, _iaSeq) + 1;
 }
 
-function addInteractable(posArr, text, radius, anim, id, save) {
+function addInteractable(posArr, text, radius, anim, showRing, id, save) {
   if (id == null) id = nextInteractableId();
   _iaSeq = Math.max(_iaSeq, id);
   radius = radius || 3;
+  if (showRing == null) showRing = true;
   const group = createInteractableVisual(radius);
   group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
   group.userData.gizmoName = `Interagibile ${id}`;
+  group.userData.ring.visible = showRing;
   scene.add(group);
-  const ia = { id, group, text: text || '', radius, anim: anim || '', row: null };
+  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
   if (save) saveInteractables();
@@ -1233,7 +1251,7 @@ function saveInteractables() {
   const data = interactables.map(ia => ({
     id: ia.id,
     pos: ia.group.position.toArray().map(v => +v.toFixed(3)),
-    text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '',
+    text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '', showRing: ia.showRing !== false,
   }));
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
 }
@@ -1263,6 +1281,8 @@ function addInteractableRow(ia) {
     +   `<span class="model-name">Interagibile ${ia.id}</span>`
     +   `<button class="goto-btn"   title="Vai qui">🎯</button>`
     +   `<button class="gizmo-btn"  title="Sposta">✥</button>`
+    +   `<button class="ring-btn"   title="${ia.showRing !== false ? 'Nascondi cerchio raggio' : 'Mostra cerchio raggio'}">${ia.showRing !== false ? '👁' : '🚫'}</button>`
+    +   `<button class="confirm-btn" title="Salva">✓</button>`
     +   `<button class="delete-btn" title="Rimuovi">🗑</button>`
     + `</div>`
     + `<input class="ia-text-in" type="text" placeholder="Testo (es. Applica misure preventive)" value="${safeText}">`
@@ -1282,6 +1302,27 @@ function addInteractableRow(ia) {
 
   const gb = card.querySelector('.gizmo-btn');
   gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ia.group, gb); });
+
+  const rb = card.querySelector('.ring-btn');
+  rb.addEventListener('click', e => {
+    e.stopPropagation();
+    ia.showRing = !ia.showRing;
+    ia.group.userData.ring.visible = ia.showRing;
+    rb.textContent = ia.showRing ? '👁' : '🚫';
+    rb.title = ia.showRing ? 'Nascondi cerchio raggio' : 'Mostra cerchio raggio';
+    saveInteractables();
+  });
+
+  card.querySelector('.confirm-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    saveInteractables();
+    if (gizmoTarget === ia.group) {
+      transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+      document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+    }
+    showNotification(`💾 Interagibile ${ia.id} salvato`);
+  });
+
   card.querySelector('.delete-btn').addEventListener('click', e => { e.stopPropagation(); removeInteractable(ia); });
 
   const ti = card.querySelector('.ia-text-in');
@@ -1307,7 +1348,7 @@ function addInteractableRow(ia) {
 function addInteractableInFront() {
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
   const p = camera.position.clone().addScaledVector(fwd, 3);
-  const ia = addInteractable([p.x, 0, p.z], '', 3, '', null, true);
+  const ia = addInteractable([p.x, 0, p.z], '', 3, '', true, null, true);
   switchMenuTab('spatial');
   showNotification(`👆 Interagibile ${ia.id} aggiunto — scrivi il testo e scegli l'animazione`);
 }
@@ -1735,7 +1776,7 @@ async function loadScene() {
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
-  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.id, false);
+  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false);
 
   // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
   applySpawn();
