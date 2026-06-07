@@ -94,7 +94,7 @@
     ]
   },
   "audio": {
-    "volume": 0,
+    "volume": 0.6,
     "muted": false
   },
   "teleports": [
