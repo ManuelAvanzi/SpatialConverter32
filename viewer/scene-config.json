@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "exportedAt": "2026-06-07T14:38:29.976Z",
+  "positions": {
+    "rischio_da_macchinari_in_movimento_1": [
+      4.5734,
+      0.1016,
+      13.2284
+    ],
+    "Axe_Wield_01_FINAL2_1": [
+      -8.0799,
+      0.1006,
+      43.1232
+    ],
+    "Hammering_04_FINAL2": [
+      51.7871,
+      3.439,
+      41.3747
+    ],
+    "rischio_eletrico_1": [
+      4.909,
+      0.148,
+      53.7252
+    ],
+    "construction_scene": [
+      28.77,
+      0.16,
+      25.55
+    ],
+    "sliping_1": [
+      11.9597,
+      -0.4934,
+      26.076
+    ],
+    "falling_from_loosing_balance_1": [
+      -1.46,
+      2.6171,
+      34.4359
+    ],
+    "parasassi_1": [
+      10.6084,
+      3.65,
+      20.6855
+    ],
+    "Spade_02_FINAL2_1": [
+      20.94,
+      0.1,
+      6.14
+    ],
+    "Sawing_03_FINAL2_1": [
+      32.5083,
+      6.7149,
+      37.2424
+    ],
+    "Sawing_01_FINAL2_1": [
+      25.184,
+      0.1006,
+      14.0098
+    ],
+    "Sawing_02_FINAL2_1": [
+      34.6422,
+      0.0448,
+      12.8278
+    ],
+    "Crane1_1": [
+      21.16,
+      -0.13,
+      51.1589
+    ],
+    "Hand_Drill_02_FINAL2": [
+      28.4398,
+      0.1006,
+      23.4202
+    ],
+    "Hand_Drill_01_FINAL2": [
+      34.7936,
+      3.38,
+      34.9358
+    ],
+    "Roll_paint_01_FINAL2": [
+      12.552,
+      10.01,
+      42.5959
+    ],
+    "contenitoreHammerDrill_1": [
+      6.8693,
+      3.424,
+      32.6307
+    ],
+    "pointer_della_mappa_1": [
+      -0.8122,
+      3.4005,
+      7.6798
+    ]
+  },
+  "audio": {
+    "volume": 0,
+    "muted": false
+  },
+  "teleports": [
+    {
+      "id": 2,
+      "pad": [
+        23.2,
+        0.125,
+        38.585
+      ],
+      "target": [
+        25.349,
+        42.853,
+        21.582
+      ]
+    },
+    {
+      "id": 3,
+      "pad": [
+        26.259,
+        43.177,
+        16.067
+      ],
+      "target": [
+        32.537,
+        0.088,
+        10.987
+      ]
+    }
+  ],
+  "entrances": [
+    {
+      "id": 6,
+      "pos": [
+        0.325,
+        0,
+        4.169
+      ],
+      "yaw": 9.96,
+      "radius": 1.5
+    }
+  ],
+  "interactables": [
+    {
+      "id": 1,
+      "pos": [
+        -2.447,
+        0,
+        7.682
+      ],
+      "text": "Rischio macchinari in movimento",
+      "radius": 3,
+      "anim": "rischio_da_macchinari_in_movimento_1",
+      "showRing": false
+    }
+  ]
+}
