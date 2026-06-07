@@ -5,150 +5,273 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SpatialConverter — Redazione</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d0d1a; color: #eee;
-    min-height: 100vh; }
-  header { display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 28px; border-bottom: 1px solid rgba(255,255,255,.08); }
-  header h1 { font-size: 1.1rem; letter-spacing: .02em; }
-  header h1 b { color: #4a9eff; }
-  .muted { opacity: .55; }
-  .btn { background: rgba(74,158,255,.2); border: 1px solid rgba(74,158,255,.45);
-    color: #cfe6ff; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: .85rem;
-    transition: background .15s; }
-  .btn:hover { background: rgba(74,158,255,.4); }
-  .btn.ghost { background: none; border-color: rgba(255,255,255,.2); color: #ccc; }
-  .btn.green { background: rgba(74,255,138,.18); border-color: rgba(74,255,138,.45); color: #9cffc0; }
-  .btn.red   { background: rgba(255,70,70,.16); border-color: rgba(255,70,70,.4); color: #ff9a9a; }
-  .btn.sm { padding: 5px 10px; font-size: .78rem; }
+  :root { --accent:#4a9eff; --bg:#0d0d1a; --panel:#14141f; --text:#e8e8ef; --muted:rgba(232,232,239,.5);
+    --line:rgba(255,255,255,.08); --green:#4aff8a; --amber:#ffb84a; --danger:#ff6a6a; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .btn { border:1px solid rgba(74,158,255,.45); background:rgba(74,158,255,.18); color:#cfe6ff;
+    border-radius:8px; padding:8px 14px; cursor:pointer; font-size:.85rem; font-family:inherit; transition:background .15s; }
+  .btn:hover { background:rgba(74,158,255,.36); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .btn.primary:hover { background:#3b8ef0; }
+  .btn.ghost { background:none; border-color:var(--line); color:#ccc; }
+  .btn.green { background:rgba(74,255,138,.16); border-color:rgba(74,255,138,.4); color:#9cffc0; }
+  .btn.red { background:rgba(255,106,106,.14); border-color:rgba(255,106,106,.4); color:#ff9a9a; }
+  .btn.sm { padding:5px 10px; font-size:.78rem; }
 
-  main { max-width: 920px; margin: 0 auto; padding: 28px; }
+  /* LOGIN */
+  #login { max-width:360px; margin:13vh auto; text-align:center; padding:0 20px; }
+  #login .logo { font-size:1.6rem; font-weight:800; margin-bottom:22px; }
+  #login .logo span { color:var(--accent); }
+  #login h2 { font-size:1.15rem; margin-bottom:6px; }
+  #login p { font-size:.84rem; color:var(--muted); margin-bottom:20px; }
+  #login input { width:100%; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16);
+    color:#fff; border-radius:9px; padding:12px 14px; font-size:1rem; margin-bottom:12px; }
+  #login .btn { width:100%; padding:12px; }
+  #login .err { color:#ff8080; font-size:.8rem; min-height:1.2em; margin-top:10px; }
 
-  /* Login */
-  #login { max-width: 360px; margin: 12vh auto; text-align: center; }
-  #login h2 { font-size: 1.3rem; margin-bottom: 6px; }
-  #login p { font-size: .85rem; opacity: .5; margin-bottom: 22px; }
-  #login input { width: 100%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-    color: #fff; border-radius: 9px; padding: 12px 14px; font-size: 1rem; margin-bottom: 12px; }
-  #login .btn { width: 100%; padding: 12px; }
-  #login .err { color: #ff8080; font-size: .8rem; min-height: 1.2em; margin-top: 8px; }
+  /* SHELL */
+  .app-shell { display:flex; min-height:100vh; }
+  .sidebar { width:210px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; padding:20px 16px; }
+  .sidebar .logo { font-size:1.15rem; font-weight:800; margin-bottom:24px; }
+  .sidebar .logo span { color:var(--accent); }
+  .sidebar nav { flex:1; }
+  .nav-item { display:flex; align-items:center; gap:9px; padding:9px 11px; border-radius:8px;
+    color:var(--muted); text-decoration:none; font-size:.88rem; }
+  .nav-item.active { background:rgba(74,158,255,.14); color:#cfe6ff; }
+  .sidebar .user { border-top:1px solid var(--line); padding-top:14px; }
+  .sidebar .user .role { font-size:.74rem; color:var(--muted); margin-bottom:8px; }
 
-  /* New project */
-  .newbar { display: flex; gap: 10px; margin-bottom: 22px; }
-  .newbar input { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-    color: #fff; border-radius: 9px; padding: 10px 14px; font-size: .9rem; }
+  .main { flex:1; min-width:0; padding:26px 32px; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .topbar h1 { font-size:1.3rem; }
+  .topbar p { font-size:.82rem; color:var(--muted); margin-top:3px; }
 
-  /* Project cards */
-  .grid { display: grid; gap: 12px; }
-  .card { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,.04);
-    border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 14px 16px; }
-  .card .info { flex: 1; min-width: 0; }
-  .card .name { font-size: 1rem; font-weight: 600; }
-  .card .meta { font-size: .74rem; opacity: .5; margin-top: 3px; }
-  .badge { font-size: .68rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
-  .badge.published { background: rgba(74,255,138,.2); color: #9cffc0; }
-  .badge.draft { background: rgba(255,184,74,.2); color: #ffce8a; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .empty { opacity: .5; text-align: center; padding: 40px; }
-  a.plain { text-decoration: none; }
+  .searchbar { margin-bottom:14px; }
+  .searchbar input { width:100%; max-width:420px; background:rgba(255,255,255,.06);
+    border:1px solid var(--line); color:#fff; border-radius:9px; padding:10px 14px; font-size:.9rem; }
+
+  .filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .filter-label { font-size:.76rem; color:var(--muted); margin-right:2px; }
+  .filter-chip { border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--muted);
+    border-radius:999px; padding:5px 12px; cursor:pointer; font-size:.76rem; transition:all .15s; }
+  .filter-chip:hover { color:var(--text); border-color:rgba(74,158,255,.4); }
+  .filter-chip.active { background:rgba(74,158,255,.22); border-color:rgba(74,158,255,.5); color:#cfe6ff; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:16px;
+    display:flex; flex-direction:column; gap:11px; }
+  .card .top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .card .name { font-size:1.02rem; font-weight:700; }
+  .card .meta { font-size:.72rem; color:var(--muted); margin-top:3px; }
+  .status { font-size:.66rem; font-weight:800; padding:3px 9px; border-radius:999px; text-transform:uppercase;
+    letter-spacing:.04em; flex-shrink:0; display:inline-flex; align-items:center; gap:5px; }
+  .status::before { content:''; width:6px; height:6px; border-radius:50%; }
+  .status.published { background:rgba(74,255,138,.16); color:#9cffc0; }
+  .status.published::before { background:var(--green); }
+  .status.draft { background:rgba(255,184,74,.16); color:#ffce8a; }
+  .status.draft::before { background:var(--amber); }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; min-height:4px; }
+  .tag { font-size:.7rem; color:#bcd3ff; background:rgba(74,158,255,.1); border:1px solid rgba(74,158,255,.25);
+    border-radius:6px; padding:2px 8px; }
+  .card .actions { display:flex; flex-wrap:wrap; gap:7px; border-top:1px solid var(--line); padding-top:11px; }
+  .empty { color:var(--muted); text-align:center; padding:50px; grid-column:1/-1; }
+
+  /* MODAL */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px);
+    display:none; align-items:center; justify-content:center; z-index:50; }
+  .modal-overlay.show { display:flex; }
+  .modal-box { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:22px; width:420px; max-width:92vw; }
+  .modal-title { font-size:1.05rem; font-weight:700; margin-bottom:16px; }
+  .modal-box label { display:block; font-size:.76rem; color:var(--muted); margin:12px 0 5px; }
+  .modal-box input { width:100%; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.16);
+    color:#fff; border-radius:8px; padding:9px 12px; font-size:.9rem; }
+  .modal-actions { display:flex; gap:9px; margin-top:20px; }
+  .modal-actions .btn { flex:1; }
 </style>
 </head>
 <body>
-<header>
-  <h1><b>SpatialConverter</b> &nbsp;<span class="muted">· Redazione</span></h1>
-  <button class="btn ghost sm" id="logout" style="display:none">Esci</button>
-</header>
 
-<main>
-  <!-- Login -->
-  <section id="login" style="display:none">
-    <h2>Accesso redazione</h2>
-    <p>Inserisci la password per gestire i progetti.</p>
-    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
-    <button class="btn" id="login-btn">Entra</button>
-    <div class="err" id="login-err"></div>
-  </section>
+<!-- LOGIN -->
+<section id="login" style="display:none">
+  <div class="logo">Spatial<span>Converter</span></div>
+  <h2>Accesso redazione</h2>
+  <p>Inserisci la password per gestire i progetti.</p>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
+  <button class="btn primary" id="loginBtn">Entra</button>
+  <div class="err" id="loginErr"></div>
+</section>
 
-  <!-- Dashboard -->
-  <section id="dash" style="display:none">
-    <div class="newbar">
-      <input id="new-name" type="text" placeholder="Nome nuovo progetto…" />
-      <button class="btn green" id="new-btn">+ Nuovo progetto</button>
+<!-- APP -->
+<div class="app-shell" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="logo">Spatial<span>Converter</span></div>
+    <nav><a class="nav-item active">📦 Progetti</a></nav>
+    <div class="user">
+      <div class="role">Redazione</div>
+      <button class="btn ghost sm" id="logoutBtn">Esci</button>
     </div>
-    <div class="grid" id="list"></div>
-  </section>
-</main>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div><h1>Progetti</h1><p id="sub">…</p></div>
+      <button class="btn primary" id="newBtn">＋ Nuovo progetto</button>
+    </div>
+    <div class="searchbar"><input id="search" type="text" placeholder="Cerca progetto…" autocomplete="off"></div>
+    <div class="filter-row" id="filterRow"></div>
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<!-- MODAL NUOVO / MODIFICA -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle">Nuovo progetto</div>
+    <label>Nome</label>
+    <input id="mName" type="text" placeholder="Nome del progetto">
+    <label>Tag (separati da virgola)</label>
+    <input id="mTags" type="text" placeholder="es. sicurezza, cantiere, VR">
+    <div class="modal-actions">
+      <button class="btn primary" id="mSave">Salva</button>
+      <button class="btn ghost" id="mCancel">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINA -->
+<div class="modal-overlay" id="delModal">
+  <div class="modal-box">
+    <div class="modal-title">🗑 Eliminare il progetto?</div>
+    <p style="font-size:.85rem;color:var(--muted)" id="delMsg"></p>
+    <div class="modal-actions">
+      <button class="btn red" id="delOk">Elimina</button>
+      <button class="btn ghost" id="delCancel">Annulla</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
-async function api(path, opts) {
-  const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
-  return r;
-}
+const api = (p, o) => fetch(p, Object.assign({ headers: { 'Content-Type': 'application/json' } }, o));
+
+let PROJECTS = [];
+let activeTag = null;
+let editingSlug = null;     // null = nuovo progetto
+let deletingSlug = null;
 
 async function refresh() {
   const me = await (await api('/api/me')).json();
-  if (!me.authed) { $('#login').style.display = 'block'; $('#dash').style.display = 'none'; $('#logout').style.display = 'none'; $('#pw').focus(); return; }
-  $('#login').style.display = 'none'; $('#dash').style.display = 'block'; $('#logout').style.display = '';
-  await loadProjects();
+  if (!me.authed) { $('#login').style.display = 'block'; $('#app').style.display = 'none'; $('#pw').focus(); return; }
+  $('#login').style.display = 'none'; $('#app').style.display = 'flex';
+  await load();
 }
 
-async function loadProjects() {
-  const list = $('#list');
-  const res = await api('/api/projects');
-  if (!res.ok) { list.innerHTML = '<div class="empty">Errore nel caricare i progetti</div>'; return; }
-  const projects = await res.json();
-  if (!projects.length) { list.innerHTML = '<div class="empty">Nessun progetto. Creane uno qui sopra.</div>'; return; }
-  list.innerHTML = '';
-  for (const p of projects) {
+async function load() {
+  const r = await api('/api/projects');
+  PROJECTS = r.ok ? await r.json() : [];
+  $('#sub').textContent = `${PROJECTS.length} progett${PROJECTS.length === 1 ? 'o' : 'i'}`;
+  buildFilters();
+  render();
+}
+
+function buildFilters() {
+  const tags = [...new Set(PROJECTS.flatMap(p => p.tags || []))].sort();
+  const row = $('#filterRow');
+  row.innerHTML = '<span class="filter-label">Tag:</span>';
+  const mk = (label, val) => {
+    const c = document.createElement('button');
+    c.className = 'filter-chip' + (activeTag === val ? ' active' : '');
+    c.textContent = label;
+    c.onclick = () => { activeTag = val; buildFilters(); render(); };
+    row.appendChild(c);
+  };
+  mk('Tutti', null);
+  tags.forEach(t => mk(t, t));
+}
+
+function render() {
+  const q = $('#search').value.trim().toLowerCase();
+  const grid = $('#grid');
+  let items = PROJECTS.filter(p =>
+    (!activeTag || (p.tags || []).includes(activeTag)) &&
+    (!q || p.name.toLowerCase().includes(q) || p.slug.includes(q)));
+  if (!items.length) { grid.innerHTML = '<div class="empty">Nessun progetto. Creane uno con “＋ Nuovo progetto”.</div>'; return; }
+  grid.innerHTML = '';
+  for (const p of items) {
+    const date = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('it-IT') : '';
     const card = document.createElement('div');
     card.className = 'card';
-    const date = p.updatedAt ? new Date(p.updatedAt).toLocaleString('it-IT') : '';
-    const pubLabel = p.status === 'published' ? 'Metti in bozza' : 'Pubblica';
+    const tagsHtml = (p.tags || []).map(t => `<span class="tag"></span>`).join('');
     card.innerHTML =
-        `<span class="badge ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span>`
-      + `<div class="info"><div class="name"></div><div class="meta">${p.slug} · agg. ${date}</div></div>`
+        `<div class="top"><div><div class="name"></div><div class="meta">${p.slug} · ${date}</div></div>`
+      +   `<span class="status ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span></div>`
+      + `<div class="tags">${tagsHtml}</div>`
       + `<div class="actions">`
-      +   `<a class="plain" href="/?project=${encodeURIComponent(p.slug)}&edit"><button class="btn sm">✏️ Editor</button></a>`
-      +   `<a class="plain" href="/?project=${encodeURIComponent(p.slug)}" target="_blank"><button class="btn sm ghost">▶️ Play</button></a>`
-      +   `<button class="btn sm" data-act="pub">${pubLabel}</button>`
-      +   `<button class="btn sm red" data-act="del">🗑</button>`
+      +   `<a href="/?project=${encodeURIComponent(p.slug)}&edit"><button class="btn sm">✏️ Editor</button></a>`
+      +   `<a href="/?project=${encodeURIComponent(p.slug)}" target="_blank"><button class="btn sm ghost">▶️ Play</button></a>`
+      +   `<button class="btn sm green" data-a="pub">${p.status === 'published' ? 'Metti in bozza' : 'Pubblica'}</button>`
+      +   `<button class="btn sm ghost" data-a="edit">🏷 Modifica</button>`
+      +   `<button class="btn sm red" data-a="del">🗑</button>`
       + `</div>`;
     card.querySelector('.name').textContent = p.name;
-    card.querySelector('[data-act="pub"]').onclick = async () => {
+    card.querySelectorAll('.tag').forEach((el, i) => el.textContent = p.tags[i]);
+    card.querySelector('[data-a="pub"]').onclick = async () => {
       await api('/api/projects/' + encodeURIComponent(p.slug), { method: 'PUT',
         body: JSON.stringify({ status: p.status === 'published' ? 'draft' : 'published' }) });
-      loadProjects();
+      load();
     };
-    card.querySelector('[data-act="del"]').onclick = async () => {
-      if (!confirm(`Eliminare il progetto "${p.name}"? (i modelli su R2 restano)`)) return;
-      await api('/api/projects/' + encodeURIComponent(p.slug), { method: 'DELETE' });
-      loadProjects();
-    };
-    list.appendChild(card);
+    card.querySelector('[data-a="edit"]').onclick = () => openModal(p);
+    card.querySelector('[data-a="del"]').onclick = () => { deletingSlug = p.slug; $('#delMsg').textContent = `"${p.name}" — i modelli su R2 restano.`; $('#delModal').classList.add('show'); };
+    grid.appendChild(card);
   }
 }
 
-$('#login-btn').onclick = doLogin;
+/* ── Modal nuovo/modifica ── */
+function openModal(project) {
+  editingSlug = project ? project.slug : null;
+  $('#modalTitle').textContent = project ? 'Modifica progetto' : 'Nuovo progetto';
+  $('#mName').value = project ? project.name : '';
+  $('#mTags').value = project ? (project.tags || []).join(', ') : '';
+  $('#mSave').textContent = project ? 'Salva modifiche' : 'Crea e apri editor';
+  $('#editModal').classList.add('show');
+  setTimeout(() => $('#mName').focus(), 50);
+}
+function closeModal() { $('#editModal').classList.remove('show'); }
+$('#newBtn').onclick = () => openModal(null);
+$('#mCancel').onclick = closeModal;
+$('#mSave').onclick = async () => {
+  const name = $('#mName').value.trim();
+  if (!name) { $('#mName').focus(); return; }
+  const tags = $('#mTags').value.split(',').map(s => s.trim()).filter(Boolean);
+  if (editingSlug) {
+    await api('/api/projects/' + encodeURIComponent(editingSlug), { method: 'PUT', body: JSON.stringify({ name, tags }) });
+    closeModal(); load();
+  } else {
+    const r = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name, tags }) });
+    if (r.ok) { const p = await r.json(); location.href = `/?project=${encodeURIComponent(p.slug)}&edit`; }
+    else alert('Errore nella creazione');
+  }
+};
+
+/* ── Elimina ── */
+$('#delCancel').onclick = () => $('#delModal').classList.remove('show');
+$('#delOk').onclick = async () => {
+  if (deletingSlug) await api('/api/projects/' + encodeURIComponent(deletingSlug), { method: 'DELETE' });
+  $('#delModal').classList.remove('show'); deletingSlug = null; load();
+};
+
+/* ── Login / logout / search ── */
+$('#loginBtn').onclick = doLogin;
 $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 async function doLogin() {
-  $('#login-err').textContent = '';
+  $('#loginErr').textContent = '';
   const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ password: $('#pw').value }) });
-  if (r.ok) { $('#pw').value = ''; refresh(); }
-  else { $('#login-err').textContent = 'Password errata'; }
+  if (r.ok) { $('#pw').value = ''; refresh(); } else $('#loginErr').textContent = 'Password errata';
 }
-
-$('#logout').onclick = async () => { await api('/api/logout', { method: 'POST' }); refresh(); };
-
-$('#new-btn').onclick = doNew;
-$('#new-name').addEventListener('keydown', e => { if (e.key === 'Enter') doNew(); });
-async function doNew() {
-  const name = $('#new-name').value.trim();
-  if (!name) return;
-  const r = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
-  if (r.ok) { const p = await r.json(); location.href = `/?project=${encodeURIComponent(p.slug)}&edit`; }
-  else { alert('Errore nella creazione'); }
-}
+$('#logoutBtn').onclick = async () => { await api('/api/logout', { method: 'POST' }); refresh(); };
+$('#search').addEventListener('input', render);
 
 refresh();
 </script>

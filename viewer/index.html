@@ -698,20 +698,24 @@ async function loadSceneConfig() {
 // URL pubblico R2 in produzione (fornito dal server via /api/config).
 let ASSET_BASE = 'models';
 async function loadAppConfig() {
-  let r2Base = '';
+  let r2Base = '', globalBase = '';
   try {
     const r = await fetch('./api/config', { cache: 'no-store' });
     if (r.ok) {
       const c = await r.json();
-      if (c.assetBase) ASSET_BASE = String(c.assetBase).replace(/\/+$/, '');
+      globalBase = String(c.assetBase || '').replace(/\/+$/, '');
       r2Base = String(c.r2Base || '').replace(/\/+$/, '');
     }
   } catch {}
-  // Asset per-progetto: base R2 + prefisso del progetto caricato
-  if (CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix && r2Base) {
-    ASSET_BASE = `${r2Base}/${CURRENT_PROJECT.assetPrefix}`;
+  if (PROJECT_SLUG) {
+    // Modalità progetto: SOLO gli asset del progetto. Vuoto → scena vuota.
+    const pref = CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix;
+    ASSET_BASE = (pref && r2Base) ? `${r2Base}/${pref}` : '';
+  } else if (globalBase) {
+    // Modalità singolo progetto (scene-config statico)
+    ASSET_BASE = globalBase;
   }
-  console.log('🌐 ASSET_BASE =', ASSET_BASE);
+  console.log('🌐 ASSET_BASE =', ASSET_BASE, '| progetto =', PROJECT_SLUG || '(statico)');
 }
 
 async function loadAllSavedPositions() {
@@ -1954,20 +1958,25 @@ function idbDelete(key) {
 async function loadModel() {
   const gltfLoader = new GLTFLoader();
 
-  // 1. Prova dalla cache IndexedDB (conversione FBX precedente)
-  setProgress(15, 'Controllo cache locale...');
-  try {
-    const cached = await idbGet('environment.glb');
-    if (cached) {
-      setProgress(20, 'Caricamento da cache...');
-      const url = URL.createObjectURL(new Blob([cached], { type: 'model/gltf-binary' }));
-      const gltf = await loadGLTF(gltfLoader, url, p => setProgress(20 + p * 60, `Cache: ${Math.round(p*100)}%`));
-      URL.revokeObjectURL(url);
-      addModelToScene(gltf);
-      setProgress(82, 'Modello caricato dalla cache ✓');
-      return true;
-    }
-  } catch(e) { console.warn('Cache miss:', e.message); }
+  // 1. Cache IndexedDB (solo in modalità singolo progetto — evita contaminazione tra progetti)
+  if (!PROJECT_SLUG) {
+    setProgress(15, 'Controllo cache locale...');
+    try {
+      const cached = await idbGet('environment.glb');
+      if (cached) {
+        setProgress(20, 'Caricamento da cache...');
+        const url = URL.createObjectURL(new Blob([cached], { type: 'model/gltf-binary' }));
+        const gltf = await loadGLTF(gltfLoader, url, p => setProgress(20 + p * 60, `Cache: ${Math.round(p*100)}%`));
+        URL.revokeObjectURL(url);
+        addModelToScene(gltf);
+        setProgress(82, 'Modello caricato dalla cache ✓');
+        return true;
+      }
+    } catch(e) { console.warn('Cache miss:', e.message); }
+  }
+
+  // Modalità progetto senza asset propri → scena vuota (nessun environment)
+  if (PROJECT_SLUG && !ASSET_BASE) return false;
 
   // 2. Prova GLB già convertiti (cache-bust con buildId per evitare GLB vecchio)
   const bust = loadedManifest?.buildId ? `?v=${loadedManifest.buildId}` : `?t=${Date.now()}`;
@@ -2966,27 +2975,21 @@ function animateMarkers(t) {
 
 // ─── Placeholder se nessun GLB ────────────────────────────────────────────
 function createPlaceholderEnvironment() {
-  // Pavimento
+  // Pavimento + griglia (scena vuota pulita)
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(100, 100),
-    new THREE.MeshLambertMaterial({ color: 0x888888 })
+    new THREE.PlaneGeometry(120, 120),
+    new THREE.MeshLambertMaterial({ color: 0x9099a3 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Alcune pareti di esempio
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
-  for (let i = 0; i < 4; i++) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 5, 0.5), wallMat);
-    const a = (i / 4) * Math.PI * 2;
-    wall.position.set(Math.sin(a) * 15, 2.5, Math.cos(a) * 15);
-    wall.lookAt(0, 2.5, 0);
-    wall.castShadow = true;
-    scene.add(wall);
-  }
+  const grid = new THREE.GridHelper(120, 120, 0x6a7480, 0x444b54);
+  grid.position.y = 0.01;
+  scene.add(grid);
 
-  showNotification('Modalità demo — nessun GLB caricato');
+  if (PROJECT_SLUG) showNotification('🆕 Scena vuota — usa gli strumenti per costruirla');
+  else showNotification('Modalità demo — nessun GLB caricato');
 }
 
 // ─── Dati demo ─────────────────────────────────────────────────────────────

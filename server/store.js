@@ -39,7 +39,11 @@ function slugify(s) {
 
 function keyOf(slug) { return `${PREFIX}${slug}.json`; }
 function summary(p) {
-  return { slug: p.slug, name: p.name, status: p.status, assetPrefix: p.assetPrefix || '', updatedAt: p.updatedAt };
+  return {
+    slug: p.slug, name: p.name, status: p.status,
+    assetPrefix: p.assetPrefix || '', tags: Array.isArray(p.tags) ? p.tags : [],
+    updatedAt: p.updatedAt,
+  };
 }
 
 async function getProject(slug) {
@@ -81,6 +85,7 @@ async function createProject(name, opts = {}) {
     slug, name,
     status: 'draft',
     assetPrefix: opts.assetPrefix || '',
+    tags: Array.isArray(opts.tags) ? opts.tags : [],
     sceneConfig: opts.sceneConfig || { version: 1 },
     createdAt: now, updatedAt: now,
   };
@@ -93,6 +98,7 @@ async function saveProject(slug, patch) {
   if (patch.name != null) p.name = patch.name;
   if (patch.status != null) p.status = patch.status;
   if (patch.assetPrefix != null) p.assetPrefix = patch.assetPrefix;
+  if (patch.tags != null) p.tags = Array.isArray(patch.tags) ? patch.tags : p.tags;
   if (patch.sceneConfig != null) p.sceneConfig = patch.sceneConfig;
   p.updatedAt = new Date().toISOString();
   return putProject(p);

@@ -37,7 +37,7 @@ app.get('/api/projects', requireAuth, async (req, res) => {
 app.post('/api/projects', requireAuth, async (req, res) => {
   const name = (req.body && req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Nome richiesto' });
-  try { res.status(201).json(await store.createProject(name, { assetPrefix: req.body.assetPrefix })); }
+  try { res.status(201).json(await store.createProject(name, { assetPrefix: req.body.assetPrefix, tags: req.body.tags })); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/projects/:slug', async (req, res) => {

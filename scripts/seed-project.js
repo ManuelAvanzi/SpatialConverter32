@@ -14,17 +14,18 @@ async function main() {
   const cfgPath = path.join(__dirname, '..', 'viewer', 'scene-config.json');
   const sceneConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
 
-  const slug = 'cantiere-32';
+  const slug = '32-sicurezza-nel-cantiere';   // slug canonico (idempotente)
   let p = await store.getProject(slug);
   if (!p) {
-    p = await store.createProject('32 — Sicurezza nel cantiere', { assetPrefix: 'spatial32', sceneConfig });
-    // forza lo slug atteso non garantito da createProject; risalvo i campi
+    p = await store.createProject('32 — Sicurezza nel cantiere',
+      { assetPrefix: 'spatial32', sceneConfig, tags: ['sicurezza', 'cantiere', 'VR'] });
   }
   // Aggiorna in ogni caso contenuto + stato pubblicato
   const saved = await store.saveProject(p.slug, {
     name: '32 — Sicurezza nel cantiere',
     status: 'published',
     assetPrefix: 'spatial32',
+    tags: ['sicurezza', 'cantiere', 'VR'],
     sceneConfig,
   });
   console.log(`✅ Progetto salvato: ${saved.slug} (${saved.status})`);
