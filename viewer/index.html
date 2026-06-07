@@ -224,6 +224,13 @@
       cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
     }
     .delete-btn:hover { background: rgba(255,60,60,.5); color:#fff; }
+    .collider-btn {
+      background: rgba(74,200,255,.15); border: 1px solid rgba(74,200,255,.35);
+      color: #4ac8ff; border-radius: 4px; padding: 2px 7px;
+      cursor: pointer; font-size: .72rem; flex-shrink: 0; transition: background .15s;
+    }
+    .collider-btn:hover  { background: rgba(74,200,255,.35); }
+    .collider-btn.active { background: rgba(74,200,255,.55); border-color: #4ac8ff; color: #fff; }
   </style>
 </head>
 <body>
@@ -407,6 +414,35 @@ function wireGizmoControls(item, name, root) {
   });
 }
 
+// Abilita / disabilita il mesh collider su un root Object3D
+function toggleCollider(root, btn) {
+  if (colliderRoots.has(root)) {
+    // RIMUOVI collider
+    colliderRoots.delete(root);
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      const idx = collidableMeshes.indexOf(o);
+      if (idx !== -1) collidableMeshes.splice(idx, 1);
+    });
+    btn.classList.remove('active');
+    btn.title = 'Attiva mesh collider';
+    showNotification(`⬡ Collider disattivato: ${root.userData.gizmoName || root.name}`);
+  } else {
+    // AGGIUNGI collider
+    colliderRoots.add(root);
+    let added = 0;
+    root.traverse(o => {
+      if (o.isMesh && o.geometry && !collidableMeshes.includes(o)) {
+        collidableMeshes.push(o);
+        added++;
+      }
+    });
+    btn.classList.add('active');
+    btn.title = 'Disattiva mesh collider';
+    showNotification(`⬡ Collider attivo: ${root.userData.gizmoName || root.name} (${added} mesh)`);
+  }
+}
+
 // ─── Navigazione drag-to-look ──────────────────────────────────────────────
 let isDragging = false;
 let dragMoved = false;          // distingue drag da click
@@ -427,10 +463,18 @@ const fwdVec   = new THREE.Vector3();
 const rightVec = new THREE.Vector3();
 
 // ─── Fisica salto ─────────────────────────────────────────────────────────
-let velocityY    = 0;
-let isOnGround   = true;
-let jumpCount    = 0;
+let velocityY     = 0;
+let isOnGround    = true;
+let jumpCount     = 0;
 let playerGroundY = 1.7;   // aggiornato ogni frame quando si è a terra
+
+// ─── Mesh Collider ────────────────────────────────────────────────────────
+const PLAYER_HEIGHT  = 1.7;   // altezza occhi dal suolo (m)
+const PLAYER_RADIUS  = 0.45;  // raggio cilindro del giocatore (m) — usato per muri
+const collidableMeshes = [];   // meshes con collider attivo
+const colliderRoots    = new Set(); // root Object3D con collider abilitato
+const colRaycaster     = new THREE.Raycaster();
+const _downVec         = new THREE.Vector3(0, -1, 0); // costante (evita allocazioni per frame)
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
@@ -998,16 +1042,25 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
       } else {
         const root = staticRoots[piece.name];
         const btns = root
-          ? `<button class="gizmo-btn"   title="Sposta col gizmo">✥</button>`
+          ? `<button class="gizmo-btn"    title="Sposta col gizmo">✥</button>`
             + `<button class="confirm-btn" title="Conferma e salva">✓</button>`
+            + `<button class="collider-btn" title="Attiva mesh collider">⬡</button>`
             + `<button class="delete-btn"  title="Nascondi dalla scena">🗑</button>`
           : '';
         item.innerHTML = `${dot}${name}${btns}${info}`;
         if (root) {
           wireGizmoControls(item, piece.name, root);
+          // Pulsante collider
+          item.querySelector('.collider-btn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleCollider(root, e.currentTarget);
+          });
+          // Pulsante nascondi/mostra
           item.querySelector('.delete-btn')?.addEventListener('click', e => {
             e.stopPropagation();
             if (gizmoTarget === root) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+            // Se il collider è attivo, rimuovilo prima di nascondere
+            if (colliderRoots.has(root)) toggleCollider(root, item.querySelector('.collider-btn'));
             root.visible = !root.visible;
             const db = e.currentTarget;
             db.textContent = root.visible ? '🗑' : '👁';
@@ -1618,29 +1671,72 @@ function animate(timestamp, frame) {
     if (keys['KeyA'] || keys['ArrowLeft'])  moveDir.x -= 1;
     if (keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
 
+    // Vettori direzionali sempre aggiornati (servono anche per wall collision)
+    fwdVec.set(  Math.sin(cameraYaw), 0,  Math.cos(cameraYaw));
+    rightVec.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
+
+    // ── Wall collision ─────────────────────────────────────────────────────
+    if (collidableMeshes.length > 0 && moveDir.length() > 0) {
+      if (moveDir.z !== 0) {
+        colRaycaster.near = 0;
+        colRaycaster.far  = PLAYER_RADIUS;
+        colRaycaster.set(camera.position,
+          new THREE.Vector3().copy(fwdVec).multiplyScalar(Math.sign(moveDir.z)));
+        if (colRaycaster.intersectObjects(collidableMeshes, false).length > 0) moveDir.z = 0;
+      }
+      if (moveDir.x !== 0) {
+        colRaycaster.near = 0;
+        colRaycaster.far  = PLAYER_RADIUS;
+        colRaycaster.set(camera.position,
+          new THREE.Vector3().copy(rightVec).multiplyScalar(Math.sign(moveDir.x)));
+        if (colRaycaster.intersectObjects(collidableMeshes, false).length > 0) moveDir.x = 0;
+      }
+    }
+
     if (moveDir.length() > 0) {
       moveDir.normalize().multiplyScalar(speed * delta);
-      // Vettori forward/right dal yaw (ignora pitch per il movimento orizzontale)
-      fwdVec.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
-      rightVec.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
       camera.position.addScaledVector(fwdVec,   moveDir.z);
       camera.position.addScaledVector(rightVec, moveDir.x);
     }
 
-    // ── Gravità e salto ───────────────────────────────────────────────────
+    // ── Gravità, salto, floor detection ──────────────────────────────────
     if (isOnGround) {
-      // Traccia il livello del suolo dalla posizione corrente (segue rampe/scale)
-      playerGroundY = camera.position.y;
+      if (collidableMeshes.length > 0) {
+        // Floor following: il personaggio segue la superficie (rampe, scale)
+        colRaycaster.near = 0;
+        colRaycaster.far  = PLAYER_HEIGHT + 0.5;
+        colRaycaster.set(camera.position, _downVec);
+        const fh = colRaycaster.intersectObjects(collidableMeshes, false);
+        if (fh.length > 0) {
+          playerGroundY = fh[0].point.y + PLAYER_HEIGHT;
+          camera.position.y = playerGroundY;
+        }
+        // nessun pavimento rilevato → mantieni l'ultima quota (no caduta improvvisa)
+      } else {
+        playerGroundY = camera.position.y;   // suolo piatto senza collider
+      }
     } else {
       // Applica gravità
       velocityY += GRAVITY * delta;
       camera.position.y += velocityY * delta;
-      // Atterraggio: torna al livello del suolo
-      if (camera.position.y <= playerGroundY) {
-        camera.position.y = playerGroundY;
-        velocityY  = 0;
-        isOnGround = true;
-        jumpCount  = 0;
+
+      // Controlla atterraggio: piano di default OPPURE mesh sotto i piedi
+      let landed   = camera.position.y <= playerGroundY;
+      let landedY  = playerGroundY;
+      if (!landed && collidableMeshes.length > 0 && velocityY < 0) {
+        colRaycaster.near = 0;
+        colRaycaster.far  = PLAYER_HEIGHT + 0.3;
+        colRaycaster.set(camera.position, _downVec);
+        const fh = colRaycaster.intersectObjects(collidableMeshes, false);
+        if (fh.length > 0) {
+          const surfaceY = fh[0].point.y + PLAYER_HEIGHT;
+          if (camera.position.y <= surfaceY) { landed = true; landedY = surfaceY; }
+        }
+      }
+      if (landed) {
+        camera.position.y = landedY;
+        playerGroundY = landedY;
+        velocityY = 0; isOnGround = true; jumpCount = 0;
       }
     }
   }
