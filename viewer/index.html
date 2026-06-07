@@ -192,8 +192,52 @@
     }
     .tool-btn:hover { background: rgba(74,158,255,.35); }
     .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
-    .tool-btn.save { background: rgba(74,255,138,.25); border-color: rgba(74,255,138,.5); color: #bfffd6; }
-    .tool-btn.save:hover { background: rgba(74,255,138,.42); }
+    .tool-btn.save { background: rgba(74,255,138,.22); border-color: rgba(74,255,138,.45); color: #c7ffdb; }
+    .tool-btn.save:hover { background: rgba(74,255,138,.38); }
+
+    /* ── Refresh moderno ───────────────────────────────────────────────────── */
+    #toolbar .tool-btn { border-radius: 999px; padding: 8px 15px; font-weight: 500; }
+
+    /* Overlay progresso upload */
+    #upload-overlay {
+      position: fixed; inset: 0; z-index: 90; display: none;
+      background: rgba(8,8,16,.72); backdrop-filter: blur(6px);
+      align-items: center; justify-content: center;
+    }
+    #upload-overlay.show { display: flex; }
+    #upload-overlay .uo-box {
+      width: min(420px, 86vw); background: rgba(20,22,32,.97);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 24px 26px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.55); text-align: center; color: #eef;
+    }
+    #upload-overlay .uo-label { font-size: .95rem; font-weight: 600; margin-bottom: 16px; }
+    #upload-overlay .uo-bar { height: 8px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; }
+    #upload-overlay .uo-fill { height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, #4a9eff, #6bd0ff); transition: width .15s ease; }
+    #upload-overlay .uo-pct { margin-top: 10px; font-size: .8rem; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
+
+    /* Pulsanti azione delle righe: stile uniforme e compatto (niente arcobaleno) */
+    .model-item .goto-btn, .model-item .gizmo-btn, .model-item .collider-btn,
+    .model-item .confirm-btn, .model-item .play-btn, .model-item .delete-btn,
+    .model-item .tp-target-btn, .model-item .face-btn, .model-item .ring-btn,
+    .ia-card .goto-btn, .ia-card .gizmo-btn, .ia-card .delete-btn {
+      width: 29px; height: 27px; padding: 0; border-radius: 8px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+      color: #c5cad4; font-size: .82rem; transition: all .12s;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .model-item button:hover, .ia-card button:hover {
+      background: rgba(74,158,255,.22); border-color: rgba(74,158,255,.45); color: #fff;
+    }
+    .gizmo-btn.active    { background: rgba(255,159,74,.55) !important; border-color: #ff9f4a !important; color: #fff !important; }
+    .collider-btn.active { background: rgba(74,200,255,.55) !important; border-color: #4ac8ff !important; color: #fff !important; }
+    .tp-target-btn.active{ background: rgba(180,120,255,.55) !important; border-color: #b478ff !important; color: #fff !important; }
+    .play-btn.playing    { background: rgba(255,95,95,.4) !important; border-color: rgba(255,95,95,.55) !important; color: #fff !important; }
+    .delete-btn:hover    { background: rgba(255,80,80,.34) !important; border-color: rgba(255,80,80,.5) !important; color: #fff !important; }
+
+    #models-panel { border-radius: 14px; }
+    .model-item { gap: 6px; }
+    .model-name { font-weight: 500; }
 
     /* HUD coordinate camera */
     #cam-hud {
@@ -407,6 +451,15 @@
 </div>
 <div id="notification"></div>
 <div id="place-banner"></div>
+
+<!-- Overlay progresso upload -->
+<div id="upload-overlay">
+  <div class="uo-box">
+    <div class="uo-label" id="uo-label">Caricamento…</div>
+    <div class="uo-bar"><div class="uo-fill" id="uo-fill"></div></div>
+    <div class="uo-pct" id="uo-pct">0%</div>
+  </div>
+</div>
 <div id="quest-panel">
   <h3>Missione attiva</h3>
   <div id="quest-title"></div>
@@ -2721,28 +2774,46 @@ async function saveSceneToServer() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sceneConfig: buildSceneConfigObject() }),
     });
-    if (r.ok) showNotification('✅ Scena salvata sul server');
+    if (r.ok) showNotification('✅ Progetto salvato in redazione');
     else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
     else showNotification('❌ Salvataggio fallito (' + r.status + ')');
   } catch (e) { showNotification('❌ Errore: ' + e.message); }
 }
 
+// ─── Overlay progresso upload ───────────────────────────────────────────────
+function showUploadOverlay(label) {
+  document.getElementById('uo-label').textContent = label || 'Caricamento…';
+  setUploadProgress(0);
+  document.getElementById('upload-overlay').classList.add('show');
+}
+function setUploadProgress(frac) {
+  const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
+  document.getElementById('uo-fill').style.width = pct + '%';
+  document.getElementById('uo-pct').textContent = pct + '%';
+}
+function setUploadLabel(t) { document.getElementById('uo-label').textContent = t; }
+function hideUploadOverlay() { document.getElementById('upload-overlay').classList.remove('show'); }
+
 // Carica un modello (.glb) dal PC nel progetto → R2 → ricarica per vederlo
-async function uploadModelFile(e) {
+function uploadModelFile(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!file || !PROJECT_SLUG) return;
   if (!/\.(glb|gltf)$/i.test(file.name)) { showNotification('Usa un file .glb'); return; }
-  showNotification(`📤 Carico ${file.name}… (${(file.size/1024/1024).toFixed(1)} MB)`);
-  const fd = new FormData();
-  fd.append('model', file);
-  try {
-    const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}/upload`, { method: 'POST', body: fd });
-    const j = await r.json().catch(() => ({}));
-    if (r.ok) { showNotification(`✅ ${file.name} caricato — ricarico…`); setTimeout(() => location.reload(), 900); }
-    else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
-    else showNotification('❌ ' + (j.error || 'Upload fallito'));
-  } catch (err) { showNotification('❌ ' + err.message); }
+  showUploadOverlay(`Caricamento ${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+  const fd = new FormData(); fd.append('model', file);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/api/projects/${encodeURIComponent(PROJECT_SLUG)}/upload`);
+  xhr.upload.onprogress = ev => { if (ev.lengthComputable) setUploadProgress(ev.loaded / ev.total); };
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      setUploadProgress(1); setUploadLabel('Quasi pronto…');
+      setTimeout(() => location.reload(), 600);
+    } else if (xhr.status === 401) { hideUploadOverlay(); showNotification('❌ Non autorizzato — accedi dalla dashboard'); }
+    else { hideUploadOverlay(); let msg = 'Upload fallito'; try { msg = JSON.parse(xhr.responseText).error || msg; } catch {} showNotification('❌ ' + msg); }
+  };
+  xhr.onerror = () => { hideUploadOverlay(); showNotification('❌ Errore di rete'); };
+  xhr.send(fd);
 }
 
 // Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa
