@@ -10,7 +10,8 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
   .btn { border:1px solid rgba(74,158,255,.45); background:rgba(74,158,255,.18); color:#cfe6ff;
-    border-radius:8px; padding:8px 14px; cursor:pointer; font-size:.85rem; font-family:inherit; transition:background .15s; }
+    border-radius:8px; padding:8px 14px; cursor:pointer; font-size:.85rem; font-family:inherit; transition:background .15s;
+    text-decoration:none; display:inline-flex; align-items:center; gap:5px; line-height:1; white-space:nowrap; }
   .btn:hover { background:rgba(74,158,255,.36); }
   .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
   .btn.primary:hover { background:#3b8ef0; }
@@ -75,7 +76,8 @@
   .tags { display:flex; flex-wrap:wrap; gap:6px; min-height:4px; }
   .tag { font-size:.7rem; color:#bcd3ff; background:rgba(74,158,255,.1); border:1px solid rgba(74,158,255,.25);
     border-radius:6px; padding:2px 8px; }
-  .card .actions { display:flex; flex-wrap:wrap; gap:7px; border-top:1px solid var(--line); padding-top:11px; }
+  .card .actions { display:flex; flex-wrap:wrap; gap:7px; border-top:1px solid var(--line); padding-top:12px; align-items:center; }
+  .card .actions .spacer { flex:1 1 auto; }
   .empty { color:var(--muted); text-align:center; padding:50px; grid-column:1/-1; }
   .card .thumb { height:160px; border-radius:9px 9px 0 0; background-size:cover; background-position:center;
     margin:-16px -16px 4px; background-color:#0b0b14; }
@@ -227,11 +229,14 @@ function render() {
       +   `<span class="status ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span></div>`
       + `<div class="tags">${tagsHtml}</div>`
       + `<div class="actions">`
-      +   `<a href="/?project=${encodeURIComponent(p.slug)}&edit"><button class="btn sm">✏️ Editor</button></a>`
-      +   `<a href="/?project=${encodeURIComponent(p.slug)}" target="_blank"><button class="btn sm ghost">▶️ Play</button></a>`
-      +   `<button class="btn sm green" data-a="pub">${p.status === 'published' ? 'Metti in bozza' : 'Pubblica'}</button>`
+      +   `<a class="btn sm primary" href="/?project=${encodeURIComponent(p.slug)}&edit">✏️ Editor</a>`
+      +   `<a class="btn sm ghost" href="/?project=${encodeURIComponent(p.slug)}" target="_blank">▶️ Play</a>`
+      +   `<button class="btn sm ghost" data-a="dup">📋 Duplica</button>`
+      +   `<a class="btn sm ghost" href="/api/projects/${encodeURIComponent(p.slug)}/download">⬇️ Scarica</a>`
       +   `<button class="btn sm ghost" data-a="edit">🏷 Modifica</button>`
-      +   `<button class="btn sm red" data-a="del">🗑</button>`
+      +   `<button class="btn sm ${p.status === 'published' ? '' : 'green'}" data-a="pub" title="${p.status === 'published' ? 'Mette in bozza: lo vede solo la redazione' : 'Rende pubblico: link play per tutti'}">${p.status === 'published' ? '🙈 Rendi privato' : '🌐 Pubblica'}</button>`
+      +   `<span class="spacer"></span>`
+      +   `<button class="btn sm red" data-a="del" title="Elimina">🗑</button>`
       + `</div>`;
     card.querySelector('.name').textContent = p.name;
     card.querySelectorAll('.tag').forEach((el, i) => el.textContent = p.tags[i]);
@@ -239,6 +244,10 @@ function render() {
       await api('/api/projects/' + encodeURIComponent(p.slug), { method: 'PUT',
         body: JSON.stringify({ status: p.status === 'published' ? 'draft' : 'published' }) });
       load();
+    };
+    card.querySelector('[data-a="dup"]').onclick = async () => {
+      const r = await api('/api/projects/' + encodeURIComponent(p.slug) + '/duplicate', { method: 'POST' });
+      if (r.ok) load(); else alert('Errore nella duplicazione');
     };
     card.querySelector('[data-a="edit"]').onclick = () => openModal(p);
     card.querySelector('[data-a="del"]').onclick = () => { deletingSlug = p.slug; $('#delMsg').textContent = `"${p.name}" — i modelli su R2 restano.`; $('#delModal').classList.add('show'); };

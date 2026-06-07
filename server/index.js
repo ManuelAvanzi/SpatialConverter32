@@ -3,7 +3,9 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
+const archiver = require('archiver');
 const { makeToken, checkPassword, isAuthed, requireAuth, COOKIE } = require('./auth');
 const store = require('./store');
 
@@ -61,6 +63,75 @@ app.delete('/api/projects/:slug', requireAuth, async (req, res) => {
   try { await store.deleteProject(req.params.slug); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// ─── Duplica progetto ────────────────────────────────────────────────────────
+app.post('/api/projects/:slug/duplicate', requireAuth, async (req, res) => {
+  try {
+    const copy = await store.duplicateProject(req.params.slug);
+    if (!copy) return res.status(404).json({ error: 'Progetto non trovato' });
+    res.status(201).json(copy);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Download: bundle ZIP giocabile in locale ────────────────────────────────
+app.get('/api/projects/:slug/download', requireAuth, async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const proj = await store.getProject(slug);
+    if (!proj) return res.status(404).send('Progetto non trovato');
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.zip"`);
+    const zip = archiver('zip', { zlib: { level: 6 } });
+    zip.on('error', err => { console.error('zip error', err); try { res.status(500).end(); } catch {} });
+    zip.pipe(res);
+
+    // Engine + config del progetto + README
+    zip.file(path.join(VIEWER_DIR, 'index.html'), { name: 'index.html' });
+    zip.append(JSON.stringify(proj.sceneConfig || { version: 1 }, null, 2), { name: 'scene-config.json' });
+    zip.append(README(slug, proj.name), { name: 'LEGGIMI.txt' });
+
+    // Asset del progetto da R2 → cartella models/
+    const prefix = proj.assetPrefix || slug;
+    const keys = (await store.listAssetFiles(`${prefix}/`)).filter(k => !k.endsWith('/'));
+    for (const key of keys) {
+      const rel = key.slice(prefix.length + 1);     // es. environment.glb, gltfModels/x.glb
+      const buf = await store.getAssetBuffer(key);
+      if (buf) zip.append(buf, { name: 'models/' + rel });
+    }
+
+    // File statici del 32 (manifest, scene.json, Audio, copertina)
+    if (proj.assetPrefix === 'spatial32') {
+      for (const f of ['manifest.json', 'scene.json']) {
+        const p = path.join(VIEWER_DIR, f);
+        if (fs.existsSync(p)) zip.file(p, { name: f });
+      }
+      for (const d of ['Audio', 'copertina']) {
+        const p = path.join(VIEWER_DIR, d);
+        if (fs.existsSync(p)) zip.directory(p, d);
+      }
+    }
+    zip.finalize();
+  } catch (e) { console.error(e); try { res.status(500).send(e.message); } catch {} }
+});
+
+function README(slug, name) {
+  return [
+    `${name} — esperienza SpatialConverter (bundle locale)`,
+    ``,
+    `Contenuto: index.html (engine) + scene-config.json + models/ (+ Audio/copertina per il 32).`,
+    ``,
+    `COME APRIRLO:`,
+    `Serve un piccolo server web statico (aprire index.html da doppio click NON basta).`,
+    `Esempi dalla cartella del progetto:`,
+    `  - Node:   npx serve .`,
+    `  - Python: python -m http.server 8000`,
+    `Poi apri l'indirizzo mostrato (es. http://localhost:8000).`,
+    ``,
+    `VR: funziona se servito da https:// (o http://localhost). Da file:// la VR non parte.`,
+    `Nota: three.js è caricato da CDN → per l'uso serve connessione internet.`,
+  ].join('\n');
+}
 
 // ─── Upload contenuti (modelli .glb) e copertina ─────────────────────────────
 app.post('/api/projects/:slug/upload', requireAuth, upload.single('model'), async (req, res) => {

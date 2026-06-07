@@ -3,6 +3,7 @@
 const {
   S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand,
 } = require('@aws-sdk/client-s3');
+const { Readable } = require('stream');
 
 const BUCKET = process.env.R2_BUCKET || 'immersivelab-assets';
 const PREFIX = '_projects/';
@@ -56,6 +57,24 @@ async function listAssetFiles(prefix) {
   const out = await cl.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix }));
   return (out.Contents || []).map(o => o.Key);
 }
+async function getAssetBuffer(key) {
+  const cl = r2(); if (!cl) return null;
+  try {
+    const out = await cl.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+    const chunks = [];
+    for await (const c of out.Body) chunks.push(c);
+    return Buffer.concat(chunks);
+  } catch { return null; }
+}
+
+// Duplica un progetto (record + scene-config + tag + cover; stessi asset/prefix)
+async function duplicateProject(slug) {
+  const src = await getProject(slug);
+  if (!src) return null;
+  return createProject((src.name || 'Progetto') + ' (copia)', {
+    assetPrefix: src.assetPrefix, tags: src.tags, sceneConfig: src.sceneConfig, cover: src.cover,
+  });
+}
 
 async function getProject(slug) {
   const cl = r2(); if (!cl) return null;
@@ -97,6 +116,7 @@ async function createProject(name, opts = {}) {
     status: 'draft',
     assetPrefix: opts.assetPrefix || '',
     tags: Array.isArray(opts.tags) ? opts.tags : [],
+    cover: opts.cover || '',
     sceneConfig: opts.sceneConfig || { version: 1 },
     createdAt: now, updatedAt: now,
   };
@@ -123,5 +143,5 @@ async function deleteProject(slug) {
 
 module.exports = {
   available, listProjects, getProject, createProject, saveProject, deleteProject, slugify,
-  putAsset, listAssetFiles,
+  putAsset, listAssetFiles, getAssetBuffer, duplicateProject,
 };
