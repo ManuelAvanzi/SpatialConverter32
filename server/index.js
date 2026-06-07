@@ -171,11 +171,16 @@ app.post('/api/projects/:slug/cover', requireAuth, upload.single('cover'), async
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Dashboard redazione (URL pulito)
+// Home = redazione (lista laboratori). Con ?project apre il viewer (play/editor).
+app.get('/', (req, res) => {
+  if (req.query.project) return res.sendFile(path.join(VIEWER_DIR, 'index.html'));
+  res.sendFile(path.join(VIEWER_DIR, 'admin.html'));
+});
 app.get('/admin', (req, res) => res.sendFile(path.join(VIEWER_DIR, 'admin.html')));
 
 // ─── Static + fallback ───────────────────────────────────────────────────────
 app.use(express.static(VIEWER_DIR, {
+  index: false,   // niente index.html automatico su "/" (la home è la redazione)
   setHeaders(res, filePath) {
     if (filePath.endsWith('manifest.json') || filePath.endsWith('scene-config.json')) {
       res.set('Cache-Control', 'no-store');
@@ -184,7 +189,7 @@ app.use(express.static(VIEWER_DIR, {
 }));
 app.get('*', (req, res) => {
   if (path.extname(req.path)) return res.status(404).send('Not found');
-  res.sendFile(path.join(VIEWER_DIR, 'index.html'));
+  res.sendFile(path.join(VIEWER_DIR, 'admin.html'));   // rotte sconosciute → home redazione
 });
 
 const PORT = process.env.PORT || 3003;
