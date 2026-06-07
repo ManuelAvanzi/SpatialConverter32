@@ -1,12 +1,17 @@
 // Auth minimale: una password "redazione" (env EDITOR_PASSWORD) → cookie JWT.
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
-const SECRET   = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
-const PASSWORD = process.env.EDITOR_PASSWORD || 'admin';   // default solo per dev locale
-const COOKIE   = 'sct';
+// Secret stabile se impostato, altrimenti random per-avvio (logout a ogni redeploy)
+const SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const COOKIE = 'sct';
 
 function makeToken() { return jwt.sign({ role: 'redazione' }, SECRET, { expiresIn: '7d' }); }
-function checkPassword(pw) { return typeof pw === 'string' && pw.length > 0 && pw === PASSWORD; }
+// Senza EDITOR_PASSWORD impostata, il login è DISABILITATO (default sicuro)
+function checkPassword(pw) {
+  const expected = process.env.EDITOR_PASSWORD;
+  return !!expected && typeof pw === 'string' && pw.length > 0 && pw === expected;
+}
 
 function parseCookies(req) {
   const h = req.headers.cookie || '';

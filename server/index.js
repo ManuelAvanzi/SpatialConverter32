@@ -13,7 +13,11 @@ app.use(express.json({ limit: '6mb' }));
 // ─── Config viewer: base-URL asset (R2 in prod, vuoto in locale) ─────────────
 app.get('/api/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ assetBase: process.env.ASSET_BASE || '', projectsEnabled: store.available() });
+  res.json({
+    assetBase: process.env.ASSET_BASE || '',
+    r2Base: (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, ''),
+    projectsEnabled: store.available(),
+  });
 });
 
 // ─── Auth redazione ──────────────────────────────────────────────────────────

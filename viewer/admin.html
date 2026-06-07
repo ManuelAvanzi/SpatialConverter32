@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SpatialConverter — Redazione</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d0d1a; color: #eee;
+    min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  header h1 { font-size: 1.1rem; letter-spacing: .02em; }
+  header h1 b { color: #4a9eff; }
+  .muted { opacity: .55; }
+  .btn { background: rgba(74,158,255,.2); border: 1px solid rgba(74,158,255,.45);
+    color: #cfe6ff; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: .85rem;
+    transition: background .15s; }
+  .btn:hover { background: rgba(74,158,255,.4); }
+  .btn.ghost { background: none; border-color: rgba(255,255,255,.2); color: #ccc; }
+  .btn.green { background: rgba(74,255,138,.18); border-color: rgba(74,255,138,.45); color: #9cffc0; }
+  .btn.red   { background: rgba(255,70,70,.16); border-color: rgba(255,70,70,.4); color: #ff9a9a; }
+  .btn.sm { padding: 5px 10px; font-size: .78rem; }
+
+  main { max-width: 920px; margin: 0 auto; padding: 28px; }
+
+  /* Login */
+  #login { max-width: 360px; margin: 12vh auto; text-align: center; }
+  #login h2 { font-size: 1.3rem; margin-bottom: 6px; }
+  #login p { font-size: .85rem; opacity: .5; margin-bottom: 22px; }
+  #login input { width: 100%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+    color: #fff; border-radius: 9px; padding: 12px 14px; font-size: 1rem; margin-bottom: 12px; }
+  #login .btn { width: 100%; padding: 12px; }
+  #login .err { color: #ff8080; font-size: .8rem; min-height: 1.2em; margin-top: 8px; }
+
+  /* New project */
+  .newbar { display: flex; gap: 10px; margin-bottom: 22px; }
+  .newbar input { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+    color: #fff; border-radius: 9px; padding: 10px 14px; font-size: .9rem; }
+
+  /* Project cards */
+  .grid { display: grid; gap: 12px; }
+  .card { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 14px 16px; }
+  .card .info { flex: 1; min-width: 0; }
+  .card .name { font-size: 1rem; font-weight: 600; }
+  .card .meta { font-size: .74rem; opacity: .5; margin-top: 3px; }
+  .badge { font-size: .68rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+  .badge.published { background: rgba(74,255,138,.2); color: #9cffc0; }
+  .badge.draft { background: rgba(255,184,74,.2); color: #ffce8a; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .empty { opacity: .5; text-align: center; padding: 40px; }
+  a.plain { text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>SpatialConverter</b> &nbsp;<span class="muted">· Redazione</span></h1>
+  <button class="btn ghost sm" id="logout" style="display:none">Esci</button>
+</header>
+
+<main>
+  <!-- Login -->
+  <section id="login" style="display:none">
+    <h2>Accesso redazione</h2>
+    <p>Inserisci la password per gestire i progetti.</p>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" />
+    <button class="btn" id="login-btn">Entra</button>
+    <div class="err" id="login-err"></div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dash" style="display:none">
+    <div class="newbar">
+      <input id="new-name" type="text" placeholder="Nome nuovo progetto…" />
+      <button class="btn green" id="new-btn">+ Nuovo progetto</button>
+    </div>
+    <div class="grid" id="list"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+async function api(path, opts) {
+  const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+  return r;
+}
+
+async function refresh() {
+  const me = await (await api('/api/me')).json();
+  if (!me.authed) { $('#login').style.display = 'block'; $('#dash').style.display = 'none'; $('#logout').style.display = 'none'; $('#pw').focus(); return; }
+  $('#login').style.display = 'none'; $('#dash').style.display = 'block'; $('#logout').style.display = '';
+  await loadProjects();
+}
+
+async function loadProjects() {
+  const list = $('#list');
+  const res = await api('/api/projects');
+  if (!res.ok) { list.innerHTML = '<div class="empty">Errore nel caricare i progetti</div>'; return; }
+  const projects = await res.json();
+  if (!projects.length) { list.innerHTML = '<div class="empty">Nessun progetto. Creane uno qui sopra.</div>'; return; }
+  list.innerHTML = '';
+  for (const p of projects) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const date = p.updatedAt ? new Date(p.updatedAt).toLocaleString('it-IT') : '';
+    const pubLabel = p.status === 'published' ? 'Metti in bozza' : 'Pubblica';
+    card.innerHTML =
+        `<span class="badge ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span>`
+      + `<div class="info"><div class="name"></div><div class="meta">${p.slug} · agg. ${date}</div></div>`
+      + `<div class="actions">`
+      +   `<a class="plain" href="/?project=${encodeURIComponent(p.slug)}&edit"><button class="btn sm">✏️ Editor</button></a>`
+      +   `<a class="plain" href="/?project=${encodeURIComponent(p.slug)}" target="_blank"><button class="btn sm ghost">▶️ Play</button></a>`
+      +   `<button class="btn sm" data-act="pub">${pubLabel}</button>`
+      +   `<button class="btn sm red" data-act="del">🗑</button>`
+      + `</div>`;
+    card.querySelector('.name').textContent = p.name;
+    card.querySelector('[data-act="pub"]').onclick = async () => {
+      await api('/api/projects/' + encodeURIComponent(p.slug), { method: 'PUT',
+        body: JSON.stringify({ status: p.status === 'published' ? 'draft' : 'published' }) });
+      loadProjects();
+    };
+    card.querySelector('[data-act="del"]').onclick = async () => {
+      if (!confirm(`Eliminare il progetto "${p.name}"? (i modelli su R2 restano)`)) return;
+      await api('/api/projects/' + encodeURIComponent(p.slug), { method: 'DELETE' });
+      loadProjects();
+    };
+    list.appendChild(card);
+  }
+}
+
+$('#login-btn').onclick = doLogin;
+$('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+async function doLogin() {
+  $('#login-err').textContent = '';
+  const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ password: $('#pw').value }) });
+  if (r.ok) { $('#pw').value = ''; refresh(); }
+  else { $('#login-err').textContent = 'Password errata'; }
+}
+
+$('#logout').onclick = async () => { await api('/api/logout', { method: 'POST' }); refresh(); };
+
+$('#new-btn').onclick = doNew;
+$('#new-name').addEventListener('keydown', e => { if (e.key === 'Enter') doNew(); });
+async function doNew() {
+  const name = $('#new-name').value.trim();
+  if (!name) return;
+  const r = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
+  if (r.ok) { const p = await r.json(); location.href = `/?project=${encodeURIComponent(p.slug)}&edit`; }
+  else { alert('Errore nella creazione'); }
+}
+
+refresh();
+</script>
+</body>
+</html>

@@ -421,6 +421,7 @@
     <div id="models-list"></div>
   </div>
   <div id="tab-spatial" class="menu-tab-content">
+    <button id="btn-save-server" class="export-cfg-btn" style="display:none">💾 Salva sul server</button>
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
     <h3>Spatial Features</h3>
     <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
@@ -582,6 +583,12 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 // la scena è SEMPRE quella pubblicata (scene-config.json). Teleport/interactable
 // /entrance restano pienamente funzionanti (è l'esperienza, non l'editing).
 const EDIT_MODE = new URLSearchParams(location.search).has('edit');
+// Se presente ?project=<slug>, la scena si carica dal server (piattaforma);
+// altrimenti dal file statico viewer/scene-config.json (modalità "singolo progetto").
+const PROJECT_SLUG = new URLSearchParams(location.search).get('project');
+let CURRENT_PROJECT = null;
+// Suffisso per isolare gli edit (localStorage) di un progetto dall'altro
+const _KP = PROJECT_SLUG ? '::' + PROJECT_SLUG : '';
 
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
@@ -606,8 +613,9 @@ let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
 let transformControls = null;
 let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
 let gizmoDragging = false;         // true mentre si trascina un handle
-const POS_STORE_KEY  = 'sc32-positions';   // localStorage: { nome: [x,y,z] }
-const ENTRANCE_KEY   = 'sc32-entrance';    // localStorage: {x,y,z,yaw,pitch}
+const POS_STORE_KEY  = 'sc32-positions' + _KP;   // localStorage: { nome: [x,y,z] }
+const ENTRANCE_KEY   = 'sc32-entrance' + _KP;    // localStorage: {x,y,z,yaw,pitch}
+const AUDIO_KEY      = 'sc32-audio' + _KP;
 
 // ── Migrazione una-tantum: ripristina entrance al default del progetto ──────
 // Gira solo la prima volta con questo build — poi il flag lo blocca.
@@ -666,6 +674,19 @@ let environmentScene = null;       // gltf.scene della scena statica
 // il sito (visitatore senza localStorage). localStorage resta la copia di lavoro dell'editor.
 let SCENE_CONFIG = {};
 async function loadSceneConfig() {
+  // 1) Progetto dal server (piattaforma)
+  if (PROJECT_SLUG) {
+    try {
+      const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}`, { cache: 'no-store' });
+      if (r.ok) {
+        CURRENT_PROJECT = await r.json();
+        SCENE_CONFIG = CURRENT_PROJECT.sceneConfig || { version: 1 };
+        document.title = `${CURRENT_PROJECT.name} — SpatialConverter`;
+        return SCENE_CONFIG;
+      }
+    } catch {}
+  }
+  // 2) File statico (singolo progetto)
   try {
     const r = await fetch('./scene-config.json?t=' + Date.now(), { cache: 'no-store' });
     if (r.ok) SCENE_CONFIG = await r.json();
@@ -677,13 +698,19 @@ async function loadSceneConfig() {
 // URL pubblico R2 in produzione (fornito dal server via /api/config).
 let ASSET_BASE = 'models';
 async function loadAppConfig() {
+  let r2Base = '';
   try {
     const r = await fetch('./api/config', { cache: 'no-store' });
     if (r.ok) {
       const c = await r.json();
       if (c.assetBase) ASSET_BASE = String(c.assetBase).replace(/\/+$/, '');
+      r2Base = String(c.r2Base || '').replace(/\/+$/, '');
     }
   } catch {}
+  // Asset per-progetto: base R2 + prefisso del progetto caricato
+  if (CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix && r2Base) {
+    ASSET_BASE = `${r2Base}/${CURRENT_PROJECT.assetPrefix}`;
+  }
   console.log('🌐 ASSET_BASE =', ASSET_BASE);
 }
 
@@ -1511,19 +1538,19 @@ const colRaycaster     = new THREE.Raycaster();
 const _downVec         = new THREE.Vector3(0, -1, 0); // costante (evita allocazioni per frame)
 
 // ─── Teleport (Spatial Avatar Teleporter) ───────────────────────────────────
-const TP_STORE_KEY = 'sc32-teleports';   // localStorage: [{id, pad:[x,y,z], target:[x,y,z]}]
+const TP_STORE_KEY = 'sc32-teleports' + _KP;   // localStorage: [{id, pad:[x,y,z], target:[x,y,z]}]
 const TP_TRIGGER_R = 0.7;                // raggio del trigger (m)
 const teleports = [];                    // {id, padGroup, targetGroup, row}
 let   _tpSeq = 0;
 let   teleportCooldownUntil = 0;         // anti rimbalzo dopo il teletrasporto
 
 // ─── Entrance Point (Spatial Entrance Point) ────────────────────────────────
-const EP_STORE_KEY = 'sc32-entrances';   // localStorage: [{id, pos:[x,y,z], yaw, radius}]
+const EP_STORE_KEY = 'sc32-entrances' + _KP;   // localStorage: [{id, pos:[x,y,z], yaw, radius}]
 const entrances = [];                    // {id, group, yaw, radius, row}
 let   _epSeq = 0;
 
 // ─── Interactable (Spatial Interactable) ────────────────────────────────────
-const IA_STORE_KEY = 'sc32-interactables'; // [{id, pos, text, radius, anim}]
+const IA_STORE_KEY = 'sc32-interactables' + _KP; // [{id, pos, text, radius, anim}]
 const interactables = [];                // {id, group, text, radius, anim, row}
 let   _iaSeq = 0;
 let   currentSpatialIA = null;           // interactable attualmente vicino (prompt attivo)
@@ -1714,6 +1741,9 @@ async function init() {
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
   document.getElementById('btn-export-config').addEventListener('click', exportSceneConfig);
+  const _saveBtn = document.getElementById('btn-save-server');
+  _saveBtn.addEventListener('click', saveSceneToServer);
+  if (PROJECT_SLUG) _saveBtn.style.display = '';
 
   // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
   renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
@@ -2483,7 +2513,7 @@ function setupAudio() {
   if (!audio) return;
 
   let saved = SCENE_CONFIG.audio || {};
-  try { const ls = localStorage.getItem('sc32-audio'); if (ls) saved = JSON.parse(ls); } catch {}
+  try { const ls = localStorage.getItem(AUDIO_KEY); if (ls) saved = JSON.parse(ls); } catch {}
   let vol   = saved.volume != null ? saved.volume : 0.6;
   let muted = !!saved.muted;
   audio.volume = vol;
@@ -2500,7 +2530,7 @@ function setupAudio() {
     muteBtn.textContent = muted ? '🔇' : '🔊';
     toolBtn.textContent = (muted ? '🔇' : '🔊') + ' Audio';
   }
-  function save() { localStorage.setItem('sc32-audio', JSON.stringify({ volume: vol, muted })); }
+  function save() { localStorage.setItem(AUDIO_KEY, JSON.stringify({ volume: vol, muted })); }
   refresh();
 
   // Autoplay: i browser lo bloccano finché non c'è un gesto utente → fallback
@@ -2557,19 +2587,34 @@ function downloadJSON(filename, obj) {
 
 // Esporta l'INTERA configurazione della scena in un solo file (engine/contenuto split).
 // Da committare in viewer/scene-config.json → diventa ciò che vedono tutti online.
-function exportSceneConfig() {
+function buildSceneConfigObject() {
   const safe = s => { try { return JSON.parse(s); } catch { return null; } };
-  const cfg = {
+  return {
     version: 1,
     exportedAt: new Date().toISOString(),
     positions:     { ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() },
-    audio:         safe(localStorage.getItem('sc32-audio')) || SCENE_CONFIG.audio || { volume: 0.6, muted: false },
+    audio:         safe(localStorage.getItem(AUDIO_KEY)) || SCENE_CONFIG.audio || { volume: 0.6, muted: false },
     teleports:     loadSavedTeleports(),
     entrances:     loadSavedEntrances(),
     interactables: loadSavedInteractables(),
   };
-  downloadJSON('scene-config.json', cfg);
+}
+function exportSceneConfig() {
+  downloadJSON('scene-config.json', buildSceneConfigObject());
   showNotification('⬇️ scene-config.json esportato — mettilo in viewer/ e committa');
+}
+// Salva la scena nel progetto sul server (solo con ?project e login redazione)
+async function saveSceneToServer() {
+  if (!PROJECT_SLUG) { showNotification('Nessun progetto attivo (manca ?project)'); return; }
+  try {
+    const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sceneConfig: buildSceneConfigObject() }),
+    });
+    if (r.ok) showNotification('✅ Scena salvata sul server');
+    else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
+    else showNotification('❌ Salvataggio fallito (' + r.status + ')');
+  } catch (e) { showNotification('❌ Errore: ' + e.message); }
 }
 
 // Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa
