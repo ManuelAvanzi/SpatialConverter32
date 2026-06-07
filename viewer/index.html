@@ -20,7 +20,7 @@
     /* Copertina animata (Ken Burns: lento zoom + pan) */
     #loader-bg {
       position: absolute; inset: 0; z-index: 0;
-      background: url("copertina/Screenshot 2026-06-07 154051.png") center center / cover no-repeat;
+      background: #0d0d1a center center / cover no-repeat;   /* immagine impostata via JS */
       transform: scale(1.15);
       animation: coverKenBurns 24s ease-in-out infinite alternate;
       will-change: transform;
@@ -594,6 +594,11 @@ let CURRENT_PROJECT = null;
 const _KP = PROJECT_SLUG ? '::' + PROJECT_SLUG : '';
 // Progetto senza asset propri = scena completamente vuota (niente 32: modelli/audio/copertina)
 function isEmptyProject() { return !!(PROJECT_SLUG && !(CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix)); }
+// I file STATICI (environment.glb, manifest.json, Audio/, copertina/) sono SOLO del 32.
+// Li usa solo la modalità statica (/) o il progetto 32 (assetPrefix 'spatial32').
+function usesStatic32() {
+  return !PROJECT_SLUG || (CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix === 'spatial32');
+}
 
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
@@ -1577,12 +1582,14 @@ async function init() {
   await loadSceneConfig();
   await loadAppConfig();
 
-  // Copertina del loader: quella del progetto se impostata; vuoto = loader scuro
+  // Copertina del loader: statica solo per il 32, altrimenti quella del progetto, altrimenti niente
   const _lb = document.getElementById('loader-bg');
-  if (PROJECT_SLUG && CURRENT_PROJECT && CURRENT_PROJECT.cover) {
-    if (_lb) _lb.style.backgroundImage = `url("${CURRENT_PROJECT.cover}")`;
-  } else if (isEmptyProject()) {
-    if (_lb) _lb.style.display = 'none';
+  if (_lb) {
+    let coverUrl = '';
+    if (usesStatic32()) coverUrl = 'copertina/Screenshot 2026-06-07 154051.png';
+    else if (CURRENT_PROJECT && CURRENT_PROJECT.cover) coverUrl = CURRENT_PROJECT.cover;
+    if (coverUrl) _lb.style.backgroundImage = `url("${coverUrl}")`;
+    else _lb.style.display = 'none';
   }
 
   // Renderer
@@ -1858,9 +1865,9 @@ async function loadScene() {
     sceneData = { interactables: [], teleports: [], quests: [] };
   }
 
-  // manifest del 32 (pezzi statici): salta per i progetti vuoti
+  // manifest del 32 (TERRITORIO/construction_scene): SOLO per il 32, mai per altri progetti
   let manifest = null;
-  if (!isEmptyProject()) {
+  if (usesStatic32()) {
     try {
       const res = await fetch('./manifest.json?t=' + Date.now(), { cache: 'no-store' });
       if (res.ok) manifest = await res.json();
@@ -1992,8 +1999,9 @@ async function loadModel() {
     } catch(e) { console.warn('Cache miss:', e.message); }
   }
 
-  // Modalità progetto senza asset propri → scena vuota (nessun environment)
-  if (PROJECT_SLUG && !ASSET_BASE) return false;
+  // Solo il 32 (o modalità statica) usa environment.glb + FBX statici.
+  // Gli altri progetti caricano i modelli da gltfModels (loadGltfCharacters) → niente 404.
+  if (PROJECT_SLUG && !usesStatic32()) return false;
 
   // 2. Prova GLB già convertiti (cache-bust con buildId per evitare GLB vecchio)
   const bust = loadedManifest?.buildId ? `?v=${loadedManifest.buildId}` : `?t=${Date.now()}`;
@@ -2123,9 +2131,9 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
   `;
   list.appendChild(legend);
 
-  // Usa manifest già caricato, altrimenti rifetch (mai per i progetti vuoti)
+  // Usa manifest già caricato, altrimenti rifetch (SOLO per il 32)
   let manifest = preloadedManifest;
-  if (!manifest && !isEmptyProject()) {
+  if (!manifest && usesStatic32()) {
     try {
       const res = await fetch('./manifest.json');
       if (res.ok) manifest = await res.json();
@@ -2537,8 +2545,8 @@ function setupLightingPanel() {
 function setupAudio() {
   const audio = document.getElementById('bg-audio');
   if (!audio) return;
-  // Progetto vuoto: nessun audio (quello è del 32) → niente src, niente pulsante
-  if (isEmptyProject()) {
+  // L'audio di sottofondo è del 32: niente audio negli altri progetti
+  if (!usesStatic32()) {
     audio.removeAttribute('src'); audio.load();
     const tb = document.getElementById('btn-audio'); if (tb) tb.style.display = 'none';
     return;
