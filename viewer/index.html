@@ -509,8 +509,8 @@
 <div id="audio-panel">
   <div class="ap-row">
     <button id="ap-mute" title="Muto / Riattiva">🔊</button>
-    <input type="range" id="ap-vol" min="0" max="100" step="1" value="60">
-    <span id="ap-vol-val">60%</span>
+    <input type="range" id="ap-vol" min="0" max="100" step="1" value="20">
+    <span id="ap-vol-val">20%</span>
   </div>
 </div>
 
@@ -2091,6 +2091,8 @@ async function loadScene() {
     document.getElementById('loader').style.opacity = '0';
     document.getElementById('loader').style.transition = 'opacity .5s';
     setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+    // Audio di sottofondo: parte SOLO ora che la scena è caricata
+    startBackgroundAudio();
   }, 400);
 }
 
@@ -2729,7 +2731,7 @@ function setupAudio() {
 
   let saved = SCENE_CONFIG.audio || {};
   try { const ls = localStorage.getItem(AUDIO_KEY); if (ls) saved = JSON.parse(ls); } catch {}
-  let vol   = saved.volume != null ? saved.volume : 0.6;
+  let vol   = saved.volume != null ? saved.volume : 0.2;   // default 20% per tutti i laboratori
   let muted = !!saved.muted;
   audio.volume = vol;
   audio.muted  = muted;
@@ -2747,14 +2749,7 @@ function setupAudio() {
   }
   function save() { localStorage.setItem(AUDIO_KEY, JSON.stringify({ volume: vol, muted })); }
   refresh();
-
-  // Autoplay: i browser lo bloccano finché non c'è un gesto utente → fallback
-  audio.play().catch(() => {
-    const resume = () => { audio.play().catch(() => {}); };
-    window.addEventListener('pointerdown', resume, { once: true });
-    window.addEventListener('keydown',     resume, { once: true });
-    window.addEventListener('touchstart',  resume, { once: true });
-  });
+  // NB: l'audio NON parte qui — parte solo a scena caricata (startBackgroundAudio)
 
   // Toolbar: apri/chiudi il pannellino volume
   toolBtn.addEventListener('click', () => {
@@ -2778,6 +2773,18 @@ function setupAudio() {
     refresh(); save();
     if (vol > 0) audio.play().catch(() => {});
   });
+}
+
+// Avvia l'audio di sottofondo SOLO quando la scena è caricata (con fallback al gesto)
+function startBackgroundAudio() {
+  const audio = document.getElementById('bg-audio');
+  if (!audio || !audio.getAttribute('src')) return;   // niente audio (progetto non-32)
+  const tryPlay = () => audio.play().catch(() => {});
+  tryPlay();
+  const resume = () => tryPlay();
+  window.addEventListener('pointerdown', resume, { once: true });
+  window.addEventListener('keydown',     resume, { once: true });
+  window.addEventListener('touchstart',  resume, { once: true });
 }
 
 // Esporta tutte le posizioni salvate come file positions.json
@@ -2843,7 +2850,7 @@ function buildSceneConfigObject() {
     version: 1,
     exportedAt: new Date().toISOString(),
     positions:     { ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() },
-    audio:         safe(localStorage.getItem(AUDIO_KEY)) || SCENE_CONFIG.audio || { volume: 0.6, muted: false },
+    audio:         safe(localStorage.getItem(AUDIO_KEY)) || SCENE_CONFIG.audio || { volume: 0.2, muted: false },
     teleports:     loadSavedTeleports(),
     entrances:     loadSavedEntrances(),
     interactables: loadSavedInteractables(),
