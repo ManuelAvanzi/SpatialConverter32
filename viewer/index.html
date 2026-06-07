@@ -34,30 +34,40 @@
     #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
     #crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
 
-    /* Pannello interactable */
+    /* Pannello interactable — pill con tasto [F], stile Spatial */
     #interact-panel {
-      position: fixed; bottom: 100px; left: 50%;
+      position: fixed; bottom: 110px; left: 50%;
       transform: translateX(-50%) translateY(20px);
-      background: rgba(0,0,0,.75); backdrop-filter: blur(10px);
+      background: rgba(0,0,0,.72); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,.15);
-      border-radius: 12px; padding: 14px 24px;
-      color: #fff; text-align: center;
-      opacity: 0; transition: all .25s ease;
-      pointer-events: none; z-index: 20;
-      max-width: 400px;
+      border-radius: 999px; padding: 10px 14px 10px 20px;
+      color: #fff; display: flex; align-items: center; gap: 12px;
+      opacity: 0; transition: opacity .2s ease, transform .2s ease;
+      pointer-events: auto; cursor: pointer; z-index: 20; max-width: 70vw;
     }
-    #interact-panel.visible {
-      opacity: 1; transform: translateX(-50%) translateY(0);
+    #interact-panel.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #interact-panel:hover { background: rgba(25,25,25,.85); }
+    .ia-prompt-text { font-size: 1rem; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    .ia-prompt-key {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 26px; height: 26px; padding: 0 7px;
+      background: #fff; color: #111; border-radius: 7px;
+      font-size: .82rem; font-weight: 700; box-shadow: 0 2px 0 rgba(0,0,0,.3); flex-shrink: 0;
     }
-    #interact-panel .icon {
-      font-size: 1.6rem; margin-bottom: 6px;
-    }
-    #interact-panel .label {
-      font-size: 1rem; font-weight: 600; margin-bottom: 4px;
-    }
-    #interact-panel .hint {
-      font-size: .75rem; opacity: .5;
-    }
+
+    /* Card interactable nel pannello */
+    .ia-card { background: rgba(255,184,74,.07); border: 1px solid rgba(255,184,74,.25);
+      border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+    .ia-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .ia-text-in { width: 100%; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 5px; padding: 5px 8px; font-size: .78rem; margin-bottom: 6px; }
+    .ia-controls { display: flex; align-items: center; gap: 6px; font-size: .72rem; }
+    .ia-controls label { opacity: .6; }
+    .ia-controls .ia-radius { width: 46px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 4px; padding: 2px 4px; font-size: .7rem; font-family: monospace; }
+    .ia-controls .ia-anim { flex: 1; min-width: 0; background: rgba(40,40,40,.95);
+      border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 4px; padding: 3px 4px; font-size: .72rem; }
 
     /* Notifica azione */
     #notification {
@@ -325,10 +335,9 @@
 
 <!-- UI -->
 <div id="crosshair"></div>
-<div id="interact-panel">
-  <div class="icon">☝️</div>
-  <div class="label" id="interact-label"></div>
-  <div class="hint">Clicca per interagire</div>
+<div id="interact-panel" title="Interagisci">
+  <span class="ia-prompt-text" id="interact-label"></span>
+  <span class="ia-prompt-key">F</span>
 </div>
 <div id="notification"></div>
 <div id="place-banner"></div>
@@ -358,6 +367,8 @@
     <div id="teleport-list"></div>
     <h3 style="margin-top:14px">Entrance Points</h3>
     <div id="entrance-list"></div>
+    <h3 style="margin-top:14px">Interactable</h3>
+    <div id="interactable-list"></div>
   </div>
 </div>
 
@@ -811,8 +822,9 @@ function buildSpatialPalette() {
   const pal = document.getElementById('spatial-palette');
   if (!pal) return;
   pal.innerHTML =
-      featureCardHTML('teleport', '🌀', 'Teleport', 'Sali sul cilindro → ti sposti')
-    + featureCardHTML('entrance', '📍', 'Entrance Point', 'Dove appari entrando nella scena');
+      featureCardHTML('teleport',     '🌀', 'Teleport', 'Sali sul cilindro → ti sposti')
+    + featureCardHTML('entrance',     '📍', 'Entrance Point', 'Dove appari entrando nella scena')
+    + featureCardHTML('interactable', '👆', 'Interactable', 'Avvicinati → testo + tasto, parte un\'animazione');
 
   pal.querySelectorAll('.spatial-feature').forEach(feat => {
     const kind = feat.dataset.feature;
@@ -824,7 +836,9 @@ function buildSpatialPalette() {
     feat.addEventListener('dragend', () => { _draggingFeature = null; });
     feat.querySelector('.sf-add').addEventListener('click', e => {
       e.stopPropagation();
-      if (kind === 'teleport') addTeleportInFront(); else addEntranceAtMe();
+      if (kind === 'teleport') addTeleportInFront();
+      else if (kind === 'entrance') addEntranceAtMe();
+      else addInteractableInFront();
     });
   });
 }
@@ -855,7 +869,7 @@ function screenToScenePoint(clientX, clientY) {
 
 function onCanvasDrop(e) {
   const kind = _draggingFeature;
-  if (kind !== 'teleport' && kind !== 'entrance') return;
+  if (kind !== 'teleport' && kind !== 'entrance' && kind !== 'interactable') return;
   e.preventDefault();
   const pt = screenToScenePoint(e.clientX, e.clientY);
   _draggingFeature = null;
@@ -864,10 +878,14 @@ function onCanvasDrop(e) {
     const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
     switchMenuTab('spatial');
     enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
-  } else {
+  } else if (kind === 'entrance') {
     const ep = addEntrance([pt.x, pt.y, pt.z], cameraYaw, 1.5, null, true);
     switchMenuTab('spatial');
     showNotification(`📍 Entrance ${ep.id} piazzato — usa ⟳ per la direzione di spawn`);
+  } else {
+    const ia = addInteractable([pt.x, pt.y, pt.z], '', 3, '', null, true);
+    switchMenuTab('spatial');
+    showNotification(`👆 Interagibile ${ia.id} piazzato — scrivi il testo e scegli l'animazione`);
   }
 }
 
@@ -1119,11 +1137,200 @@ function applySpawn() {
   applyEntrancePoint();   // fallback al vecchio entrance singolo (localStorage)
 }
 
-// Salva la posizione del target del gizmo (route per tipo: teleport / entrance / oggetto)
+// ─── Interactable: visual + prossimità + trigger animazione ──────────────────
+function makeHandSprite() {
+  const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.beginPath(); ctx.arc(128, 128, 100, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 8; ctx.stroke();
+  ctx.font = 'bold 120px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.fillText('☝', 128, 145);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(0.7, 0.7, 0.7);
+  return sp;
+}
+
+function createInteractableVisual(radius) {
+  const group = new THREE.Group();
+  const col = 0xffb84a;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 8, 48),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.scale.setScalar(radius);
+  group.add(ring); group.userData.ring = ring;
+  const sprite = makeHandSprite(); sprite.position.y = 1.4; group.add(sprite);
+  group.userData.sprite = sprite;
+  group.userData.isInteractablePart = true;
+  return group;
+}
+
+function nextInteractableId() {
+  const m = interactables.reduce((a, x) => Math.max(a, x.id), 0);
+  return Math.max(m, _iaSeq) + 1;
+}
+
+function addInteractable(posArr, text, radius, anim, id, save) {
+  if (id == null) id = nextInteractableId();
+  _iaSeq = Math.max(_iaSeq, id);
+  radius = radius || 3;
+  const group = createInteractableVisual(radius);
+  group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
+  group.userData.gizmoName = `Interagibile ${id}`;
+  scene.add(group);
+  const ia = { id, group, text: text || '', radius, anim: anim || '', row: null };
+  interactables.push(ia);
+  addInteractableRow(ia);
+  if (save) saveInteractables();
+  return ia;
+}
+
+function removeInteractable(ia) {
+  if (currentSpatialIA === ia) { currentSpatialIA = null; hideInteractPanel(); }
+  if (gizmoTarget === ia.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+  scene.remove(ia.group);
+  ia.group.traverse(o => {
+    if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); }
+    if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); }
+  });
+  const i = interactables.indexOf(ia); if (i !== -1) interactables.splice(i, 1);
+  if (ia.row) ia.row.remove();
+  saveInteractables();
+  showNotification(`🗑 Interagibile ${ia.id} rimosso`);
+}
+
+function saveInteractables() {
+  const data = interactables.map(ia => ({
+    id: ia.id,
+    pos: ia.group.position.toArray().map(v => +v.toFixed(3)),
+    text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '',
+  }));
+  localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
+}
+function loadSavedInteractables() {
+  try { return JSON.parse(localStorage.getItem(IA_STORE_KEY) || '[]'); } catch { return []; }
+}
+
+// Opzioni animazione = personaggi glTF caricati
+function animOptions(selected) {
+  let opts = `<option value="">— nessuna —</option>`;
+  for (const ch of gltfCharacters) {
+    const sel = ch.name === selected ? ' selected' : '';
+    opts += `<option value="${ch.name}"${sel}>${ch.name}</option>`;
+  }
+  return opts;
+}
+
+function addInteractableRow(ia) {
+  const list = document.getElementById('interactable-list');
+  if (!list) return;
+  const card = document.createElement('div');
+  card.className = 'ia-card';
+  const safeText = (ia.text || '').replace(/"/g, '&quot;');
+  card.innerHTML =
+      `<div class="ia-head">`
+    +   `<div class="model-dot" style="background:#ffb84a"></div>`
+    +   `<span class="model-name">Interagibile ${ia.id}</span>`
+    +   `<button class="goto-btn"   title="Vai qui">🎯</button>`
+    +   `<button class="gizmo-btn"  title="Sposta">✥</button>`
+    +   `<button class="delete-btn" title="Rimuovi">🗑</button>`
+    + `</div>`
+    + `<input class="ia-text-in" type="text" placeholder="Testo (es. Applica misure preventive)" value="${safeText}">`
+    + `<div class="ia-controls">`
+    +   `<label>Raggio</label><input class="ia-radius" type="number" min="0.5" step="0.5" value="${ia.radius}">`
+    +   `<label>Anim</label><select class="ia-anim">${animOptions(ia.anim)}</select>`
+    + `</div>`;
+
+  card.querySelector('.goto-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (cameraMode !== 'fps') toggleOverhead();
+    const p = ia.group.position;
+    camera.position.set(p.x, p.y + 1.7, p.z + 4);
+    cameraYaw = 0; cameraPitch = 0; camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0;
+    showNotification(`📍 Interagibile ${ia.id}`);
+  });
+
+  const gb = card.querySelector('.gizmo-btn');
+  gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ia.group, gb); });
+  card.querySelector('.delete-btn').addEventListener('click', e => { e.stopPropagation(); removeInteractable(ia); });
+
+  const ti = card.querySelector('.ia-text-in');
+  ti.addEventListener('click', e => e.stopPropagation());
+  ti.addEventListener('input', () => { ia.text = ti.value; if (currentSpatialIA === ia) showInteractPanel(ia.text || 'Interagisci'); });
+  ti.addEventListener('change', () => saveInteractables());
+
+  const ri = card.querySelector('.ia-radius');
+  ri.addEventListener('click', e => e.stopPropagation());
+  ri.addEventListener('change', () => {
+    const r = Math.max(0.5, parseFloat(ri.value) || 3);
+    ia.radius = r; ia.group.userData.ring.scale.setScalar(r); saveInteractables();
+  });
+
+  const ai = card.querySelector('.ia-anim');
+  ai.addEventListener('click', e => e.stopPropagation());
+  ai.addEventListener('change', () => { ia.anim = ai.value; saveInteractables(); });
+
+  list.appendChild(card);
+  ia.row = card;
+}
+
+function addInteractableInFront() {
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  const p = camera.position.clone().addScaledVector(fwd, 3);
+  const ia = addInteractable([p.x, 0, p.z], '', 3, '', null, true);
+  switchMenuTab('spatial');
+  showNotification(`👆 Interagibile ${ia.id} aggiunto — scrivi il testo e scegli l'animazione`);
+}
+
+// Prossimità: mostra il prompt sull'interactable più vicino entro il raggio
+function checkSpatialInteractables() {
+  let best = null, bestD = Infinity;
+  for (const ia of interactables) {
+    const p = ia.group.position;
+    const dx = camera.position.x - p.x, dz = camera.position.z - p.z;
+    const d = dx * dx + dz * dz;
+    if (d < ia.radius * ia.radius && d < bestD) { best = ia; bestD = d; }
+  }
+  if (best !== currentSpatialIA) {
+    currentSpatialIA = best;
+    if (best) showInteractPanel(best.text || 'Interagisci'); else hideInteractPanel();
+  }
+}
+
+// Trigger: fa partire l'animazione scelta
+function triggerSpatialIA(ia) {
+  if (!ia) return;
+  if (ia.anim) playInteractableAnim(ia.anim);
+  showNotification(`▶ ${ia.text || 'Interazione'}`);
+}
+
+function playInteractableAnim(name) {
+  const ch = gltfCharacters.find(c => c.name === name);
+  if (ch && ch.action) {
+    ch.action.paused = false;
+    ch.action.reset();
+    ch.action.setLoop(THREE.LoopRepeat);
+    ch.action.play();
+    // sincronizza il bottone play/pausa nel pannello Modelli, se presente
+    if (ch._playBtn) { ch._playBtn.classList.add('playing'); ch._playBtn.textContent = '⏹'; }
+  } else {
+    console.warn('Animazione non trovata:', name);
+  }
+}
+
+function animateInteractables(t) {
+  for (const ia of interactables) {
+    const s = ia.group.userData.sprite;
+    if (s) s.position.y = 1.4 + Math.sin(t * 1.8) * 0.08;
+  }
+}
+
+// Salva la posizione del target del gizmo (route per tipo)
 function persistGizmoTarget(obj) {
   if (!obj) return;
-  if (obj.userData.isTeleportPart) { saveTeleports();  return; }
-  if (obj.userData.isEntrancePart) { saveEntrances();  return; }
+  if (obj.userData.isTeleportPart)     { saveTeleports();      return; }
+  if (obj.userData.isEntrancePart)     { saveEntrances();      return; }
+  if (obj.userData.isInteractablePart) { saveInteractables();  return; }
   if (obj.userData.gizmoName) saveObjectPosition(obj.userData.gizmoName, obj);
 }
 
@@ -1171,6 +1378,12 @@ let   teleportCooldownUntil = 0;         // anti rimbalzo dopo il teletrasporto
 const EP_STORE_KEY = 'sc32-entrances';   // localStorage: [{id, pos:[x,y,z], yaw, radius}]
 const entrances = [];                    // {id, group, yaw, radius, row}
 let   _epSeq = 0;
+
+// ─── Interactable (Spatial Interactable) ────────────────────────────────────
+const IA_STORE_KEY = 'sc32-interactables'; // [{id, pos, text, radius, anim}]
+const interactables = [];                // {id, group, text, radius, anim, row}
+let   _iaSeq = 0;
+let   currentSpatialIA = null;           // interactable attualmente vicino (prompt attivo)
 let   _draggingFeature = null;           // feature in drag dalla palette
 let   placingTarget = null;              // teleport in modalità "clicca per posizionare destinazione"
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1300,8 +1513,15 @@ async function init() {
 
   // Movimento tastiera
   document.addEventListener('keydown', e => {
+    // Non intercettare i tasti mentre si scrive in un campo del pannello
+    const _tag = e.target.tagName;
+    if (_tag === 'INPUT' || _tag === 'SELECT' || _tag === 'TEXTAREA') return;
+
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
+
+    // F: interagisci con l'interactable vicino
+    if (e.code === 'KeyF' && currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
 
     // ESC: annulla la modalità "posiziona destinazione"
     if (e.code === 'Escape' && placingTarget) { exitPlaceTargetMode(); return; }
@@ -1347,6 +1567,11 @@ async function init() {
   // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
   renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
   renderer.domElement.addEventListener('drop', onCanvasDrop);
+
+  // Click sulla pill prompt → interagisci (oltre al tasto F e al controller VR)
+  document.getElementById('interact-panel').addEventListener('click', () => {
+    if (currentSpatialIA) triggerSpatialIA(currentSpatialIA);
+  });
 
   // ── Pulsante Illuminazione ────────────────────────────────────────────────
   document.getElementById('btn-lighting').addEventListener('click', () => {
@@ -1475,6 +1700,9 @@ async function loadScene() {
 
   // Ricrea gli entrance point salvati
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
+
+  // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
+  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.id, false);
 
   // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
   applySpawn();
@@ -2152,12 +2380,15 @@ function addCharactersToPanel() {
     });
 
     const pb = item.querySelector('.play-btn');
-    if (pb) pb.addEventListener('click', e => {
-      e.stopPropagation();
-      ch.action.paused = !ch.action.paused;
-      pb.classList.toggle('playing', !ch.action.paused);
-      pb.textContent = ch.action.paused ? '▶' : '⏹';
-    });
+    if (pb) {
+      ch._playBtn = pb;
+      pb.addEventListener('click', e => {
+        e.stopPropagation();
+        ch.action.paused = !ch.action.paused;
+        pb.classList.toggle('playing', !ch.action.paused);
+        pb.textContent = ch.action.paused ? '▶' : '⏹';
+      });
+    }
 
     item.querySelector('.delete-btn').addEventListener('click', e => {
       e.stopPropagation();
@@ -2363,6 +2594,7 @@ function onInteract() {
 }
 
 function onVRInteract() {
+  if (currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
   if (currentInteractable) triggerInteractable(currentInteractable);
 }
 
@@ -2585,8 +2817,9 @@ function animate(timestamp, frame) {
     mixer.update(delta);
   }
 
-  // Controlla interactable a ogni frame
-  checkInteractables();
+  // Prompt interactable per prossimità — in FPS o VR (non in vista aerea)
+  if (cameraMode === 'fps' || renderer.xr.isPresenting) checkSpatialInteractables();
+  else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
 
   // Aggiorna HUD coordinate camera
   const hud = document.getElementById('cam-hud');
@@ -2600,6 +2833,9 @@ function animate(timestamp, frame) {
 
   // Anima i teleport (fascio + anelli)
   animateTeleports(t);
+
+  // Anima gli hotspot interactable (bob)
+  animateInteractables(t);
 
   renderer.render(scene, camera);
 }
