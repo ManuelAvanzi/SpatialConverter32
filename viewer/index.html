@@ -577,7 +577,19 @@ async function init() {
   });
 
   // ── Pulsante Entrata ──────────────────────────────────────────────────────
-  document.getElementById('btn-entrance').addEventListener('click', saveEntrance);
+  document.getElementById('btn-entrance').addEventListener('click', () => {
+    const btn = document.getElementById('btn-entrance');
+    if (btn.classList.contains('active')) {
+      // Secondo click: cancella il punto salvato
+      if (confirm('Cancellare il punto d\'entrata salvato?')) {
+        localStorage.removeItem(ENTRANCE_KEY);
+        btn.classList.remove('active');
+        showNotification('🗑 Punto d\'entrata rimosso — si ripartirà dall\'origine');
+      }
+    } else {
+      saveEntrance();
+    }
+  });
   // Marca il pulsante come attivo se esiste già un punto salvato
   if (loadSavedEntrance()) document.getElementById('btn-entrance').classList.add('active');
 
