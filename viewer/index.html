@@ -264,6 +264,38 @@
     }
     .collider-btn:hover  { background: rgba(74,200,255,.35); }
     .collider-btn.active { background: rgba(74,200,255,.55); border-color: #4ac8ff; color: #fff; }
+
+    /* Tab del menu */
+    .menu-tabs { display:flex; gap:6px; margin-bottom:10px; }
+    .menu-tab { flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+      color:rgba(255,255,255,.7); border-radius:7px; padding:6px 8px; cursor:pointer;
+      font-size:.74rem; transition:background .15s; }
+    .menu-tab:hover { background:rgba(255,255,255,.14); }
+    .menu-tab.active { background:rgba(74,158,255,.25); border-color:rgba(74,158,255,.5); color:#cfe6ff; }
+    .menu-tab-content { display:none; }
+    .menu-tab-content.active { display:block; }
+    .sf-hint { font-size:.68rem; opacity:.45; margin:2px 0 10px; line-height:1.5; }
+
+    /* Bottone "sposta destinazione" del teleport */
+    .tp-target-btn { background:rgba(180,120,255,.18); border:1px solid rgba(180,120,255,.4);
+      color:#c9a8ff; border-radius:4px; padding:2px 7px; cursor:pointer; font-size:.72rem;
+      flex-shrink:0; transition:background .15s; }
+    .tp-target-btn:hover  { background:rgba(180,120,255,.4); }
+    .tp-target-btn.active { background:rgba(180,120,255,.6); border-color:#b478ff; color:#fff; }
+
+    /* Palette Spatial Features (draggabili) */
+    .spatial-feature { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:8px 10px; margin-bottom:8px;
+      cursor:grab; transition:background .15s; }
+    .spatial-feature:hover  { background:rgba(74,158,255,.15); border-color:rgba(74,158,255,.35); }
+    .spatial-feature:active { cursor:grabbing; }
+    .spatial-feature .sf-ico { font-size:1.4rem; flex-shrink:0; }
+    .spatial-feature .sf-txt { flex:1; min-width:0; }
+    .spatial-feature .sf-name { font-size:.82rem; font-weight:600; }
+    .spatial-feature .sf-desc { font-size:.68rem; opacity:.5; }
+    .spatial-feature .sf-add { background:rgba(74,158,255,.25); border:1px solid rgba(74,158,255,.45);
+      color:#cfe6ff; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:1rem; flex-shrink:0; }
+    .spatial-feature .sf-add:hover { background:rgba(74,158,255,.5); }
   </style>
 </head>
 <body>
@@ -291,16 +323,29 @@
 </div>
 <div id="teleport-panel"></div>
 
-<!-- Pannello modelli -->
+<!-- Pannello menu (modelli + spatial features) -->
 <div id="models-panel">
-  <h3>Modelli caricati</h3>
-  <div id="models-list"></div>
+  <div class="menu-tabs">
+    <button class="menu-tab active" data-tab="models">📦 Modelli</button>
+    <button class="menu-tab"        data-tab="spatial">🌀 Spatial</button>
+  </div>
+  <div id="tab-models" class="menu-tab-content active">
+    <h3>Modelli caricati</h3>
+    <div id="models-list"></div>
+  </div>
+  <div id="tab-spatial" class="menu-tab-content">
+    <h3>Spatial Features</h3>
+    <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
+    <div id="spatial-palette"></div>
+    <h3 style="margin-top:14px">Teleport piazzati</h3>
+    <div id="teleport-list"></div>
+  </div>
 </div>
 
 <!-- Toolbar -->
 <div id="toolbar">
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
-  <button class="tool-btn" id="btn-models"    title="Modelli caricati">📦 Modelli</button>
+  <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
   <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Salva punto d'entrata (posizione iniziale del personaggio)">📍 Entrata</button>
 </div>
@@ -567,6 +612,265 @@ function toggleCollider(root, btn) {
   }
 }
 
+// ─── Teleport: visual + logica ──────────────────────────────────────────────
+// Texture del fascio: bianco brillante in basso → trasparente in alto
+function beamTexture() {
+  if (_beamTex) return _beamTex;
+  const c = document.createElement('canvas'); c.width = 16; c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 128, 0, 0);       // bottom → top
+  g.addColorStop(0,   'rgba(255,255,255,0.60)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.18)');
+  g.addColorStop(1,   'rgba(255,255,255,0.00)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 16, 128);
+  _beamTex = new THREE.CanvasTexture(c);
+  _beamTex.colorSpace = THREE.SRGBColorSpace;
+  return _beamTex;
+}
+
+// Crea il gruppo visuale del teleport (kind: 'pad' luminoso | 'target' tenue)
+function createTeleportVisual(kind) {
+  const group = new THREE.Group();
+  const bright = kind === 'pad';
+  const col = bright ? 0xffffff : 0x66ccff;
+  const add = THREE.AdditiveBlending;
+
+  // Disco glow a terra
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(0.62, 40),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: bright ? 0.35 : 0.18,
+      blending: add, depthWrite: false, side: THREE.DoubleSide }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = 0.02;
+  group.add(disc);
+
+  // Anello luminoso
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.6, 0.05, 10, 48),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: bright ? 0.95 : 0.5,
+      blending: add, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03;
+  group.add(ring);
+  group.userData.ring = ring;
+
+  // Fascio di luce verticale (solo sul pad)
+  if (bright) {
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 3.2, 32, 1, true),
+      new THREE.MeshBasicMaterial({ map: beamTexture(), transparent: true, opacity: 0.85,
+        blending: add, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 1.6;
+    group.add(beam);
+    group.userData.beam = beam;
+  }
+  group.userData.isTeleportPart = true;
+  return group;
+}
+
+function nextTeleportId() {
+  const m = teleports.reduce((a, t) => Math.max(a, t.id), 0);
+  return Math.max(m, _tpSeq) + 1;
+}
+
+// Crea un teleport completo (pad + destinazione)
+function addTeleport(padArr, targetArr, id, save) {
+  if (id == null) { id = nextTeleportId(); }
+  _tpSeq = Math.max(_tpSeq, id);
+
+  const padGroup = createTeleportVisual('pad');
+  padGroup.position.set(padArr[0], padArr[1] || 0, padArr[2]);
+  padGroup.userData.gizmoName = `Teleport ${id} · pad`;
+
+  const targetGroup = createTeleportVisual('target');
+  targetGroup.position.set(targetArr[0], targetArr[1] || 0, targetArr[2]);
+  targetGroup.userData.gizmoName = `Teleport ${id} · destinazione`;
+
+  scene.add(padGroup);
+  scene.add(targetGroup);
+
+  const tp = { id, padGroup, targetGroup, row: null };
+  teleports.push(tp);
+  addTeleportRow(tp);
+  if (save) saveTeleports();
+  return tp;
+}
+
+function removeTeleport(tp) {
+  if (gizmoTarget === tp.padGroup || gizmoTarget === tp.targetGroup) {
+    transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+  }
+  [tp.padGroup, tp.targetGroup].forEach(g => {
+    scene.remove(g);
+    g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+  });
+  const i = teleports.indexOf(tp); if (i !== -1) teleports.splice(i, 1);
+  if (tp.row) tp.row.remove();
+  saveTeleports();
+  showNotification(`🗑 Teleport ${tp.id} rimosso`);
+}
+
+function saveTeleports() {
+  const data = teleports.map(tp => ({
+    id: tp.id,
+    pad:    tp.padGroup.position.toArray().map(v => +v.toFixed(3)),
+    target: tp.targetGroup.position.toArray().map(v => +v.toFixed(3)),
+  }));
+  localStorage.setItem(TP_STORE_KEY, JSON.stringify(data));
+}
+function loadSavedTeleports() {
+  try { return JSON.parse(localStorage.getItem(TP_STORE_KEY) || '[]'); } catch { return []; }
+}
+
+// Riga del teleport nel pannello (tab Spatial)
+function addTeleportRow(tp) {
+  const list = document.getElementById('teleport-list');
+  if (!list) return;
+  const item = document.createElement('div');
+  item.className = 'model-item';
+  item.innerHTML =
+      `<div class="model-dot" style="background:#66ccff"></div>`
+    + `<span class="model-name">Teleport ${tp.id}</span>`
+    + `<button class="goto-btn"      title="Vai al pad">🎯</button>`
+    + `<button class="gizmo-btn"     title="Sposta il pad (dove sali)">✥</button>`
+    + `<button class="tp-target-btn" title="Sposta la destinazione">⊕</button>`
+    + `<button class="confirm-btn"   title="Salva">✓</button>`
+    + `<button class="delete-btn"    title="Rimuovi teleport">🗑</button>`;
+
+  item.querySelector('.goto-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (cameraMode !== 'fps') toggleOverhead();
+    const p = tp.padGroup.position;
+    camera.position.set(p.x, p.y + 1.7, p.z + 4);
+    cameraYaw = 0; cameraPitch = 0;
+    camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0;
+    showNotification(`📍 Teleport ${tp.id}`);
+  });
+
+  const gb = item.querySelector('.gizmo-btn');
+  gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(tp.padGroup, gb); });
+
+  const tb = item.querySelector('.tp-target-btn');
+  tb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(tp.targetGroup, tb); });
+
+  item.querySelector('.confirm-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    saveTeleports();
+    if (gizmoTarget === tp.padGroup || gizmoTarget === tp.targetGroup) {
+      transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+      document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+    }
+    showNotification(`💾 Teleport ${tp.id} salvato`);
+  });
+
+  item.querySelector('.delete-btn').addEventListener('click', e => {
+    e.stopPropagation(); removeTeleport(tp);
+  });
+
+  list.appendChild(item);
+  tp.row = item;
+}
+
+// Palette Spatial Features (draggabile)
+function buildSpatialPalette() {
+  const pal = document.getElementById('spatial-palette');
+  if (!pal) return;
+  pal.innerHTML =
+      `<div class="spatial-feature" draggable="true" data-feature="teleport">`
+    +   `<span class="sf-ico">🌀</span>`
+    +   `<div class="sf-txt"><div class="sf-name">Teleport</div>`
+    +     `<div class="sf-desc">Sali sul cilindro → ti sposti</div></div>`
+    +   `<button class="sf-add" title="Aggiungi davanti a me">＋</button>`
+    + `</div>`;
+  const feat = pal.querySelector('.spatial-feature');
+  feat.addEventListener('dragstart', e => {
+    _draggingFeature = 'teleport';
+    e.dataTransfer.setData('text/plain', 'teleport');
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+  feat.addEventListener('dragend', () => { _draggingFeature = null; });
+  pal.querySelector('.sf-add').addEventListener('click', e => { e.stopPropagation(); addTeleportInFront(); });
+}
+
+function addTeleportInFront() {
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  const pad = camera.position.clone().addScaledVector(fwd, 4);
+  const target = pad.clone().addScaledVector(fwd, 3);
+  const tp = addTeleport([pad.x, 0, pad.z], [target.x, 0, target.z], null, true);
+  switchMenuTab('spatial');
+  showNotification(`🌀 Teleport ${tp.id} aggiunto — usa ✥ pad e ⊕ destinazione`);
+}
+
+// Converte coordinate schermo → punto sulla scena (raycast su ambiente, fallback piano y=0)
+function screenToScenePoint(clientX, clientY) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  if (environmentScene) {
+    const hits = raycaster.intersectObject(environmentScene, true);
+    if (hits.length) return hits[0].point.clone();
+  }
+  const p = new THREE.Vector3();
+  return raycaster.ray.intersectPlane(_groundPlane, p) ? p : null;
+}
+
+function onCanvasDrop(e) {
+  if (_draggingFeature !== 'teleport') return;
+  e.preventDefault();
+  const pt = screenToScenePoint(e.clientX, e.clientY);
+  _draggingFeature = null;
+  if (!pt) return;
+  const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
+  switchMenuTab('spatial');
+  showNotification(`🌀 Teleport ${tp.id} piazzato — sposta la destinazione con ⊕`);
+}
+
+function switchMenuTab(name) {
+  document.querySelectorAll('.menu-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.getElementById('tab-models').classList.toggle('active', name === 'models');
+  document.getElementById('tab-spatial').classList.toggle('active', name === 'spatial');
+  const panel = document.getElementById('models-panel');
+  if (panel.style.display !== 'block') {
+    panel.style.display = 'block';
+    document.getElementById('btn-models').classList.add('active');
+  }
+}
+
+// Controlla se il player è su un pad → teletrasporta sulla destinazione
+function checkTeleports() {
+  if (!teleports.length || performance.now() < teleportCooldownUntil) return;
+  for (const tp of teleports) {
+    const p = tp.padGroup.position;
+    const dx = camera.position.x - p.x;
+    const dz = camera.position.z - p.z;
+    if (dx * dx + dz * dz > TP_TRIGGER_R * TP_TRIGGER_R) continue;
+    if (Math.abs(camera.position.y - (p.y + PLAYER_HEIGHT)) > 2.2) continue; // non da piani sopra
+    const t = tp.targetGroup.position;
+    camera.position.set(t.x, t.y + PLAYER_HEIGHT, t.z);
+    playerGroundY = t.y + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
+    teleportCooldownUntil = performance.now() + 1200;
+    showNotification(`🌀 Teleport ${tp.id}`);
+    break;
+  }
+}
+
+// Animazione: pulsa il fascio, ruota gli anelli
+function animateTeleports(t) {
+  for (const tp of teleports) {
+    const beam = tp.padGroup.userData.beam;
+    if (beam) beam.material.opacity = 0.7 + Math.sin(t * 2.5) * 0.18;
+    if (tp.padGroup.userData.ring)    tp.padGroup.userData.ring.rotation.z    += 0.02;
+    if (tp.targetGroup.userData.ring) tp.targetGroup.userData.ring.rotation.z -= 0.015;
+  }
+}
+
+// Salva la posizione del target del gizmo (teleport → saveTeleports, altrimenti posizione oggetto)
+function persistGizmoTarget(obj) {
+  if (!obj) return;
+  if (obj.userData.isTeleportPart) { saveTeleports(); return; }
+  if (obj.userData.gizmoName) saveObjectPosition(obj.userData.gizmoName, obj);
+}
+
 // ─── Navigazione drag-to-look ──────────────────────────────────────────────
 let isDragging = false;
 let dragMoved = false;          // distingue drag da click
@@ -599,6 +903,16 @@ const collidableMeshes = [];   // meshes con collider attivo
 const colliderRoots    = new Set(); // root Object3D con collider abilitato
 const colRaycaster     = new THREE.Raycaster();
 const _downVec         = new THREE.Vector3(0, -1, 0); // costante (evita allocazioni per frame)
+
+// ─── Teleport (Spatial Avatar Teleporter) ───────────────────────────────────
+const TP_STORE_KEY = 'sc32-teleports';   // localStorage: [{id, pad:[x,y,z], target:[x,y,z]}]
+const TP_TRIGGER_R = 0.7;                // raggio del trigger (m)
+const teleports = [];                    // {id, padGroup, targetGroup, row}
+let   _tpSeq = 0;
+let   teleportCooldownUntil = 0;         // anti rimbalzo dopo il teletrasporto
+let   _draggingFeature = null;           // feature in drag dalla palette
+const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let   _beamTex = null;
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
@@ -646,8 +960,7 @@ async function init() {
     gizmoDragging = e.value;
     if (orbitControls) orbitControls.enabled = !e.value; // non ruotare mentre sposti (vista aerea)
     // al RILASCIO (e.value=false) salva la nuova posizione
-    if (!e.value && gizmoTarget && gizmoTarget.userData.gizmoName)
-      saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+    if (!e.value && gizmoTarget) persistGizmoTarget(gizmoTarget);
   });
   // mentre trascini il gizmo, aggiorna i campi X/Y/Z
   transformControls.addEventListener('objectChange', () => {
@@ -754,6 +1067,15 @@ async function init() {
     panel.style.display = isVisible ? 'none' : 'block';
     document.getElementById('btn-models').classList.toggle('active', !isVisible);
   });
+
+  // ── Tab del menu (Modelli / Spatial) ──────────────────────────────────────
+  document.querySelectorAll('.menu-tab').forEach(tab =>
+    tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
+  buildSpatialPalette();
+
+  // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
+  renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
+  renderer.domElement.addEventListener('drop', onCanvasDrop);
 
   // ── Pulsante Illuminazione ────────────────────────────────────────────────
   document.getElementById('btn-lighting').addEventListener('click', () => {
@@ -890,6 +1212,9 @@ async function loadScene() {
 
   // Personaggi animati ora da Unity (glTF), non più dal GLB Blender.
   await loadGltfCharacters();
+
+  // Ricrea i teleport salvati (Spatial features)
+  for (const t of loadSavedTeleports()) addTeleport(t.pad, t.target, t.id, false);
 
   // Applica punto d'entrata salvato (sovrascrive la posizione default 0,1.7,0)
   applyEntrancePoint();
@@ -1338,13 +1663,13 @@ function toggleGizmo(charRoot, btn) {
   if (gizmoTarget === charRoot) {
     transformControls.detach();
     gizmoTarget = null;
-    document.querySelectorAll('.gizmo-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
     hideCoordEditor();
     showNotification('Gizmo disattivato');
   } else {
     transformControls.attach(charRoot);
     gizmoTarget = charRoot;
-    document.querySelectorAll('.gizmo-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     showCoordEditor(charRoot, charRoot.userData.gizmoName);
     showNotification(`✥ Sposta: ${charRoot.userData.gizmoName} — frecce o coordinate manuali`);
@@ -1370,7 +1695,7 @@ function applyCoordEditor() {
   const z = parseFloat(document.getElementById('ce-z').value);
   if ([x, y, z].some(v => Number.isNaN(v))) { showNotification('Coordinate non valide'); return; }
   gizmoTarget.position.set(x, y, z);
-  if (gizmoTarget.userData.gizmoName) saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+  persistGizmoTarget(gizmoTarget);
 }
 function setupCoordEditor() {
   ['ce-x', 'ce-y', 'ce-z'].forEach(id =>
@@ -1386,7 +1711,7 @@ function setupCoordEditor() {
     const p = camera.position.clone().add(fwd.multiplyScalar(5));
     gizmoTarget.position.set(p.x, 0, p.z);   // a terra, 5m davanti
     updateCoordEditorFields(gizmoTarget);
-    if (gizmoTarget.userData.gizmoName) saveObjectPosition(gizmoTarget.userData.gizmoName, gizmoTarget);
+    persistGizmoTarget(gizmoTarget);
     showNotification('Portato davanti alla camera');
   });
 }
@@ -1992,6 +2317,9 @@ function animate(timestamp, frame) {
     }
   }
 
+  // Teleport: controlla se il player è su un pad (solo FPS, no VR)
+  if (cameraMode === 'fps' && !renderer.xr.isPresenting) checkTeleports();
+
   // Aggiorna animatori
   for (const { mixer } of animationMixers) {
     mixer.update(delta);
@@ -2009,6 +2337,9 @@ function animate(timestamp, frame) {
 
   // Anima markers
   animateMarkers(t);
+
+  // Anima i teleport (fascio + anelli)
+  animateTeleports(t);
 
   renderer.render(scene, camera);
 }
