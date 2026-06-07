@@ -296,6 +296,14 @@
     .spatial-feature .sf-add { background:rgba(74,158,255,.25); border:1px solid rgba(74,158,255,.45);
       color:#cfe6ff; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:1rem; flex-shrink:0; }
     .spatial-feature .sf-add:hover { background:rgba(74,158,255,.5); }
+
+    /* Banner modalità "posiziona destinazione" */
+    #place-banner {
+      position:fixed; top:62px; left:50%; transform:translateX(-50%);
+      background:rgba(74,158,255,.94); color:#fff; padding:9px 20px; border-radius:9px;
+      font-size:.82rem; font-weight:500; z-index:45; display:none;
+      box-shadow:0 4px 18px rgba(0,0,0,.35); pointer-events:none;
+    }
   </style>
 </head>
 <body>
@@ -315,6 +323,7 @@
   <div class="hint">Clicca per interagire</div>
 </div>
 <div id="notification"></div>
+<div id="place-banner"></div>
 <div id="quest-panel">
   <h3>Missione attiva</h3>
   <div id="quest-title"></div>
@@ -687,7 +696,13 @@ function addTeleport(padArr, targetArr, id, save) {
   scene.add(padGroup);
   scene.add(targetGroup);
 
-  const tp = { id, padGroup, targetGroup, row: null };
+  // Linea di collegamento pad → destinazione (per vedere sempre dove atterri)
+  const linkGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const link = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({
+    color: 0x66ccff, transparent: true, opacity: 0.5, depthWrite: false }));
+  scene.add(link);
+
+  const tp = { id, padGroup, targetGroup, link, row: null };
   teleports.push(tp);
   addTeleportRow(tp);
   if (save) saveTeleports();
@@ -698,10 +713,12 @@ function removeTeleport(tp) {
   if (gizmoTarget === tp.padGroup || gizmoTarget === tp.targetGroup) {
     transformControls.detach(); gizmoTarget = null; hideCoordEditor();
   }
+  if (placingTarget === tp) exitPlaceTargetMode();
   [tp.padGroup, tp.targetGroup].forEach(g => {
     scene.remove(g);
     g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
   });
+  if (tp.link) { scene.remove(tp.link); tp.link.geometry.dispose(); tp.link.material.dispose(); }
   const i = teleports.indexOf(tp); if (i !== -1) teleports.splice(i, 1);
   if (tp.row) tp.row.remove();
   saveTeleports();
@@ -731,7 +748,7 @@ function addTeleportRow(tp) {
     + `<span class="model-name">Teleport ${tp.id}</span>`
     + `<button class="goto-btn"      title="Vai al pad">🎯</button>`
     + `<button class="gizmo-btn"     title="Sposta il pad (dove sali)">✥</button>`
-    + `<button class="tp-target-btn" title="Sposta la destinazione">⊕</button>`
+    + `<button class="tp-target-btn" title="Posiziona la destinazione (clic sul terreno)">⊕</button>`
     + `<button class="confirm-btn"   title="Salva">✓</button>`
     + `<button class="delete-btn"    title="Rimuovi teleport">🗑</button>`;
 
@@ -749,7 +766,10 @@ function addTeleportRow(tp) {
   gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(tp.padGroup, gb); });
 
   const tb = item.querySelector('.tp-target-btn');
-  tb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(tp.targetGroup, tb); });
+  tb.addEventListener('click', e => {
+    e.stopPropagation();
+    if (placingTarget === tp) exitPlaceTargetMode(); else enterPlaceTargetMode(tp);
+  });
 
   item.querySelector('.confirm-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -796,7 +816,7 @@ function addTeleportInFront() {
   const target = pad.clone().addScaledVector(fwd, 3);
   const tp = addTeleport([pad.x, 0, pad.z], [target.x, 0, target.z], null, true);
   switchMenuTab('spatial');
-  showNotification(`🌀 Teleport ${tp.id} aggiunto — usa ✥ pad e ⊕ destinazione`);
+  enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
 }
 
 // Converte coordinate schermo → punto sulla scena (raycast su ambiente, fallback piano y=0)
@@ -822,7 +842,7 @@ function onCanvasDrop(e) {
   if (!pt) return;
   const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
   switchMenuTab('spatial');
-  showNotification(`🌀 Teleport ${tp.id} piazzato — sposta la destinazione con ⊕`);
+  enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
 }
 
 function switchMenuTab(name) {
@@ -835,6 +855,35 @@ function switchMenuTab(name) {
     document.getElementById('btn-models').classList.add('active');
   }
 }
+
+// ── Modalità "clicca sul terreno per posizionare la destinazione" ──────────
+function enterPlaceTargetMode(tp) {
+  if (gizmoTarget) {
+    transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+    document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+  }
+  placingTarget = tp;
+  renderer.domElement.style.cursor = 'crosshair';
+  tp.row?.querySelector('.tp-target-btn')?.classList.add('active');
+  showPlaceBanner(`🌀 Teleport ${tp.id}: clicca sul terreno dove vuoi atterrare · ESC per annullare`);
+}
+function exitPlaceTargetMode() {
+  if (placingTarget) placingTarget.row?.querySelector('.tp-target-btn')?.classList.remove('active');
+  placingTarget = null;
+  renderer.domElement.style.cursor = '';
+  hidePlaceBanner();
+}
+function placeTargetAt(clientX, clientY) {
+  const tp = placingTarget; if (!tp) return;
+  const pt = screenToScenePoint(clientX, clientY);
+  if (!pt) { showNotification('Clic fuori dalla scena — riprova'); return; }
+  tp.targetGroup.position.set(pt.x, pt.y, pt.z);
+  saveTeleports();
+  showNotification(`✅ Destinazione Teleport ${tp.id} posizionata`);
+  exitPlaceTargetMode();
+}
+function showPlaceBanner(txt) { const b = document.getElementById('place-banner'); if (b) { b.textContent = txt; b.style.display = 'block'; } }
+function hidePlaceBanner()    { const b = document.getElementById('place-banner'); if (b) b.style.display = 'none'; }
 
 // Controlla se il player è su un pad → teletrasporta sulla destinazione
 function checkTeleports() {
@@ -861,6 +910,13 @@ function animateTeleports(t) {
     if (beam) beam.material.opacity = 0.7 + Math.sin(t * 2.5) * 0.18;
     if (tp.padGroup.userData.ring)    tp.padGroup.userData.ring.rotation.z    += 0.02;
     if (tp.targetGroup.userData.ring) tp.targetGroup.userData.ring.rotation.z -= 0.015;
+    if (tp.link) {
+      const a = tp.padGroup.position, b = tp.targetGroup.position;
+      const pos = tp.link.geometry.attributes.position;
+      pos.setXYZ(0, a.x, a.y + 0.05, a.z);
+      pos.setXYZ(1, b.x, b.y + 0.05, b.z);
+      pos.needsUpdate = true;
+    }
   }
 }
 
@@ -911,6 +967,7 @@ const teleports = [];                    // {id, padGroup, targetGroup, row}
 let   _tpSeq = 0;
 let   teleportCooldownUntil = 0;         // anti rimbalzo dopo il teletrasporto
 let   _draggingFeature = null;           // feature in drag dalla palette
+let   placingTarget = null;              // teleport in modalità "clicca per posizionare destinazione"
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 let   _beamTex = null;
 
@@ -999,6 +1056,12 @@ async function init() {
   window.addEventListener('mouseup', e => {
     if (e.button !== 0) return;
     canvas.classList.remove('dragging');
+    // Modalità "posiziona destinazione": clic pulito sul canvas → piazza la destinazione
+    if (placingTarget && !dragMoved && e.target === renderer.domElement) {
+      placeTargetAt(e.clientX, e.clientY);
+      isDragging = false;
+      return;
+    }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
     isDragging = false;
@@ -1034,6 +1097,9 @@ async function init() {
   document.addEventListener('keydown', e => {
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
+
+    // ESC: annulla la modalità "posiziona destinazione"
+    if (e.code === 'Escape' && placingTarget) { exitPlaceTargetMode(); return; }
 
     // Salto (Space) — solo in FPS
     if (e.code === 'Space' && cameraMode === 'fps') {
