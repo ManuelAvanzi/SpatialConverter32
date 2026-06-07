@@ -8,6 +8,7 @@
     "dev": "node server/index.js",
     "manifest": "node scripts/build-manifest.js",
     "upload": "node scripts/upload-to-r2.js",
+    "seed": "node scripts/seed-project.js",
     "convert": "node build.js",
     "extract": "node extract.js",
     "serve": "npx serve viewer -p 3003"
@@ -19,6 +20,7 @@
     "@aws-sdk/client-s3": "^3.600.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
     "mime-types": "^2.1.35"
   }
 }
