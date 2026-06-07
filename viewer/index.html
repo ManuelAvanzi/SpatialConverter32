@@ -401,7 +401,6 @@
 </div>
 <div id="notification"></div>
 <div id="place-banner"></div>
-<div id="editor-badge">✏️ EDITOR</div>
 <div id="quest-panel">
   <h3>Missione attiva</h3>
   <div id="quest-title"></div>
@@ -421,7 +420,7 @@
     <div id="models-list"></div>
   </div>
   <div id="tab-spatial" class="menu-tab-content">
-    <button id="btn-save-server" class="export-cfg-btn" style="display:none">💾 Salva sul server</button>
+    <button id="btn-save-server" class="export-cfg-btn" style="display:none">💾 Salva in redazione</button>
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
     <h3>Spatial Features</h3>
     <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
@@ -589,6 +588,8 @@ const PROJECT_SLUG = new URLSearchParams(location.search).get('project');
 let CURRENT_PROJECT = null;
 // Suffisso per isolare gli edit (localStorage) di un progetto dall'altro
 const _KP = PROJECT_SLUG ? '::' + PROJECT_SLUG : '';
+// Progetto senza asset propri = scena completamente vuota (niente 32: modelli/audio/copertina)
+function isEmptyProject() { return !!(PROJECT_SLUG && !(CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix)); }
 
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
@@ -1572,6 +1573,11 @@ async function init() {
   await loadSceneConfig();
   await loadAppConfig();
 
+  // Progetto vuoto: niente copertina (è quella del 32) → loader scuro pulito
+  if (isEmptyProject()) {
+    const lb = document.getElementById('loader-bg'); if (lb) lb.style.display = 'none';
+  }
+
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -1744,10 +1750,12 @@ async function init() {
   document.querySelectorAll('.menu-tab').forEach(tab =>
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
-  document.getElementById('btn-export-config').addEventListener('click', exportSceneConfig);
+  const _exportBtn = document.getElementById('btn-export-config');
+  _exportBtn.addEventListener('click', exportSceneConfig);
   const _saveBtn = document.getElementById('btn-save-server');
   _saveBtn.addEventListener('click', saveSceneToServer);
-  if (PROJECT_SLUG) _saveBtn.style.display = '';
+  // In modalità progetto: un solo pulsante "Salva in redazione" (niente export)
+  if (PROJECT_SLUG) { _saveBtn.style.display = ''; _exportBtn.style.display = 'none'; }
 
   // ── Drag & drop di una Spatial Feature dentro il canvas 3D ────────────────
   renderer.domElement.addEventListener('dragover', e => { if (_draggingFeature) e.preventDefault(); });
@@ -1828,22 +1836,22 @@ async function setupVR() {
 async function loadScene() {
   setProgress(5, 'Lettura dati scena...');
 
-  // Carica scene.json
-  try {
-    const res = await fetch('./scene.json');
-    sceneData = await res.json();
-  } catch (e) {
-    console.warn('scene.json non trovato, uso dati demo');
-    sceneData = getDemoScene();
+  // scene.json (hotspot/quest legacy): solo in modalità statica, mai nei progetti
+  if (!PROJECT_SLUG) {
+    try { const res = await fetch('./scene.json'); sceneData = await res.json(); }
+    catch (e) { sceneData = getDemoScene(); }
+  } else {
+    sceneData = { interactables: [], teleports: [], quests: [] };
   }
 
-  // Carica manifest (prima del modello, serve il buildId per la cache)
-  // cache-bust con timestamp: il manifest deve essere SEMPRE fresco
+  // manifest del 32 (pezzi statici): salta per i progetti vuoti
   let manifest = null;
-  try {
-    const res = await fetch('./manifest.json?t=' + Date.now(), { cache: 'no-store' });
-    if (res.ok) manifest = await res.json();
-  } catch (e) {}
+  if (!isEmptyProject()) {
+    try {
+      const res = await fetch('./manifest.json?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) manifest = await res.json();
+    } catch (e) {}
+  }
   loadedManifest = manifest;
 
   // Cache-busting: se il buildId è cambiato, invalida la cache IDB
@@ -1855,8 +1863,6 @@ async function loadScene() {
       console.log('🔄 Cache invalidata — nuovo build:', manifest.buildId);
     }
   }
-
-  updateQuestUI();
 
   // Carica le posizioni salvate (servono già al caricamento dei modelli)
   SAVED_POSITIONS = await loadAllSavedPositions();
@@ -1870,11 +1876,8 @@ async function loadScene() {
 
   // Camera rimane alla posizione di default (0, 1.7, 0) impostata in init()
 
-  setProgress(85, 'Posizionamento interactable...');
-  placeInteractables();
-
-  setProgress(95, 'Posizionamento teleport...');
-  placeTeleports();
+  // Hotspot/teleport legacy da scene.json: solo in modalità statica
+  if (!PROJECT_SLUG) { placeInteractables(); placeTeleports(); }
 
   // Aggiorna bounding box e pannello modelli
   updateSceneBoundingBox();
@@ -2106,9 +2109,9 @@ async function loadManifestAndUpdatePanel(preloadedManifest) {
   `;
   list.appendChild(legend);
 
-  // Usa manifest già caricato, altrimenti rifetch
+  // Usa manifest già caricato, altrimenti rifetch (mai per i progetti vuoti)
   let manifest = preloadedManifest;
-  if (!manifest) {
+  if (!manifest && !isEmptyProject()) {
     try {
       const res = await fetch('./manifest.json');
       if (res.ok) manifest = await res.json();
@@ -2520,6 +2523,12 @@ function setupLightingPanel() {
 function setupAudio() {
   const audio = document.getElementById('bg-audio');
   if (!audio) return;
+  // Progetto vuoto: nessun audio (quello è del 32) → niente src, niente pulsante
+  if (isEmptyProject()) {
+    audio.removeAttribute('src'); audio.load();
+    const tb = document.getElementById('btn-audio'); if (tb) tb.style.display = 'none';
+    return;
+  }
 
   let saved = SCENE_CONFIG.audio || {};
   try { const ls = localStorage.getItem(AUDIO_KEY); if (ls) saved = JSON.parse(ls); } catch {}
@@ -2951,8 +2960,12 @@ function setProgress(pct, label) {
 }
 
 function updateQuestUI() {
-  if (!sceneData?.quests?.length) return;
+  // Pannello "Missione attiva" rimosso — resta sempre nascosto
   const panel = document.getElementById('quest-panel');
+  if (panel) panel.style.display = 'none';
+  return;
+  // eslint-disable-next-line no-unreachable
+  if (!sceneData?.quests?.length) return;
   panel.style.display = 'block';
 
   const quest = sceneData.quests[0];
