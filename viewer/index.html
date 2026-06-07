@@ -97,6 +97,25 @@
       font-weight: 600; margin-bottom: 12px; transition: background .15s; }
     .export-cfg-btn:hover { background: rgba(74,255,138,.32); }
 
+    /* Modalità PLAY: nascondi tutti gli strumenti da editor */
+    body.play-mode #btn-models,
+    body.play-mode #btn-lighting,
+    body.play-mode #btn-entrance,
+    body.play-mode #models-panel,
+    body.play-mode #lighting-panel,
+    body.play-mode #coord-editor,
+    body.play-mode #place-banner { display: none !important; }
+    /* in play resta: 🗺️ Vista aerea, 🔊 Audio (+ popover), VR */
+
+    /* Badge EDITOR (solo in modalità editor) */
+    #editor-badge {
+      position: fixed; top: 14px; left: 16px; z-index: 31; display: none;
+      background: rgba(255,159,74,.92); color: #1a1205; font-weight: 700;
+      font-size: .72rem; letter-spacing: .04em; padding: 5px 10px; border-radius: 7px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.3);
+    }
+    body:not(.play-mode) #editor-badge { display: block; }
+
     /* Notifica azione */
     #notification {
       position: fixed; top: 68px; left: 50%;
@@ -382,6 +401,7 @@
 </div>
 <div id="notification"></div>
 <div id="place-banner"></div>
+<div id="editor-badge">✏️ EDITOR</div>
 <div id="quest-panel">
   <h3>Missione attiva</h3>
   <div id="quest-title"></div>
@@ -557,6 +577,12 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
+// ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
+// In play: niente strumenti di editing, niente scrittura su localStorage,
+// la scena è SEMPRE quella pubblicata (scene-config.json). Teleport/interactable
+// /entrance restano pienamente funzionanti (è l'esperienza, non l'editing).
+const EDIT_MODE = new URLSearchParams(location.search).has('edit');
+
 // ─── Stato globale ─────────────────────────────────────────────────────────
 let scene, camera, renderer;
 let ambientLight = null;   // accessibile dal pannello illuminazione
@@ -667,8 +693,8 @@ async function loadAllSavedPositions() {
     const r = await fetch('./models/gltfModels/positions.json?t=' + Date.now());
     if (r.ok) base = await r.json();
   } catch {}
-  // priorità: positions.json (legacy) → scene-config.json → localStorage (edit live)
-  return { ...base, ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() };
+  // priorità: positions.json (legacy) → scene-config.json → localStorage (solo in editor)
+  return { ...base, ...(SCENE_CONFIG.positions || {}), ...(EDIT_MODE ? loadSavedPositions() : {}) };
 }
 function applySavedToObject(obj, name) {
   obj.userData.gizmoName = name;
@@ -835,8 +861,10 @@ function saveTeleports() {
   localStorage.setItem(TP_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedTeleports() {
-  const ls = localStorage.getItem(TP_STORE_KEY);
-  if (ls) { try { return JSON.parse(ls); } catch {} }
+  if (EDIT_MODE) {
+    const ls = localStorage.getItem(TP_STORE_KEY);
+    if (ls) { try { return JSON.parse(ls); } catch {} }
+  }
   return SCENE_CONFIG.teleports || [];
 }
 
@@ -1130,8 +1158,10 @@ function saveEntrances() {
   localStorage.setItem(EP_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedEntrances() {
-  const ls = localStorage.getItem(EP_STORE_KEY);
-  if (ls) { try { return JSON.parse(ls); } catch {} }
+  if (EDIT_MODE) {
+    const ls = localStorage.getItem(EP_STORE_KEY);
+    if (ls) { try { return JSON.parse(ls); } catch {} }
+  }
   return SCENE_CONFIG.entrances || [];
 }
 
@@ -1294,8 +1324,10 @@ function saveInteractables() {
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
 }
 function loadSavedInteractables() {
-  const ls = localStorage.getItem(IA_STORE_KEY);
-  if (ls) { try { return JSON.parse(ls); } catch {} }
+  if (EDIT_MODE) {
+    const ls = localStorage.getItem(IA_STORE_KEY);
+    if (ls) { try { return JSON.parse(ls); } catch {} }
+  }
   return SCENE_CONFIG.interactables || [];
 }
 
@@ -1502,6 +1534,9 @@ let   _beamTex = null;
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function init() {
+  // Modalità play (default) vs editor (?edit). In play niente strumenti di editing.
+  document.body.classList.toggle('play-mode', !EDIT_MODE);
+
   // Configurazione pubblicata del progetto + base-URL asset (serve già ad audio e modelli)
   await loadSceneConfig();
   await loadAppConfig();
