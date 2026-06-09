@@ -1757,6 +1757,7 @@ function loadQuests() {
     questTriggers.push({ questId: t.questId, taskId: t.taskId, name: t.name || '', pos: t.pos, radius: t.radius || QUEST_TRIGGER_R, entered: false });
   rebuildQuestTriggerVisuals();
   renderQuestPanel();
+  renderQuestVrPanel();
   renderQuestEditorList();
 }
 // Anelli verdi delle zone-trigger (solo in editor, aiuto al posizionamento)
@@ -1767,14 +1768,15 @@ function rebuildQuestTriggerVisuals() {
     _questTrigGroup.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
   }
   _questTrigGroup = new THREE.Group();
-  _questTrigGroup.visible = EDIT_MODE;
+  _questTrigGroup.visible = true;   // l'icona ⚡ si vede sempre (play, editor, VR)
   for (const tr of questTriggers) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 40),
       new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.28, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.scale.setScalar(tr.radius);
     ring.position.set(tr.pos[0], (tr.pos[1] || 0) + 0.05, tr.pos[2]);
+    ring.visible = EDIT_MODE;                              // l'anello del raggio solo in editor
     _questTrigGroup.add(ring);
-    const bolt = makeBoltSprite();                         // icona ⚡ distintiva del trigger
+    const bolt = makeBoltSprite();                         // icona ⚡ distintiva del trigger (sempre visibile)
     bolt.position.set(tr.pos[0], (tr.pos[1] || 0) + 1.2, tr.pos[2]);
     _questTrigGroup.add(bolt);
   }
@@ -1815,6 +1817,7 @@ function importQuestsFromUnity(list) {
   }
   saveQuestDefs();
   renderQuestPanel();
+  renderQuestVrPanel();
   renderQuestEditorList();
   return list.length;
 }
@@ -1828,6 +1831,7 @@ function completeTask(questId, taskId) {
   q.done.add(taskId);
   saveQuestProgress();
   renderQuestPanel();
+  renderQuestVrPanel();
   const complete = q.tasks.length && q.done.size >= q.tasks.length;
   if (complete && q.celebrateOnComplete) celebrateQuest(q);
   else showNotification(`✅ ${t.name}`);
@@ -1881,6 +1885,61 @@ function celebrateQuest(q) {
     spawnConfetti();
   }
   renderQuestPanel();
+}
+
+// ── Pannello quest 3D per VR (attaccato al controller sinistro, stile tablet) ──
+// In VR il DOM non si vede: replico la checklist su un pannello 3D leggibile nel visore.
+let _questVrPanel = null;
+function ensureQuestVrPanel() {
+  if (_questVrPanel) return _questVrPanel;
+  const tex = new THREE.CanvasTexture(document.createElement('canvas'));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, side: THREE.DoubleSide });
+  _questVrPanel = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.26), mat);
+  _questVrPanel.renderOrder = 1000;
+  _questVrPanel.visible = false;
+  return _questVrPanel;
+}
+function renderQuestVrPanel() {
+  const panel = ensureQuestVrPanel();
+  const active = quests.filter(q => q.tasks.length);
+  if (!active.length) { panel.visible = false; return; }
+  const q = active.find(x => x.started) || active[0];
+  const doneN = q.done.size, totN = q.tasks.length, complete = doneN >= totN;
+  const W = 380, H = 494, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(12,16,24,0.95)'; _roundRect(ctx, 0, 0, W, H, 26); ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(120,180,255,0.5)'; ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#5fb0ff'; ctx.font = 'bold 16px Segoe UI, sans-serif'; ctx.fillText('QUEST', 22, 32);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 25px Segoe UI, sans-serif';
+  let title = q.name; while (ctx.measureText(title).width > W - 90 && title.length > 4) title = title.slice(0, -2);
+  ctx.fillText(title === q.name ? title : title + '…', 22, 62);
+  ctx.textAlign = 'right'; ctx.fillStyle = complete ? '#8effb4' : '#7fd0ff'; ctx.font = 'bold 18px Segoe UI, sans-serif';
+  ctx.fillText(`${doneN}/${totN}`, W - 22, 34); ctx.textAlign = 'left';
+  const py = 78; ctx.fillStyle = 'rgba(255,255,255,0.12)'; _roundRect(ctx, 22, py, W - 44, 8, 4); ctx.fill();
+  ctx.fillStyle = '#4aff8a'; _roundRect(ctx, 22, py, (W - 44) * (totN ? doneN / totN : 0), 8, 4); ctx.fill();
+  let y = py + 34; const rowH = (H - y - 14) / Math.max(1, totN);
+  ctx.font = '17px Segoe UI, sans-serif';
+  for (const t of q.tasks) {
+    const done = q.done.has(t.id);
+    if (done) { ctx.fillStyle = '#4aff8a'; _roundRect(ctx, 22, y - 14, 18, 18, 5); ctx.fill(); ctx.fillStyle = '#06210f'; ctx.font = 'bold 14px Segoe UI'; ctx.fillText('✓', 26, y); ctx.font = '17px Segoe UI'; }
+    else { ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; _roundRect(ctx, 22, y - 14, 18, 18, 5); ctx.stroke(); }
+    let name = t.name; while (ctx.measureText(name).width > W - 70 && name.length > 4) name = name.slice(0, -2);
+    if (name !== t.name) name += '…';
+    ctx.fillStyle = done ? '#8b97a8' : '#eef2f8'; ctx.fillText(name, 50, y);
+    if (done) { const w = ctx.measureText(name).width; ctx.strokeStyle = '#8b97a8'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(50, y - 5); ctx.lineTo(50 + w, y - 5); ctx.stroke(); }
+    y += rowH;
+  }
+  panel.material.map.image = c; panel.material.map.needsUpdate = true;
+  panel.visible = renderer.xr.isPresenting;
+}
+function attachQuestVrPanel(controller) {
+  const panel = ensureQuestVrPanel();
+  controller.add(panel);
+  panel.position.set(0, 0.04, -0.11);            // come un tablet sopra/davanti al controller
+  panel.rotation.set(-Math.PI * 0.42, 0, 0);     // inclinato verso il viso
+  renderQuestVrPanel();
 }
 function spawnConfetti() {
   const host = document.getElementById('quest-celebrate'); if (!host) return;
@@ -2484,6 +2543,8 @@ async function setupVR() {
     controller.addEventListener('selectstart', onVRInteract);            // grilletto = interagisci
     controller.addEventListener('squeezestart', () => { _vrTeleporting = true; _vrTeleCtrl = controller; });  // grip = teleport
     controller.addEventListener('squeezeend',   () => { if (_vrTeleCtrl === controller) doVrTeleport(); });
+    // Pannello quest 3D agganciato al controller sinistro (accesso alla lista in VR)
+    controller.addEventListener('connected', e => { if (e.data && e.data.handedness === 'left') attachQuestVrPanel(controller); });
     playerRig.add(controller);
 
     const controllerGrip = renderer.xr.getControllerGrip(i);
@@ -4203,6 +4264,7 @@ function animate(timestamp, frame) {
   else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
   if (EDIT_MODE) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato
+  if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
   // Aggiorna HUD coordinate camera
   const hud = document.getElementById('cam-hud');
