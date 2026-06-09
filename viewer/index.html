@@ -1770,17 +1770,64 @@ function rebuildQuestTriggerVisuals() {
   _questTrigGroup = new THREE.Group();
   _questTrigGroup.visible = true;   // l'icona ⚡ si vede sempre (play, editor, VR)
   for (const tr of questTriggers) {
+    const q = questById(tr.questId);
+    const done = !!(q && q.done.has(tr.taskId));           // se già fatta non la mostro
+    const cx = tr.pos[0], cy = (tr.pos[1] || 0), cz = tr.pos[2];
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 40),
       new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.28, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.scale.setScalar(tr.radius);
-    ring.position.set(tr.pos[0], (tr.pos[1] || 0) + 0.05, tr.pos[2]);
-    ring.visible = EDIT_MODE;                              // l'anello del raggio solo in editor
-    _questTrigGroup.add(ring);
-    const bolt = makeBoltSprite();                         // icona ⚡ distintiva del trigger (sempre visibile)
-    bolt.position.set(tr.pos[0], (tr.pos[1] || 0) + 1.2, tr.pos[2]);
-    _questTrigGroup.add(bolt);
+    ring.position.set(cx, cy + 0.05, cz);
+    ring.visible = EDIT_MODE && !done;                     // l'anello del raggio solo in editor
+    _questTrigGroup.add(ring); tr.ring = ring;
+    const bolt = makeBoltSprite();                         // icona ⚡ (sempre visibile, cliccabile)
+    bolt.position.set(cx, cy + 1.2, cz); bolt.visible = !done;
+    _questTrigGroup.add(bolt); tr.bolt = bolt; tr.boltBaseY = cy + 1.2; tr.boltBaseScale = bolt.scale.x;
+    // sfera invisibile = bersaglio di click (mesh: raycastabile anche dal raggio del controller VR)
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+    hit.position.set(cx, cy + 1.2, cz); hit.visible = !done; hit.userData.qtr = tr;
+    _questTrigGroup.add(hit); tr.hit = hit;
   }
   scene.add(_questTrigGroup);
+}
+// Completamento di una task: ⚡ fa un "pop" verso l'alto e svanisce (sei arrivato)
+function animateTriggerDone(questId, taskId) {
+  for (const tr of questTriggers) {
+    if (tr.questId !== questId || tr.taskId !== taskId || !tr.bolt || !tr.bolt.visible) continue;
+    if (tr.ring) tr.ring.visible = false;
+    if (tr.hit) tr.hit.visible = false;                   // non più cliccabile
+    const bolt = tr.bolt, start = performance.now(), DUR = 650;
+    const baseS = tr.boltBaseScale || bolt.scale.x, baseY = tr.boltBaseY || bolt.position.y;
+    (function step() {
+      const t = (performance.now() - start) / DUR;
+      if (t >= 1) { bolt.visible = false; bolt.scale.setScalar(baseS); bolt.position.y = baseY; bolt.material.opacity = 1; return; }
+      bolt.scale.setScalar(baseS * (1 + 0.7 * Math.sin(t * Math.PI)));   // ingrandisce e torna
+      bolt.position.y = baseY + t * 0.7;                                 // sale
+      bolt.material.opacity = 1 - t;                                     // svanisce
+      requestAnimationFrame(step);
+    })();
+  }
+}
+// Raycast contro le sfere-bersaglio delle ⚡ (da camera o da controller VR)
+const _qRay = new THREE.Raycaster(), _qNdc = new THREE.Vector2();
+function questHitMeshes() { return questTriggers.filter(t => t.hit && t.hit.visible).map(t => t.hit); }
+function pickQuestTrigger(clientX, clientY) {
+  const meshes = questHitMeshes(); if (!meshes.length) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, camera);
+  const hits = _qRay.intersectObjects(meshes, false);
+  return hits.length ? hits[0].object.userData.qtr : null;
+}
+function pickQuestTriggerFromController(ctrl) {
+  const meshes = questHitMeshes(); if (!meshes.length) return null;
+  const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+  const dir = ctrl.getWorldDirection(new THREE.Vector3()).negate();   // forward del controller = -Z
+  _qRay.set(origin, dir); _qRay.near = 0; _qRay.far = 40;
+  const hits = _qRay.intersectObjects(meshes, false);
+  _qRay.far = Infinity;
+  return hits.length ? hits[0].object.userData.qtr : null;
 }
 // Anelli del raggio (interactable + entrance) visibili solo se l'oggetto è selezionato
 function refreshSelectionRings() {
@@ -1830,13 +1877,14 @@ function completeTask(questId, taskId) {
   if (q.done.has(taskId)) return;
   q.done.add(taskId);
   saveQuestProgress();
+  animateTriggerDone(questId, taskId);   // ⚡ pop + svanisce: "sei arrivato"
   renderQuestPanel();
   renderQuestVrPanel();
   const complete = q.tasks.length && q.done.size >= q.tasks.length;
   if (complete && q.celebrateOnComplete) celebrateQuest(q);
   else showNotification(`✅ ${t.name}`);
 }
-function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); renderQuestPanel(); renderQuestEditorList(); }
+function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); for (const tr of questTriggers) tr.entered = false; rebuildQuestTriggerVisuals(); renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); }
 
 // ── UI checklist (play + anteprima editor) ──
 let _questCollapsed = false;
@@ -2342,6 +2390,11 @@ async function init() {
       placeTargetAt(e.clientX, e.clientY);
       isDragging = false;
       return;
+    }
+    // Clic sull'icona ⚡ di una zona-trigger → completa la task (play + editor)
+    if (!dragMoved && e.target === renderer.domElement) {
+      const qtr = pickQuestTrigger(e.clientX, e.clientY);
+      if (qtr) { completeTask(qtr.questId, qtr.taskId); isDragging = false; return; }
     }
     // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
     if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
@@ -3977,7 +4030,13 @@ function onInteract() {
   triggerInteractable(currentInteractable);
 }
 
-function onVRInteract() {
+function onVRInteract(e) {
+  // Prima: il raggio del controller colpisce una ⚡ zona-trigger? → completa la task
+  const ctrl = e && e.target;
+  if (ctrl && ctrl.isObject3D) {
+    const qtr = pickQuestTriggerFromController(ctrl);
+    if (qtr) { completeTask(qtr.questId, qtr.taskId); return; }
+  }
   if (currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
   if (currentInteractable) triggerInteractable(currentInteractable);
 }
