@@ -203,6 +203,8 @@
     .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
     .tool-btn.save { background: rgba(74,255,138,.22); border-color: rgba(74,255,138,.45); color: #c7ffdb; }
     .tool-btn.save:hover { background: rgba(74,255,138,.38); }
+    .tool-btn.exit { background: rgba(255,90,90,.22); border-color: rgba(255,90,90,.45); color: #ffd2d2; }
+    .tool-btn.exit:hover { background: rgba(255,90,90,.40); }
 
     /* ── Refresh moderno ───────────────────────────────────────────────────── */
     #toolbar .tool-btn { border-radius: 999px; padding: 8px 15px; font-weight: 500; }
@@ -241,6 +243,9 @@
     .gizmo-btn.active    { background: rgba(255,159,74,.55) !important; border-color: #ff9f4a !important; color: #fff !important; }
     .collider-btn.active { background: rgba(74,200,255,.55) !important; border-color: #4ac8ff !important; color: #fff !important; }
     .tp-target-btn.active{ background: rgba(180,120,255,.55) !important; border-color: #b478ff !important; color: #fff !important; }
+    /* Card selezionata cliccando la feature nella scena (stile Unity) */
+    .sf-selected-flash { animation: sfFlash 1.2s ease-out; box-shadow: 0 0 0 2px rgba(255,159,74,.9), 0 0 16px rgba(255,159,74,.55); border-radius: 10px; }
+    @keyframes sfFlash { 0% { box-shadow: 0 0 0 2px rgba(255,159,74,1), 0 0 22px rgba(255,159,74,.85); } 100% { box-shadow: 0 0 0 2px rgba(255,159,74,0), 0 0 16px rgba(255,159,74,0); } }
     .play-btn.playing    { background: rgba(255,95,95,.4) !important; border-color: rgba(255,95,95,.55) !important; color: #fff !important; }
     .delete-btn:hover    { background: rgba(255,80,80,.34) !important; border-color: rgba(255,80,80,.5) !important; color: #fff !important; }
 
@@ -530,6 +535,7 @@
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo">🔊 Audio</button>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione">💾 Salva</button>
+  <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione">🚪 Esci</button>
 </div>
 
 <!-- Audio di sottofondo (loop) -->
@@ -1842,6 +1848,11 @@ async function init() {
       isDragging = false;
       return;
     }
+    // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
+    if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
+      const picked = pickSpatialFeature(e.clientX, e.clientY);
+      if (picked) { selectSpatialFeature(picked); isDragging = false; return; }
+    }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
     isDragging = false;
@@ -1934,6 +1945,11 @@ async function init() {
   const _saveTop = document.getElementById('btn-save-top');
   _saveTop.addEventListener('click', saveSceneToServer);
   if (PROJECT_SLUG && EDIT_MODE) { _saveTop.style.display = ''; _exportBtn.style.display = 'none'; }
+
+  // Pulsante "Esci" — torna alla redazione (solo in editor)
+  const _exitBtn = document.getElementById('btn-exit-editor');
+  if (EDIT_MODE) _exitBtn.style.display = '';
+  _exitBtn.addEventListener('click', () => { window.location.href = 'admin.html'; });
 
   // Pulsante "Carica contenuti" (upload modello) — solo in editor su un progetto
   const _upBtn = document.getElementById('btn-upload-model');
@@ -2731,6 +2747,56 @@ function toggleGizmo(charRoot, btn) {
     showCoordEditor(charRoot, charRoot.userData.gizmoName);
     showNotification(`✥ Sposta: ${charRoot.userData.gizmoName} — frecce o coordinate manuali`);
   }
+}
+
+// ─── Click-to-select delle Spatial feature (stile Unity) ────────────────────
+// Clicca un entrance / interactable / teleport nella scena → lo selezioni:
+// gizmo agganciato, editor coordinate aperto e card evidenziata nel menu.
+const _selRay = new THREE.Raycaster();
+const _selNdc = new THREE.Vector2();
+function spatialPickEntries() {
+  const entries = [];
+  for (const ep of entrances)     entries.push({ group: ep.group,       row: ep.row });
+  for (const ia of interactables) entries.push({ group: ia.group,       row: ia.row });
+  for (const tp of teleports) {
+    entries.push({ group: tp.padGroup,    row: tp.row });
+    entries.push({ group: tp.targetGroup, row: tp.row });
+  }
+  return entries;
+}
+function pickSpatialFeature(clientX, clientY) {
+  const entries = spatialPickEntries();
+  if (!entries.length) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _selNdc.x =  ((clientX - r.left) / r.width)  * 2 - 1;
+  _selNdc.y = -((clientY - r.top)  / r.height) * 2 + 1;
+  _selRay.setFromCamera(_selNdc, camera);
+  const hits = _selRay.intersectObjects(entries.map(e => e.group), true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;            // risali fino al gruppo radice della feature
+  while (obj) {
+    const m = entries.find(e => e.group === obj);
+    if (m) return m;
+    obj = obj.parent;
+  }
+  return null;
+}
+function selectSpatialFeature(entry) {
+  const { group, row } = entry;
+  switchMenuTab('spatial');            // apre il pannello sulla tab giusta
+  transformControls.attach(group);
+  gizmoTarget = group;
+  document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+  const gb = row && row.querySelector('.gizmo-btn');
+  if (gb) gb.classList.add('active');
+  showCoordEditor(group, group.userData.gizmoName);
+  if (row) {
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    row.classList.remove('sf-selected-flash');
+    void row.offsetWidth;              // forza il restart dell'animazione
+    row.classList.add('sf-selected-flash');
+  }
+  showNotification(`✥ ${group.userData.gizmoName} — trascina o usa le coordinate`);
 }
 
 // ─── Editor coordinate manuale ───────────────────────────────────────────────
