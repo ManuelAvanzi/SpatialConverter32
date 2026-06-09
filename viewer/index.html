@@ -91,9 +91,9 @@
       color: #fff; border-radius: 5px; padding: 5px 8px; font-size: .78rem; margin-bottom: 6px; }
     .ia-controls { display: flex; align-items: center; gap: 6px; font-size: .72rem; }
     .ia-controls label { opacity: .6; }
-    .ia-controls .ia-radius { width: 46px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+    .ia-controls .ia-radius, .ia-controls .qt-radius { width: 46px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
       color: #fff; border-radius: 4px; padding: 2px 4px; font-size: .7rem; font-family: monospace; }
-    .ia-controls .ia-anim { flex: 1; min-width: 0; background: rgba(40,40,40,.95);
+    .ia-controls .ia-anim, .ia-controls .qt-quest, .ia-controls .qt-task { flex: 1; min-width: 0; background: rgba(40,40,40,.95);
       border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 4px; padding: 3px 4px; font-size: .72rem; }
     .ring-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2);
       color: #ddd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: .72rem;
@@ -146,6 +146,8 @@
     .quest-task { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 9px; cursor: pointer;
       background: rgba(255,255,255,.04); transition: background .12s; font-size: .85rem; }
     .quest-task:hover { background: rgba(74,158,255,.16); }
+    body.play-mode .quest-task { cursor: default; }
+    body.play-mode .quest-task:hover { background: rgba(255,255,255,.04); }
     .qt-check { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 6px; border: 1.5px solid rgba(255,255,255,.32);
       display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; color: #06210f; font-weight: 700; transition: all .15s; }
     .quest-task.done .qt-check { background: #4aff8a; border-color: #4aff8a; }
@@ -585,6 +587,8 @@
     <div id="interactable-list"></div>
     <h3 style="margin-top:14px">Quest</h3>
     <div id="quest-list"></div>
+    <h3 style="margin-top:14px">Trigger (zone task)</h3>
+    <div id="trigger-list"></div>
   </div>
 </div>
 
@@ -1146,7 +1150,8 @@ function buildSpatialPalette() {
   pal.innerHTML =
       featureCardHTML('teleport',     '🌀', 'Teleport', 'Sali sul cilindro → ti sposti')
     + featureCardHTML('entrance',     '📍', 'Entrance Point', 'Dove appari entrando nella scena')
-    + featureCardHTML('interactable', '👆', 'Interactable', 'Avvicinati → testo + tasto, parte un\'animazione');
+    + featureCardHTML('interactable', '👆', 'Interactable', 'Avvicinati → testo + tasto, parte un\'animazione')
+    + featureCardHTML('trigger',      '⚡', 'Trigger Quest', 'Entra nella zona → spunta una task');
 
   pal.querySelectorAll('.spatial-feature').forEach(feat => {
     const kind = feat.dataset.feature;
@@ -1160,6 +1165,7 @@ function buildSpatialPalette() {
       e.stopPropagation();
       if (kind === 'teleport') addTeleportInFront();
       else if (kind === 'entrance') addEntranceAtMe();
+      else if (kind === 'trigger') addTriggerInFront();
       else addInteractableInFront();
     });
   });
@@ -1191,11 +1197,18 @@ function screenToScenePoint(clientX, clientY) {
 
 function onCanvasDrop(e) {
   const kind = _draggingFeature;
-  if (kind !== 'teleport' && kind !== 'entrance' && kind !== 'interactable') return;
+  if (kind !== 'teleport' && kind !== 'entrance' && kind !== 'interactable' && kind !== 'trigger') return;
   e.preventDefault();
   const pt = screenToScenePoint(e.clientX, e.clientY);
   _draggingFeature = null;
   if (!pt) return;
+  if (kind === 'trigger') {
+    const q0 = quests[0];
+    const tr = addQuestTrigger([pt.x, pt.y, pt.z], q0 ? q0.id : 0, 0, QUEST_TRIGGER_R, null, true);
+    switchMenuTab('spatial');
+    showNotification(`⚡ Trigger ${tr.id} piazzato — assegna quest e task nella card`);
+    return;
+  }
   if (kind === 'teleport') {
     const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
     switchMenuTab('spatial');
@@ -1661,14 +1674,12 @@ function applyTaskLinks(links) {
 // Le posizioni sono già in coordinate Three. Default radius comodo da camminata.
 function applyTaskTriggers(list) {
   if (!Array.isArray(list) || !list.length) return 0;
-  questTriggers.length = 0;
+  clearQuestTriggers();
   for (const tr of list) {
     if (!Array.isArray(tr.pos)) continue;
-    questTriggers.push({ questId: tr.questId, taskId: tr.taskId, name: tr.name || '',
-      pos: [tr.pos[0], tr.pos[1] || 0, tr.pos[2]], radius: tr.radius || QUEST_TRIGGER_R, entered: false });
+    addQuestTrigger([tr.pos[0], tr.pos[1] || 0, tr.pos[2]], tr.questId, tr.taskId, tr.radius || QUEST_TRIGGER_R, null, false, tr.name);
   }
   saveQuestTriggers();
-  rebuildQuestTriggerVisuals();
   return questTriggers.length;
 }
 // Orchestratore: il file può contenere interactables e/o quests e/o links/triggers
@@ -1735,7 +1746,8 @@ function saveQuestProgress() {
   localStorage.setItem(QUEST_PROGRESS_KEY, JSON.stringify(out));
 }
 function questTriggerDefArray() {
-  return questTriggers.map(t => ({ questId: t.questId, taskId: t.taskId, name: t.name, pos: t.pos, radius: t.radius }));
+  return questTriggers.map(t => ({ questId: t.questId, taskId: t.taskId, name: t.name,
+    pos: t.group.position.toArray().map(v => +v.toFixed(3)), radius: +(t.radius || QUEST_TRIGGER_R).toFixed(2) }));
 }
 function saveQuestTriggers() { localStorage.setItem(QUEST_TRIG_KEY, JSON.stringify(questTriggerDefArray())); }
 function loadQuestTriggerDefs() {
@@ -1751,53 +1763,143 @@ function loadQuests() {
     if (Array.isArray(saved)) saved.forEach(id => q.done.add(id));
     if (q.done.size || q.startAutomatically) q.started = true;
   }
-  // zone-trigger delle task
-  questTriggers.length = 0;
+  // zone-trigger delle task (oggetti gizmo-movable)
+  clearQuestTriggers();
   for (const t of loadQuestTriggerDefs())
-    questTriggers.push({ questId: t.questId, taskId: t.taskId, name: t.name || '', pos: t.pos, radius: t.radius || QUEST_TRIGGER_R, entered: false });
-  rebuildQuestTriggerVisuals();
+    addQuestTrigger([t.pos[0], t.pos[1] || 0, t.pos[2]], t.questId, t.taskId, t.radius || QUEST_TRIGGER_R, null, false, t.name);
   renderQuestPanel();
   renderQuestVrPanel();
   renderQuestEditorList();
 }
-// Anelli verdi delle zone-trigger (solo in editor, aiuto al posizionamento)
-let _questTrigGroup = null;
-function rebuildQuestTriggerVisuals() {
-  if (_questTrigGroup) {
-    scene.remove(_questTrigGroup);
-    _questTrigGroup.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
-  }
-  _questTrigGroup = new THREE.Group();
-  _questTrigGroup.visible = true;   // l'icona ⚡ si vede sempre (play, editor, VR)
+// ── Zone-trigger della quest: oggetto con group gizmo-movable (⚡ + anello + bersaglio) ──
+let _triggerSeq = 0;
+function nextTriggerId() { return Math.max(_triggerSeq, questTriggers.reduce((a, t) => Math.max(a, t.id || 0), 0)) + 1; }
+function createQuestTriggerVisual(radius) {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 40),
+    new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.28, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.scale.setScalar(radius);
+  group.add(ring); group.userData.ring = ring;
+  const bolt = makeBoltSprite(); bolt.position.y = 1.2; group.add(bolt); group.userData.bolt = bolt;
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+  hit.position.y = 1.2; group.add(hit); group.userData.hit = hit;
+  group.userData.isQuestTriggerPart = true;
+  return group;
+}
+function addQuestTrigger(posArr, questId, taskId, radius, id, save, name) {
+  if (id == null) id = nextTriggerId();
+  _triggerSeq = Math.max(_triggerSeq, id);
+  radius = radius || QUEST_TRIGGER_R;
+  const group = createQuestTriggerVisual(radius);
+  group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
+  group.userData.gizmoName = `Trigger ${id}`;
+  scene.add(group);
+  const tr = { id, questId: questId || 0, taskId: taskId || 0, name: name || '', radius, group, entered: false, row: null };
+  group.userData.qtr = tr; group.userData.hit.userData.qtr = tr;
+  questTriggers.push(tr);
+  addQuestTriggerRow(tr);
+  updateTriggerVisibility(tr);
+  if (save) saveQuestTriggers();
+  return tr;
+}
+function removeQuestTrigger(tr) {
+  if (gizmoTarget === tr.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+  scene.remove(tr.group);
+  tr.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } });
+  const i = questTriggers.indexOf(tr); if (i !== -1) questTriggers.splice(i, 1);
+  if (tr.row) tr.row.remove();
+  saveQuestTriggers();
+  renderQuestEditorList();
+}
+function clearQuestTriggers() {
   for (const tr of questTriggers) {
-    const q = questById(tr.questId);
-    const done = !!(q && q.done.has(tr.taskId));           // se già fatta non la mostro
-    const cx = tr.pos[0], cy = (tr.pos[1] || 0), cz = tr.pos[2];
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 40),
-      new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.28, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2; ring.scale.setScalar(tr.radius);
-    ring.position.set(cx, cy + 0.05, cz);
-    ring.visible = EDIT_MODE && !done;                     // l'anello del raggio solo in editor
-    _questTrigGroup.add(ring); tr.ring = ring;
-    const bolt = makeBoltSprite();                         // icona ⚡ (sempre visibile, cliccabile)
-    bolt.position.set(cx, cy + 1.2, cz); bolt.visible = !done;
-    _questTrigGroup.add(bolt); tr.bolt = bolt; tr.boltBaseY = cy + 1.2; tr.boltBaseScale = bolt.scale.x;
-    // sfera invisibile = bersaglio di click (mesh: raycastabile anche dal raggio del controller VR)
-    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
-    hit.position.set(cx, cy + 1.2, cz); hit.visible = !done; hit.userData.qtr = tr;
-    _questTrigGroup.add(hit); tr.hit = hit;
+    if (gizmoTarget === tr.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    scene.remove(tr.group);
+    tr.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); } });
+    if (tr.row) tr.row.remove();
   }
-  scene.add(_questTrigGroup);
+  questTriggers.length = 0;
+}
+function triggerIsDone(tr) { const q = questById(tr.questId); return !!(q && q.done.has(tr.taskId)); }
+function updateTriggerVisibility(tr) {
+  const done = triggerIsDone(tr), u = tr.group.userData;
+  if (u.ring) u.ring.visible = EDIT_MODE && !done;        // anello del raggio solo in editor
+  if (u.bolt) { u.bolt.visible = !done; u.bolt.material.opacity = 1; u.bolt.scale.setScalar(0.7); }
+  if (u.hit) u.hit.visible = !done;
+}
+function refreshAllTriggerVisibility() { for (const tr of questTriggers) updateTriggerVisibility(tr); }
+
+// Aggiunge un trigger davanti a me (pulsante ＋) o per drag&drop
+function addTriggerInFront() {
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  const p = camera.position.clone().addScaledVector(fwd, 3);
+  const q0 = quests[0];
+  const tr = addQuestTrigger([p.x, Math.max(0, p.y - PLAYER_HEIGHT), p.z], q0 ? q0.id : 0, 0, QUEST_TRIGGER_R, null, true);
+  switchMenuTab('spatial');
+  showNotification(`⚡ Trigger ${tr.id} — assegna quest e task nella card`);
+  return tr;
+}
+
+// Card del trigger nel pannello editor (tab Spatial)
+function questOptions(selId) {
+  let o = `<option value="">— quest —</option>`;
+  for (const q of quests) o += `<option value="${q.id}"${q.id === selId ? ' selected' : ''}>${escHtml(q.name)}</option>`;
+  return o;
+}
+function taskOptions(questId, selId) {
+  const q = questById(questId);
+  let o = `<option value="">— task —</option>`;
+  if (q) for (const t of q.tasks) o += `<option value="${t.id}"${t.id === selId ? ' selected' : ''}>${escHtml(t.name)}</option>`;
+  return o;
+}
+function addQuestTriggerRow(tr) {
+  const list = document.getElementById('trigger-list');
+  if (!list) return;
+  const card = document.createElement('div');
+  card.className = 'ia-card';
+  card.innerHTML =
+      `<div class="ia-head">`
+    +   `<div class="model-dot" style="background:#4aff8a"></div>`
+    +   `<span class="model-name">⚡ Trigger ${tr.id}</span>`
+    +   `<button class="goto-btn"  title="Vai qui">🎯</button>`
+    +   `<button class="gizmo-btn" title="Sposta">✥</button>`
+    +   `<button class="delete-btn" title="Rimuovi">🗑</button>`
+    + `</div>`
+    + `<div class="ia-controls"><label>Quest</label><select class="qt-quest">${questOptions(tr.questId)}</select></div>`
+    + `<div class="ia-controls"><label>Task</label><select class="qt-task">${taskOptions(tr.questId, tr.taskId)}</select></div>`
+    + `<div class="ia-controls"><label>Raggio</label><input class="qt-radius" type="number" min="0.5" step="0.5" value="${tr.radius}"></div>`;
+  card.querySelector('.goto-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (cameraMode !== 'fps') toggleOverhead();
+    const p = tr.group.position;
+    camera.position.set(p.x, p.y + 1.7, p.z + 4);
+    cameraYaw = 0; cameraPitch = 0; camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0;
+    showNotification(`⚡ Trigger ${tr.id}`);
+  });
+  const gb = card.querySelector('.gizmo-btn');
+  gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(tr.group, gb); });
+  card.querySelector('.delete-btn').addEventListener('click', e => { e.stopPropagation(); removeQuestTrigger(tr); });
+  const qsel = card.querySelector('.qt-quest'), tsel = card.querySelector('.qt-task');
+  qsel.addEventListener('click', e => e.stopPropagation());
+  tsel.addEventListener('click', e => e.stopPropagation());
+  qsel.addEventListener('change', () => { tr.questId = +qsel.value || 0; tr.taskId = 0; tsel.innerHTML = taskOptions(tr.questId, 0); saveQuestTriggers(); updateTriggerVisibility(tr); renderQuestEditorList(); });
+  tsel.addEventListener('change', () => { tr.taskId = +tsel.value || 0; const q = questById(tr.questId); const t = q && q.tasks.find(x => x.id === tr.taskId); tr.name = t ? t.name : ''; saveQuestTriggers(); updateTriggerVisibility(tr); renderQuestEditorList(); });
+  const ri = card.querySelector('.qt-radius');
+  ri.addEventListener('click', e => e.stopPropagation());
+  ri.addEventListener('input', () => { const r = Math.max(0.5, parseFloat(ri.value) || QUEST_TRIGGER_R); tr.radius = r; tr.group.userData.ring.scale.setScalar(r); saveQuestTriggers(); });
+  list.appendChild(card);
+  tr.row = card;
 }
 // Completamento di una task: ⚡ fa un "pop" verso l'alto e svanisce (sei arrivato)
 function animateTriggerDone(questId, taskId) {
   for (const tr of questTriggers) {
-    if (tr.questId !== questId || tr.taskId !== taskId || !tr.bolt || !tr.bolt.visible) continue;
-    if (tr.ring) tr.ring.visible = false;
-    if (tr.hit) tr.hit.visible = false;                   // non più cliccabile
-    const bolt = tr.bolt, start = performance.now(), DUR = 650;
-    const baseS = tr.boltBaseScale || bolt.scale.x, baseY = tr.boltBaseY || bolt.position.y;
+    if (tr.questId !== questId || tr.taskId !== taskId) continue;
+    const u = tr.group.userData, bolt = u.bolt, ring = u.ring, hit = u.hit;
+    if (!bolt || !bolt.visible) continue;
+    if (ring) ring.visible = false;
+    if (hit) hit.visible = false;                          // non più cliccabile
+    const start = performance.now(), DUR = 650, baseS = bolt.scale.x, baseY = bolt.position.y;
     (function step() {
       const t = (performance.now() - start) / DUR;
       if (t >= 1) { bolt.visible = false; bolt.scale.setScalar(baseS); bolt.position.y = baseY; bolt.material.opacity = 1; return; }
@@ -1810,7 +1912,7 @@ function animateTriggerDone(questId, taskId) {
 }
 // Raycast contro le sfere-bersaglio delle ⚡ (da camera o da controller VR)
 const _qRay = new THREE.Raycaster(), _qNdc = new THREE.Vector2();
-function questHitMeshes() { return questTriggers.filter(t => t.hit && t.hit.visible).map(t => t.hit); }
+function questHitMeshes() { return questTriggers.map(t => t.group.userData.hit).filter(h => h && h.visible); }
 function pickQuestTrigger(clientX, clientY) {
   const meshes = questHitMeshes(); if (!meshes.length) return null;
   const r = renderer.domElement.getBoundingClientRect();
@@ -1829,6 +1931,18 @@ function pickQuestTriggerFromController(ctrl) {
   _qRay.far = Infinity;
   return hits.length ? hits[0].object.userData.qtr : null;
 }
+// Clic sull'icona ⊙ (sprite mano) di un interactable → ritorna l'interactable
+function pickInteractableSprite(clientX, clientY) {
+  const sprites = interactables.map(ia => ia.group.userData.sprite).filter(Boolean);
+  if (!sprites.length) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, camera);
+  const hits = _qRay.intersectObjects(sprites, false);
+  if (!hits.length) return null;
+  return interactables.find(ia => ia.group.userData.sprite === hits[0].object) || null;
+}
 // Anelli del raggio (interactable + entrance) visibili solo se l'oggetto è selezionato
 function refreshSelectionRings() {
   for (const ia of interactables) {
@@ -1846,9 +1960,11 @@ function checkQuestTriggers() {
   if (!questTriggers.length) return;
   const pw = playerWorld();
   for (const tr of questTriggers) {
+    if (!tr.taskId) continue;                                          // trigger non ancora assegnato
     const q = questById(tr.questId);
     if (q && q.done.has(tr.taskId)) { tr.entered = true; continue; }   // già fatta
-    const dx = pw.x - tr.pos[0], dz = pw.z - tr.pos[2], dy = pw.y - tr.pos[1];
+    const p = tr.group.position;
+    const dx = pw.x - p.x, dz = pw.z - p.z, dy = pw.y - p.y;
     const inside = (dx * dx + dz * dz + dy * dy) < tr.radius * tr.radius;
     if (inside && !tr.entered) { tr.entered = true; completeTask(tr.questId, tr.taskId); }
     else if (!inside) tr.entered = false;
@@ -1884,7 +2000,7 @@ function completeTask(questId, taskId) {
   if (complete && q.celebrateOnComplete) celebrateQuest(q);
   else showNotification(`✅ ${t.name}`);
 }
-function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); for (const tr of questTriggers) tr.entered = false; rebuildQuestTriggerVisuals(); renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); }
+function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); for (const tr of questTriggers) tr.entered = false; refreshAllTriggerVisibility(); renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); }
 
 // ── UI checklist (play + anteprima editor) ──
 let _questCollapsed = false;
@@ -1922,7 +2038,8 @@ function renderQuestPanel() {
   const doToggle = e => { if (e) e.stopPropagation(); _questCollapsed = !_questCollapsed; panel.classList.toggle('collapsed', _questCollapsed); toggle.textContent = _questCollapsed ? '▸' : '▾'; };
   toggle.onclick = doToggle;
   head.onclick = e => { if (e.target !== toggle) doToggle(e); };   // click sull'header = comprimi/espandi
-  panel.querySelectorAll('.quest-task').forEach(el => el.onclick = e => { e.stopPropagation(); completeTask(q.id, +el.dataset.task); });
+  // In editor le task sono cliccabili (per testare); in PLAY no: si completano nel mondo
+  if (EDIT_MODE) panel.querySelectorAll('.quest-task').forEach(el => el.onclick = e => { e.stopPropagation(); completeTask(q.id, +el.dataset.task); });
 }
 function celebrateQuest(q) {
   const el = document.getElementById('quest-celebrate');
@@ -2162,6 +2279,7 @@ function persistGizmoTarget(obj) {
   if (obj.userData.isTeleportPart)     { saveTeleports();      return; }
   if (obj.userData.isEntrancePart)     { saveEntrances();      return; }
   if (obj.userData.isInteractablePart) { saveInteractables();  return; }
+  if (obj.userData.isQuestTriggerPart) { saveQuestTriggers();  return; }
   if (obj.userData.gizmoName) saveObjectPosition(obj.userData.gizmoName, obj);
 }
 
@@ -2391,10 +2509,12 @@ async function init() {
       isDragging = false;
       return;
     }
-    // Clic sull'icona ⚡ di una zona-trigger → completa la task (play + editor)
-    if (!dragMoved && e.target === renderer.domElement) {
+    // PLAY: clic sull'icona ⚡ di una zona-trigger → completa la task
+    if (!EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
       const qtr = pickQuestTrigger(e.clientX, e.clientY);
-      if (qtr) { completeTask(qtr.questId, qtr.taskId); isDragging = false; return; }
+      if (qtr && qtr.taskId) { completeTask(qtr.questId, qtr.taskId); isDragging = false; return; }
+      const ia = pickInteractableSprite(e.clientX, e.clientY);   // clic sull'icona ⊙ → interagisci
+      if (ia) { triggerSpatialIA(ia); isDragging = false; return; }
     }
     // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
     if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
@@ -3317,6 +3437,7 @@ function spatialPickEntries() {
   const entries = [];
   for (const ep of entrances)     entries.push({ group: ep.group,       row: ep.row });
   for (const ia of interactables) entries.push({ group: ia.group,       row: ia.row });
+  for (const tr of questTriggers)  entries.push({ group: tr.group,       row: tr.row });
   for (const tp of teleports) {
     entries.push({ group: tp.padGroup,    row: tp.row });
     entries.push({ group: tp.targetGroup, row: tp.row });
