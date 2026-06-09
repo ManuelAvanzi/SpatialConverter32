@@ -1,97 +1,87 @@
-# SpatialConverter32 — Sicurezza nel Cantiere
+# SpatialConverter — piattaforma web per laboratori 3D immersivi
 
-Strumento per convertire ambienti **Spatial.io + Unity** in viewer web **Three.js + WebXR**.
+Mini-piattaforma per convertire ambienti **Spatial.io + Unity** in laboratori web
+**Three.js + WebXR**, con redazione, editor visuale nel browser e modalità play.
 
-## Struttura progetto
+**Primo progetto**: *32 — Sicurezza nel cantiere e percezione del rischio*.
 
-```
-claudeSpatConverter/
-├── extract.js              Parser .unitypackage → scene.json
-├── merge_and_export.py     Blender: merge FBX → environment.glb
-├── build.js                Orchestratore completo
-├── blender-convert.py      Conversione singolo FBX
-├── convert_territorio.py   Script one-shot per TERRITORIO.fbx
-├── SceneExporter.cs        Unity Editor script OBJ exporter
-├── viewer/
-│   ├── index.html          Viewer Three.js + WebXR
-│   ├── fbx-converter.html  Converter browser-side
-│   ├── scene.json          Dati scena (interactable, quest, teleport)
-│   └── manifest.json       Lista modelli caricati
-└── .gitignore
-```
+🌐 **Live**: https://spatialconverter32-production.up.railway.app
 
-## Workflow per aggiungere pezzi di scena
+## Com'è fatta
 
-1. In Unity (con FBX Exporter installato): seleziona oggetti → `Assets → Export to FBX`
-   - Format: **Binary**, Include: **Model(s) + Animation**, Animated Skinned Mesh: ✓
-   - Export path: `claudeSpatConverter/viewer/models/`
+- **Redazione** (`/admin`): login, lista laboratori, nuovo/duplica/elimina progetto,
+  pubblica/bozza, download bundle ZIP giocabile, apri in Editor o Play.
+- **Editor** (`?project=<slug>&edit`): si costruisce la scena direttamente nel browser.
+- **Play** (`?project=<slug>`): l'utente naviga il laboratorio (desktop, mobile, visore VR).
+- **Backend** Express minimale: progetti salvati su **Cloudflare R2** (`_projects/<slug>.json`),
+  asset 3D su R2, nessun database.
 
-2. Da terminale (o chiedi a Claude):
-   ```bash
-   cd claudeSpatConverter
-   node merge_and_export.py   # oppure eseguito da Claude
-   ```
-   Blender converte tutti gli FBX in `viewer/models/` → `environment.glb`
+## Funzioni del viewer
 
-3. Ricarica `localhost:3003`
+### Navigazione
+- **Prima persona** (default): WASD + sprint (Shift) + salto/doppio salto (Space), drag-to-look.
+- **Terza persona** (🎥 / tasto **V**): avatar umanoide neutro (X Bot) con idle/walk/run,
+  posa di salto procedurale, follow-cam anti-muro. Colori avatar scelti in editor.
+- **VR (WebXR)**: locomozione con stick, teleport ad arco (grip), salto (A), snap-turn,
+  prompt 3D e checklist quest agganciata al controller sinistro.
+- **Mobile**: joystick touch.
+- **Vista aerea**: OrbitControls per l'editing dall'alto.
 
-## Avviare il viewer
+### Spatial features (editor, drag & drop o ＋)
+- **🌀 Teleport** — pad luminoso + destinazione (click-to-place).
+- **📍 Entrance Point** — spawn con direzione e raggio (random fra più entrance).
+- **👆 Interactable** — hotspot di prossimità: testo + tasto F / click sull'icona /
+  trigger VR → parte un'animazione.
+- **⚡ Trigger Quest** — zona walk-in (o click sull'icona) che completa una task.
+- **🧭 Quest** — missione con task editabili (nome, descrizione, aggiungi/rinomina/elimina);
+  checklist in stile Spatial con progresso salvato, coriandoli al completamento.
+- Click-to-select stile Unity: clicchi una feature nella scena → gizmo + coordinate + card.
+- Editor coordinate con drag-scrub e undo (Ctrl+Z), pannello luci con preset,
+  audio di sottofondo, mesh collider per i modelli statici, upload modelli nel progetto.
+- Sidebar a sezioni richiudibili con contatori; salvataggio sul server con 💾.
+
+### Import da Unity (Unity = fonte di verità)
+Script editor C# (in `Assets/Editor/` del progetto Unity, copie versionate qui):
+- `SpatialInteractableExporter.cs` → **Tools ▸ Esporta Interactable per il Web**
+- `SpatialQuestExporter.cs` → **Tools ▸ Esporta Quest per il Web** (quest + task + zone trigger)
+
+Il JSON esportato si importa dall'editor web (**🎮 Importa da Unity…**) con merge per `uid`:
+ri-esportare aggiorna le posizioni senza duplicare e senza perdere le modifiche manuali.
+Conversione assi Unity→Three: **X=-X, Y=Y, Z=+Z**.
+
+## Avvio in locale
 
 ```bash
-npx serve viewer/   # porta 3003
+npm install
+npm start            # server Express completo → http://localhost:3003
+# oppure solo statico:
+npx serve viewer -l 3003
 ```
 
-## Stato attuale (Giugno 2026)
+## Deploy
 
-### FBX importati con successo
-| File | Oggetti | Note |
-|------|---------|------|
-| TERRITORIO.fbx | 730 | Terreno + edifici principali |
-| Untitled.fbx | 319 | Pezzo scena aggiuntivo |
-| construction_scene.fbx | 129 | Scena cantiere |
-| rischio da macchinari in movimento.fbx | 116 | NPC + animazioni |
-| Sawing_03_FINAL2.fbx | 53 | NPC Biped |
-| Spade_01_FINAL2.fbx | 50 | NPC Biped |
-| Spade_02_FINAL2.fbx | 50 | NPC Biped |
+Architettura **engine + contenuto** (vedi `DEPLOY.md`):
+- **Engine** = questo repo (viewer + server) → **Railway**, auto-deploy su push.
+- **Contenuto** = modelli su **R2** (bucket `immersivelab-assets`, prefisso per progetto)
+  + scene-config per progetto su R2.
+- Env var principali: `R2_*`, `EDITOR_PASSWORD`, `JWT_SECRET`, `ASSET_BASE`.
+- Script: `npm run manifest` (rigenera models.json), `npm run upload` (asset → R2),
+  `npm run seed` (importa scene-config.json come progetto).
 
-**Totale:** 668 mesh · 613 animazioni · ~100 MB GLB
+## Pipeline contenuti 3D
 
-### Interactable (da scene.json)
-15 oggetti interattivi con clip animate:
-- `fallingObj` → Rischio caduta materiali
-- `slipping` → Rischio scivolamento
-- `Anim02` → Rischio caduta dall'alto
-- `Crollo`, `falling` → Rischio crollo
-- `Electric` → Scarica elettrica
-- `macchinariInMov` → Rischio macchinari
-- `scala` → Lavori in quota
-- `DoorOpen` → Personale autorizzato
-
-### Cosa manca
-- [ ] Restanti NPC animati (Sawing, Roll_paint, Hand_Drill, Hammer, ecc.)
-- [ ] Texture originali collegate (ora le mesh le hanno embedded)
-- [ ] Posizionamento camera iniziale ottimale
-- [ ] Test WebXR su visore
+- **Scena statica**: FBX da Unity (FBX Exporter) → Blender `merge_and_export.py` →
+  `environment.glb`.
+- **Personaggi animati**: export **direttamente da Unity in glTF** con UnityGLTF
+  (la pipeline Blender corrompe i rig Biped — vedi note in `CLAUDE`/memoria).
+  Prima dell'export, fondere i multi-SkinnedMeshRenderer con `SkinnedMeshCombiner.cs`
+  (**Tools ▸ Combina Skinned Mesh**).
+- I file pesanti **non stanno nel repo** (`.gitignore`): vanno su R2 (`npm run upload`).
+- Avatar terza persona: `viewer/avatar/Xbot.glb` (~3 MB, nel repo, lazy load).
 
 ## Note tecniche
 
-### Bug Blender risolti
-- **FBX v6100** (vecchi file originali Unity): non supportato da Blender/Three.js → soluzione: esportare da Unity con FBX Exporter (genera v7400)
-- **Biped rig KeyError** (Bip01_Pelvis): patch runtime su `FbxImportHelperNode.link_hierarchy` in `merge_and_export.py`
-- **Texture path con ".."**: patch su `bpy.path.resolve_ncase`
-
-### Navigazione viewer
-- **Drag sinistro**: ruota vista
-- **WASD**: movimento FPS
-- **Click**: interagisce con hotspot
-- **Vista aerea**: OrbitControls stile Blender (drag=ruota, scroll=zoom, drag destro=pan)
-
-### Unity setup
-- Unity 2021.3.21f1
-- Spatial Unity SDK 1.71.0
-- FBX Exporter (Unity Registry)
-- UnityGLTF 2.19.5 (installato ma con errori Visual Scripting — non usare)
-
-## Repo modelli
-I file FBX e GLB NON sono nel repo (troppo grandi).
-Path locale: `C:\Users\manue\Downloads\EX-SPATIAL\32 sicurezza nel cantiere e percezione del rischio\claudeSpatConverter\viewer\models\`
+- Unity 2021.3.21f1 · Spatial SDK 1.71.0 · UnityGLTF · Blender 4.2 (con patch Biped).
+- Three.js via CDN (import map), WebXR per la VR.
+- Modalità play: localStorage ignorato → l'utente vede sempre la scena pubblicata;
+  in editor localStorage è la copia di lavoro, 💾 salva sul server.
