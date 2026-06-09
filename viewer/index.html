@@ -1403,18 +1403,44 @@ function applySpawn() {
 }
 
 // ─── Interactable: visual + prossimità + trigger animazione ──────────────────
+// Icona "touch" (mano che preme, stile Material touch_app) — path SVG 24×24
+const _TOUCH_PATH = 'M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6C13 6.67 12.33 6 11.5 6S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.92-1.38z';
+const _touchPath2D = new Path2D(_TOUCH_PATH);
+// Disegna il dischetto: anello (ringColor) con eventuale alone (glow) + mano bianca al centro
+function drawTouchIcon(ctx, ringColor, glow) {
+  ctx.clearRect(0, 0, 256, 256);
+  ctx.beginPath(); ctx.arc(128, 128, 100, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill();
+  if (glow > 0) { ctx.save(); ctx.shadowColor = ringColor; ctx.shadowBlur = glow; ctx.strokeStyle = ringColor; ctx.lineWidth = 9; ctx.stroke(); ctx.stroke(); ctx.restore(); }
+  ctx.strokeStyle = ringColor; ctx.lineWidth = 9; ctx.stroke();
+  ctx.save();
+  ctx.translate(128, 131); ctx.scale(6, 6); ctx.translate(-12, -12);
+  ctx.fillStyle = '#fff'; ctx.fill(_touchPath2D);
+  ctx.restore();
+}
 function makeHandSprite() {
   const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
   const ctx = canvas.getContext('2d');
-  ctx.beginPath(); ctx.arc(128, 128, 100, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 8; ctx.stroke();
-  ctx.font = 'bold 120px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fff'; ctx.fillText('☝', 128, 145);
+  drawTouchIcon(ctx, 'rgba(255,255,255,0.92)', 0);
   const tex = new THREE.CanvasTexture(canvas);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
   sp.scale.set(0.7, 0.7, 0.7);
+  // Permette di ridisegnare l'anello (colore + alone) per l'effetto al trigger
+  sp.userData.redraw = (color, glow) => { drawTouchIcon(ctx, color, glow); tex.needsUpdate = true; };
   return sp;
+}
+// Effetto "shader" al trigger: l'anello bianco lampeggia azzurro con alone pulsante e poi torna bianco
+function pulseInteractableSprite(sp) {
+  if (!sp || !sp.userData.redraw) return;
+  const DUR = 950, start = performance.now();
+  (function step() {
+    const t = (performance.now() - start) / DUR;
+    if (t >= 1) { sp.userData.redraw('rgba(255,255,255,0.92)', 0); return; }
+    const env  = 1 - t;                                   // decadimento
+    const glow = 34 * env * (0.55 + 0.45 * Math.cos(t * Math.PI * 5)); // alone pulsante
+    sp.userData.redraw('#4ac8ff', Math.max(0, glow));
+    requestAnimationFrame(step);
+  })();
 }
 
 function createInteractableVisual(radius) {
@@ -1597,7 +1623,7 @@ function checkSpatialInteractables() {
 function triggerSpatialIA(ia) {
   if (!ia) return;
   if (ia.anim) playInteractableAnim(ia.anim);
-  showNotification(`▶ ${ia.text || 'Interazione'}`);
+  pulseInteractableSprite(ia.group.userData.sprite);   // l'anello lampeggia azzurro (niente popup)
 }
 
 function playInteractableAnim(name) {
