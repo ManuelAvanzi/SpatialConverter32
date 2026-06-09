@@ -109,6 +109,44 @@
       color: #d7c4ff; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
       font-weight: 600; margin-bottom: 8px; transition: background .15s; }
     .import-unity-btn:hover { background: rgba(180,120,255,.32); }
+    /* Lista quest nel pannello editor */
+    .quest-card { background: rgba(74,158,255,.07); border: 1px solid rgba(74,158,255,.25); border-radius: 10px; padding: 9px 11px; margin-bottom: 8px; }
+    .quest-card-head { display: flex; align-items: center; gap: 8px; }
+    .quest-card-head .model-name { flex: 1; font-weight: 600; }
+    .quest-card .quest-count { font-size: .72rem; color: #9fb4d4; }
+    .reset-quest-btn { width: 26px; height: 24px; border-radius: 7px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #c5cad4; cursor: pointer; }
+    .reset-quest-btn:hover { background: rgba(74,158,255,.3); color: #fff; }
+    .quest-card-tasks { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+    .quest-card-task { font-size: .76rem; color: #cdd6e6; padding-left: 2px; }
+
+    /* Quest checklist runtime (play) — in basso a sinistra come in Spatial */
+    #quest-panel { position: fixed; left: 16px; bottom: 16px; width: 270px; max-height: 56vh; overflow-y: auto;
+      background: rgba(12,16,24,.86); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px; padding: 12px 14px; z-index: 47; color: #eef2f8; display: none;
+      box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+    #quest-panel.collapsed .quest-desc, #quest-panel.collapsed .quest-tasks { display: none; }
+    #quest-panel.collapsed .quest-toggle { transform: rotate(-90deg); }
+    .quest-head { display: flex; align-items: center; gap: 8px; }
+    .quest-title { flex: 1; font-weight: 700; font-size: .95rem; }
+    #quest-panel .quest-count { font-size: .78rem; color: #7fd0ff; font-weight: 600; }
+    .quest-toggle { background: none; border: none; color: #aeb8c8; font-size: .9rem; cursor: pointer; transition: transform .15s; }
+    .quest-desc { font-size: .76rem; color: #aab6c8; margin: 6px 0 8px; line-height: 1.35; }
+    .quest-tasks { display: flex; flex-direction: column; gap: 4px; }
+    .quest-task { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,.04); transition: background .12s; font-size: .84rem; }
+    .quest-task:hover { background: rgba(74,158,255,.16); }
+    .qt-check { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 5px; border: 1.5px solid rgba(255,255,255,.35);
+      display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; color: #06122a; }
+    .quest-task.done .qt-check { background: #4aff8a; border-color: #4aff8a; }
+    .quest-task.done .qt-name { text-decoration: line-through; color: #8b97a8; }
+
+    /* Celebrazione quest completata + coriandoli */
+    #quest-celebrate { position: fixed; inset: 0; pointer-events: none; z-index: 60; display: flex; align-items: flex-start; justify-content: center; opacity: 0; transition: opacity .3s; overflow: hidden; }
+    #quest-celebrate.show { opacity: 1; }
+    #quest-celebrate .qc-text { margin-top: 16vh; background: rgba(12,16,24,.9); color: #fff; font-weight: 700; font-size: 1.2rem;
+      padding: 14px 26px; border-radius: 14px; border: 1px solid rgba(74,255,138,.5); box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+    .confetto { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; opacity: .95; animation: confettiFall 3.2s linear forwards; }
+    @keyframes confettiFall { to { transform: translateY(110vh) rotate(540deg); opacity: .9; } }
 
     /* Modalità PLAY: nascondi tutti gli strumenti da editor */
     body.play-mode #btn-models,
@@ -489,6 +527,10 @@
 <div id="notification"></div>
 <div id="place-banner"></div>
 
+<!-- Quest checklist (solo in play) -->
+<div id="quest-panel"></div>
+<div id="quest-celebrate"><div class="qc-text"></div></div>
+
 <!-- Overlay progresso upload -->
 <div id="upload-overlay">
   <div class="uo-box">
@@ -527,9 +569,11 @@
     <h3 style="margin-top:14px">Entrance Points</h3>
     <div id="entrance-list"></div>
     <h3 style="margin-top:14px">Interactable</h3>
-    <button id="btn-import-unity" class="import-unity-btn" title="Importa gli interactable esportati da Unity (file JSON)">🎮 Importa da Unity…</button>
+    <button id="btn-import-unity" class="import-unity-btn" title="Importa interactable e quest esportati da Unity (file JSON)">🎮 Importa da Unity…</button>
     <input id="import-unity-input" type="file" accept="application/json,.json" style="display:none">
     <div id="interactable-list"></div>
+    <h3 style="margin-top:14px">Quest</h3>
+    <div id="quest-list"></div>
   </div>
 </div>
 
@@ -1467,7 +1511,7 @@ function nextInteractableId() {
   return Math.max(m, _iaSeq) + 1;
 }
 
-function addInteractable(posArr, text, radius, anim, showRing, id, save, uid) {
+function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, taskLink) {
   if (id == null) id = nextInteractableId();
   _iaSeq = Math.max(_iaSeq, id);
   radius = radius || 3;
@@ -1477,7 +1521,7 @@ function addInteractable(posArr, text, radius, anim, showRing, id, save, uid) {
   group.userData.gizmoName = `Interagibile ${id}`;
   group.userData.ring.visible = showRing;
   scene.add(group);
-  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, row: null };
+  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
   if (save) saveInteractables();
@@ -1504,6 +1548,7 @@ function saveInteractables() {
     pos: ia.group.position.toArray().map(v => +v.toFixed(3)),
     text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '', showRing: ia.showRing !== false,
     ...(ia.uid ? { uid: ia.uid } : {}),
+    ...(ia.taskLink ? { taskLink: ia.taskLink } : {}),
   }));
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
 }
@@ -1531,9 +1576,8 @@ function findAnimByName(hint) {
   }
   return best;
 }
-function importInteractablesFromUnity(payload) {
-  const list = Array.isArray(payload) ? payload : (payload && payload.interactables);
-  if (!Array.isArray(list) || !list.length) { showNotification('⚠️ Nessun interactable nel file'); return; }
+function importInteractablesFromUnity(list) {
+  if (!Array.isArray(list) || !list.length) return null;
   let added = 0, updated = 0, skipped = 0;
   for (const it of list) {
     if (!it || !Array.isArray(it.pos)) { skipped++; continue; }
@@ -1548,17 +1592,57 @@ function importInteractablesFromUnity(payload) {
       existing.text = text; existing.radius = radius;
       existing.group.userData.ring.scale.setScalar(radius);
       if (!existing.anim) existing.anim = it.anim || findAnimByName(animHint);
+      if (it.taskLink) existing.taskLink = it.taskLink;
       updated++;
     } else {
       const anim = it.anim || findAnimByName(animHint);
-      addInteractable(it.pos, text, radius, anim, it.showRing !== false, null, false, uid);
+      addInteractable(it.pos, text, radius, anim, it.showRing !== false, null, false, uid, it.taskLink);
       added++;
     }
   }
-  // ricostruisci le card e salva
   rebuildInteractableList();
   saveInteractables();
-  showNotification(`🎮 Import Unity: ${added} nuovi, ${updated} aggiornati${skipped ? ', ' + skipped + ' saltati' : ''}`);
+  return { added, updated, skipped };
+}
+// Applica i link interactable→task. Match per uid esatto, oppure per ultimo
+// segmento del path (nome del GameObject), così è robusto a path diversi.
+function applyTaskLinks(links) {
+  if (!Array.isArray(links) || !links.length) return 0;
+  const leaf = s => String(s || '').split('/').pop();
+  let n = 0;
+  for (const l of links) {
+    const ia = interactables.find(x => x.uid === l.uid)
+            || interactables.find(x => x.uid && leaf(x.uid) === leaf(l.uid));
+    if (ia) { ia.taskLink = { questId: l.questId, taskId: l.taskId, type: l.type || 4 }; n++; }
+  }
+  if (n) saveInteractables();
+  return n;
+}
+// Importa le zone-trigger della quest (camminandoci dentro si completa la task).
+// Le posizioni sono già in coordinate Three. Default radius comodo da camminata.
+function applyTaskTriggers(list) {
+  if (!Array.isArray(list) || !list.length) return 0;
+  questTriggers.length = 0;
+  for (const tr of list) {
+    if (!Array.isArray(tr.pos)) continue;
+    questTriggers.push({ questId: tr.questId, taskId: tr.taskId, name: tr.name || '',
+      pos: [tr.pos[0], tr.pos[1] || 0, tr.pos[2]], radius: tr.radius || QUEST_TRIGGER_R, entered: false });
+  }
+  saveQuestTriggers();
+  rebuildQuestTriggerVisuals();
+  return questTriggers.length;
+}
+// Orchestratore: il file può contenere interactables e/o quests e/o links/triggers
+function importFromUnity(payload) {
+  const ia = importInteractablesFromUnity(Array.isArray(payload) ? payload : payload.interactables);
+  const nQ = importQuestsFromUnity(payload.quests);
+  const nL = applyTaskLinks(payload.links) + applyTaskTriggers(payload.taskTriggers);
+  renderQuestEditorList();
+  const parts = [];
+  if (ia) parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`);
+  if (nQ) parts.push(`${nQ} quest`);
+  if (nL) parts.push(`${nL} zone task`);
+  showNotification(parts.length ? `🎮 Import Unity — ${parts.join(' · ')}` : '⚠️ Niente da importare nel file');
 }
 // Ricostruisce le righe del pannello dagli oggetti correnti (dopo un import)
 function rebuildInteractableList() {
@@ -1572,10 +1656,200 @@ function handleUnityImportFile(ev) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    try { importInteractablesFromUnity(JSON.parse(reader.result)); }
+    try { importFromUnity(JSON.parse(reader.result)); }
     catch (e) { console.error(e); showNotification('❌ File non valido (JSON atteso)'); }
   };
   reader.readAsText(file);
+}
+
+// ─── Quest (Spatial Quest): stato, persistenza, runtime, UI ─────────────────
+function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function makeQuestObj(def) {
+  return {
+    id: def.id, name: def.name || 'Quest', description: def.description || '',
+    tasksAreOrdered: !!def.tasksAreOrdered, startAutomatically: !!def.startAutomatically,
+    saveUserProgress: def.saveUserProgress !== false, celebrateOnComplete: def.celebrateOnComplete !== false,
+    tasks: (def.tasks || []).map(t => ({ id: t.id, name: t.name || 'Task', type: t.type | 0, progressSteps: t.progressSteps || 1 })),
+    started: false, done: new Set(),
+  };
+}
+function loadQuestDefs() {
+  if (EDIT_MODE) {
+    const ls = localStorage.getItem(QUEST_STORE_KEY);
+    if (ls) { try { return JSON.parse(ls); } catch {} }
+  }
+  return SCENE_CONFIG.quests || [];
+}
+function questDefArray() {
+  return quests.map(q => ({
+    id: q.id, name: q.name, description: q.description,
+    tasksAreOrdered: q.tasksAreOrdered, startAutomatically: q.startAutomatically,
+    saveUserProgress: q.saveUserProgress, celebrateOnComplete: q.celebrateOnComplete,
+    tasks: q.tasks.map(t => ({ id: t.id, name: t.name, type: t.type, progressSteps: t.progressSteps })),
+  }));
+}
+function saveQuestDefs() { localStorage.setItem(QUEST_STORE_KEY, JSON.stringify(questDefArray())); }
+function loadQuestProgress() { try { return JSON.parse(localStorage.getItem(QUEST_PROGRESS_KEY)) || {}; } catch { return {}; } }
+function saveQuestProgress() {
+  const out = {};
+  for (const q of quests) if (q.saveUserProgress) out[q.id] = [...q.done];
+  localStorage.setItem(QUEST_PROGRESS_KEY, JSON.stringify(out));
+}
+function questTriggerDefArray() {
+  return questTriggers.map(t => ({ questId: t.questId, taskId: t.taskId, name: t.name, pos: t.pos, radius: t.radius }));
+}
+function saveQuestTriggers() { localStorage.setItem(QUEST_TRIG_KEY, JSON.stringify(questTriggerDefArray())); }
+function loadQuestTriggerDefs() {
+  if (EDIT_MODE) { const ls = localStorage.getItem(QUEST_TRIG_KEY); if (ls) { try { return JSON.parse(ls); } catch {} } }
+  return SCENE_CONFIG.taskTriggers || [];
+}
+function loadQuests() {
+  quests.length = 0;
+  for (const def of loadQuestDefs()) quests.push(makeQuestObj(def));
+  const prog = EDIT_MODE ? {} : loadQuestProgress();   // in editor si parte puliti (per testare)
+  for (const q of quests) {
+    const saved = prog[q.id];
+    if (Array.isArray(saved)) saved.forEach(id => q.done.add(id));
+    if (q.done.size || q.startAutomatically) q.started = true;
+  }
+  // zone-trigger delle task
+  questTriggers.length = 0;
+  for (const t of loadQuestTriggerDefs())
+    questTriggers.push({ questId: t.questId, taskId: t.taskId, name: t.name || '', pos: t.pos, radius: t.radius || QUEST_TRIGGER_R, entered: false });
+  rebuildQuestTriggerVisuals();
+  renderQuestPanel();
+  renderQuestEditorList();
+}
+// Anelli verdi delle zone-trigger (solo in editor, aiuto al posizionamento)
+let _questTrigGroup = null;
+function rebuildQuestTriggerVisuals() {
+  if (_questTrigGroup) {
+    scene.remove(_questTrigGroup);
+    _questTrigGroup.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+  }
+  _questTrigGroup = new THREE.Group();
+  _questTrigGroup.visible = EDIT_MODE;
+  for (const tr of questTriggers) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 8, 40),
+      new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.45, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2; ring.scale.setScalar(tr.radius);
+    ring.position.set(tr.pos[0], (tr.pos[1] || 0) + 0.05, tr.pos[2]);
+    _questTrigGroup.add(ring);
+  }
+  scene.add(_questTrigGroup);
+}
+// Prossimità alle zone-trigger: camminandoci dentro si completa la task
+function checkQuestTriggers() {
+  if (!questTriggers.length) return;
+  const pw = playerWorld();
+  for (const tr of questTriggers) {
+    const q = questById(tr.questId);
+    if (q && q.done.has(tr.taskId)) { tr.entered = true; continue; }   // già fatta
+    const dx = pw.x - tr.pos[0], dz = pw.z - tr.pos[2], dy = pw.y - tr.pos[1];
+    const inside = (dx * dx + dz * dz + dy * dy) < tr.radius * tr.radius;
+    if (inside && !tr.entered) { tr.entered = true; completeTask(tr.questId, tr.taskId); }
+    else if (!inside) tr.entered = false;
+  }
+}
+function importQuestsFromUnity(list) {
+  if (!Array.isArray(list) || !list.length) return 0;
+  for (const def of list) {
+    const obj = makeQuestObj(def);
+    const i = quests.findIndex(q => q.id === obj.id);
+    if (i !== -1) { obj.started = quests[i].started; obj.done = quests[i].done; quests[i] = obj; }  // preserva progresso
+    else quests.push(obj);
+  }
+  saveQuestDefs();
+  renderQuestPanel();
+  renderQuestEditorList();
+  return list.length;
+}
+function questById(id) { return quests.find(q => q.id === id); }
+function startQuest(q) { if (q && !q.started) { q.started = true; renderQuestPanel(); } }
+function completeTask(questId, taskId) {
+  const q = questById(questId); if (!q) return;
+  const t = q.tasks.find(x => x.id === taskId); if (!t) return;
+  startQuest(q);
+  if (q.done.has(taskId)) return;
+  q.done.add(taskId);
+  saveQuestProgress();
+  renderQuestPanel();
+  const complete = q.tasks.length && q.done.size >= q.tasks.length;
+  if (complete && q.celebrateOnComplete) celebrateQuest(q);
+  else showNotification(`✅ ${t.name}`);
+}
+function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); renderQuestPanel(); renderQuestEditorList(); }
+
+// ── UI checklist (play) ──
+function renderQuestPanel() {
+  const panel = document.getElementById('quest-panel');
+  if (!panel) return;
+  const active = quests.filter(q => q.tasks.length);
+  if (!active.length) { panel.style.display = 'none'; return; }   // mostra in play e in editor (anteprima)
+  const q = active.find(x => x.started) || active[0];
+  const doneN = q.done.size, totN = q.tasks.length;
+  let html = `<div class="quest-head"><span class="quest-title">${escHtml(q.name)}</span>`
+           + `<span class="quest-count">${doneN}/${totN}</span>`
+           + `<button class="quest-toggle" title="Comprimi/espandi">▾</button></div>`;
+  if (q.description) html += `<div class="quest-desc">${escHtml(q.description)}</div>`;
+  html += `<div class="quest-tasks">`;
+  for (const t of q.tasks) {
+    const done = q.done.has(t.id);
+    html += `<div class="quest-task${done ? ' done' : ''}" data-task="${t.id}">`
+          + `<span class="qt-check">${done ? '✓' : ''}</span><span class="qt-name">${escHtml(t.name)}</span></div>`;
+  }
+  html += `</div>`;
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+  panel.querySelector('.quest-toggle').onclick = e => { e.stopPropagation(); panel.classList.toggle('collapsed'); };
+  panel.querySelectorAll('.quest-task').forEach(el => el.onclick = () => completeTask(q.id, +el.dataset.task));
+}
+function celebrateQuest(q) {
+  const el = document.getElementById('quest-celebrate');
+  if (el) {
+    el.querySelector('.qc-text').textContent = `🎉 ${q.name} completata!`;
+    el.classList.add('show');
+    clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3500);
+    spawnConfetti();
+  }
+  renderQuestPanel();
+}
+function spawnConfetti() {
+  const host = document.getElementById('quest-celebrate'); if (!host) return;
+  const cols = ['#4a9eff', '#4aff8a', '#ffb84a', '#ff5a8a', '#b478ff', '#ffe14a'];
+  for (let i = 0; i < 80; i++) {
+    const c = document.createElement('i'); c.className = 'confetto';
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.background = cols[i % cols.length];
+    c.style.animationDelay = (Math.random() * 0.5) + 's';
+    c.style.transform = `rotate(${Math.random() * 360}deg)`;
+    host.appendChild(c);
+    setTimeout(() => c.remove(), 3500);
+  }
+}
+
+// ── Lista quest nel pannello editor (tab Spatial) ──
+function renderQuestEditorList() {
+  const list = document.getElementById('quest-list');
+  if (!list) return;
+  if (!quests.length) { list.innerHTML = `<div class="sf-hint">Nessuna quest. Esporta da Unity e importa col pulsante sopra.</div>`; return; }
+  let html = '';
+  for (const q of quests) {
+    const nZones = questTriggers.filter(t => t.questId === q.id).length;
+    html += `<div class="quest-card"><div class="quest-card-head">`
+          + `<span class="model-name">🧭 ${escHtml(q.name)}</span>`
+          + `<span class="quest-count">${q.tasks.length} task · ${nZones} zone</span>`
+          + `<button class="reset-quest-btn" data-q="${q.id}" title="Azzera progresso">↻</button></div>`;
+    html += `<div class="quest-card-tasks">`;
+    for (const t of q.tasks) {
+      const zoned = questTriggers.some(z => z.questId === q.id && z.taskId === t.id);
+      const done = q.done.has(t.id);
+      html += `<div class="quest-card-task">${done ? '✓' : (zoned ? '📍' : '○')} ${escHtml(t.name)}</div>`;
+    }
+    html += `</div></div>`;
+  }
+  list.innerHTML = html;
+  list.querySelectorAll('.reset-quest-btn').forEach(b => b.onclick = e => { e.stopPropagation(); resetQuest(questById(+b.dataset.q)); });
 }
 
 // Opzioni animazione = personaggi glTF caricati
@@ -1694,6 +1968,7 @@ function triggerSpatialIA(ia) {
   if (!ia) return;
   if (ia.anim) playInteractableAnim(ia.anim);
   pulseInteractableSprite(ia.group.userData.sprite);   // l'anello lampeggia azzurro (niente popup)
+  if (ia.taskLink) completeTask(ia.taskLink.questId, ia.taskLink.taskId);  // spunta la task collegata
 }
 
 function playInteractableAnim(name) {
@@ -1815,9 +2090,17 @@ let   _epSeq = 0;
 
 // ─── Interactable (Spatial Interactable) ────────────────────────────────────
 const IA_STORE_KEY = 'sc32-interactables' + _KP; // [{id, pos, text, radius, anim}]
-const interactables = [];                // {id, group, text, radius, anim, row}
+const interactables = [];                // {id, group, text, radius, anim, taskLink, row}
 let   _iaSeq = 0;
 let   currentSpatialIA = null;           // interactable attualmente vicino (prompt attivo)
+
+// ─── Quest (Spatial Quest) ──────────────────────────────────────────────────
+const QUEST_STORE_KEY = 'sc32-quests' + _KP;          // definizioni quest (editor)
+const QUEST_PROGRESS_KEY = 'sc32-quest-progress' + _KP; // {questId: [taskId completati]}
+const QUEST_TRIG_KEY = 'sc32-quest-triggers' + _KP;   // zone-trigger delle task
+const QUEST_TRIGGER_R = 2.5;                          // raggio zona di default (m)
+const quests = [];   // {id, name, description, tasksAreOrdered, startAutomatically, saveUserProgress, celebrateOnComplete, tasks:[{id,name,type,progressSteps}], started, done:Set}
+const questTriggers = [];   // {questId, taskId, name, pos:[x,y,z], radius, entered}
 let   _draggingFeature = null;           // feature in drag dalla palette
 let   placingTarget = null;              // teleport in modalità "clicca per posizionare destinazione"
 const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -2373,7 +2656,8 @@ async function loadScene() {
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
-  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid);
+  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid, ia.taskLink);
+  loadQuests();
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
   applyLighting(SCENE_CONFIG.lighting);
@@ -3251,6 +3535,8 @@ function buildSceneConfigObject() {
     teleports:     loadSavedTeleports(),
     entrances:     loadSavedEntrances(),
     interactables: loadSavedInteractables(),
+    quests:        questDefArray(),
+    taskTriggers:  questTriggerDefArray(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
   };
@@ -3858,6 +4144,7 @@ function animate(timestamp, frame) {
   // Prompt interactable per prossimità — in FPS o VR (non in vista aerea)
   if (cameraMode === 'fps' || renderer.xr.isPresenting) checkSpatialInteractables();
   else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
+  checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
 
   // Aggiorna HUD coordinate camera
   const hud = document.getElementById('cam-hud');
