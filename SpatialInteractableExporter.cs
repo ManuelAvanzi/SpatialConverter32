@@ -4,7 +4,7 @@
 //
 // Uso: Tools ▸ Esporta Interactable per il Web
 //
-// Mappa: posizione world (con conversione assi Unity→Three: X=-X, Y=Y, Z=-Z),
+// Mappa: posizione world (conversione assi Unity→Three: X=-X, Y=Y, Z=+Z),
 // interactText → text, interactiveRadius → radius, visibilityRadius, iconType.
 // L'animazione (anim) resta vuota: nel viewer viene auto-assegnata per nome
 // oppure la scegli a mano nel menu. Il merge in import avviene per "uid"
@@ -49,8 +49,9 @@ public static class SpatialInteractableExporter
             var t = it.transform;
             Vector3 p = t.position;
 
-            // Conversione assi Unity → Three.js
-            float tx = -p.x, ty = p.y, tz = -p.z;
+            // Conversione assi Unity → Three.js (verificata empiricamente sugli
+            // interactable già piazzati a mano: solo la X va invertita, la Z NO).
+            float tx = -p.x, ty = p.y, tz = p.z;
 
             string uid = HierarchyPath(t);   // stabile e unico nella scena
             string name = it.gameObject.name;
