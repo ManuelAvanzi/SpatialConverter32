@@ -119,26 +119,37 @@
     .quest-card-tasks { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
     .quest-card-task { font-size: .76rem; color: #cdd6e6; padding-left: 2px; }
 
-    /* Quest checklist runtime (play) — in basso a sinistra come in Spatial */
-    #quest-panel { position: fixed; left: 16px; bottom: 16px; width: 270px; max-height: 56vh; overflow-y: auto;
-      background: rgba(12,16,24,.86); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.12);
-      border-radius: 14px; padding: 12px 14px; z-index: 47; color: #eef2f8; display: none;
-      box-shadow: 0 8px 30px rgba(0,0,0,.45); }
-    #quest-panel.collapsed .quest-desc, #quest-panel.collapsed .quest-tasks { display: none; }
-    #quest-panel.collapsed .quest-toggle { transform: rotate(-90deg); }
-    .quest-head { display: flex; align-items: center; gap: 8px; }
-    .quest-title { flex: 1; font-weight: 700; font-size: .95rem; }
-    #quest-panel .quest-count { font-size: .78rem; color: #7fd0ff; font-weight: 600; }
-    .quest-toggle { background: none; border: none; color: #aeb8c8; font-size: .9rem; cursor: pointer; transition: transform .15s; }
-    .quest-desc { font-size: .76rem; color: #aab6c8; margin: 6px 0 8px; line-height: 1.35; }
+    /* Quest checklist runtime (play + anteprima editor) — in basso a sinistra */
+    #quest-checklist { position: fixed; left: 16px; bottom: 16px; width: 290px; z-index: 47; color: #eef2f8; display: none;
+      background: linear-gradient(180deg, rgba(18,24,34,.92), rgba(12,16,24,.92)); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 12px 14px;
+      box-shadow: 0 12px 38px rgba(0,0,0,.5); transition: width .18s ease; }
+    /* Header */
+    .quest-head { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .quest-titles { flex: 1; min-width: 0; }
+    .quest-eyebrow { font-size: .62rem; font-weight: 700; letter-spacing: .12em; color: #5fb0ff; text-transform: uppercase; }
+    .quest-title { font-weight: 700; font-size: 1rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #quest-checklist .quest-count { font-size: .78rem; color: #7fd0ff; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: rgba(74,158,255,.16); border: 1px solid rgba(74,158,255,.3); white-space: nowrap; }
+    #quest-checklist .quest-count.done { color: #8effb4; background: rgba(74,255,138,.16); border-color: rgba(74,255,138,.35); }
+    .quest-toggle { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #cdd6e6;
+      width: 24px; height: 24px; border-radius: 7px; font-size: .8rem; cursor: pointer; flex: 0 0 24px; line-height: 1; }
+    .quest-toggle:hover { background: rgba(74,158,255,.3); color: #fff; }
+    /* Body (comprimibile) */
+    .quest-body { overflow: hidden; max-height: 52vh; overflow-y: auto; margin-top: 10px; }
+    #quest-checklist.collapsed { width: 250px; }
+    #quest-checklist.collapsed .quest-body { display: none; }
+    .quest-desc { font-size: .76rem; color: #aeb9cb; margin: 0 0 9px; line-height: 1.4; }
+    .quest-progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; margin: 0 0 10px; }
+    .quest-progress-fill { height: 100%; background: linear-gradient(90deg, #4a9eff, #4aff8a); border-radius: 999px; transition: width .35s ease; }
     .quest-tasks { display: flex; flex-direction: column; gap: 4px; }
-    .quest-task { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 8px; cursor: pointer;
-      background: rgba(255,255,255,.04); transition: background .12s; font-size: .84rem; }
+    .quest-task { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 9px; cursor: pointer;
+      background: rgba(255,255,255,.04); transition: background .12s; font-size: .85rem; }
     .quest-task:hover { background: rgba(74,158,255,.16); }
-    .qt-check { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 5px; border: 1.5px solid rgba(255,255,255,.35);
-      display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; color: #06122a; }
+    .qt-check { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 6px; border: 1.5px solid rgba(255,255,255,.32);
+      display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; color: #06210f; font-weight: 700; transition: all .15s; }
     .quest-task.done .qt-check { background: #4aff8a; border-color: #4aff8a; }
-    .quest-task.done .qt-name { text-decoration: line-through; color: #8b97a8; }
+    .quest-task.done .qt-name { text-decoration: line-through; color: #7e8a9c; }
 
     /* Celebrazione quest completata + coriandoli */
     #quest-celebrate { position: fixed; inset: 0; pointer-events: none; z-index: 60; display: flex; align-items: flex-start; justify-content: center; opacity: 0; transition: opacity .3s; overflow: hidden; }
@@ -527,8 +538,8 @@
 <div id="notification"></div>
 <div id="place-banner"></div>
 
-<!-- Quest checklist (solo in play) -->
-<div id="quest-panel"></div>
+<!-- Quest checklist (play + anteprima editor) -->
+<div id="quest-checklist"></div>
 <div id="quest-celebrate"><div class="qc-text"></div></div>
 
 <!-- Overlay progresso upload -->
@@ -539,7 +550,7 @@
     <div class="uo-pct" id="uo-pct">0%</div>
   </div>
 </div>
-<div id="quest-panel">
+<div id="quest-panel" style="display:none">
   <h3>Missione attiva</h3>
   <div id="quest-title"></div>
   <div id="quest-progress"></div>
@@ -1287,6 +1298,7 @@ function createEntranceVisual(radius) {
     new THREE.TorusGeometry(1, 0.04, 8, 48),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8, blending: add, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.scale.setScalar(radius);
+  ring.visible = false;   // anello raggio visibile solo quando l'entrance è selezionato
   group.add(ring); group.userData.ring = ring;
 
   // Disco tenue
@@ -1294,6 +1306,7 @@ function createEntranceVisual(radius) {
     new THREE.CircleGeometry(1, 40),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.12, blending: add, depthWrite: false, side: THREE.DoubleSide }));
   disc.rotation.x = -Math.PI / 2; disc.position.y = 0.02; disc.scale.setScalar(radius);
+  disc.visible = false;
   group.add(disc); group.userData.disc = disc;
 
   // Pin: palo + testa
@@ -1493,12 +1506,39 @@ function pulseInteractableSprite(sp) {
   })();
 }
 
+// Icona ⚡ per le zone-trigger della quest (stile Spatial Trigger Event, non identica):
+// fulmine giallo su quadrato arrotondato scuro con bordo verde.
+const _BOLT_PATH = 'M7 2v11h3v9l7-12h-4l4-8z';
+const _boltPath2D = new Path2D(_BOLT_PATH);
+function makeBoltSprite() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  // quadrato arrotondato scuro
+  const r = 56, x = 28, y = 28, w = 200, h = 200;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  ctx.fillStyle = 'rgba(8,14,10,0.82)'; ctx.fill();
+  ctx.lineWidth = 9; ctx.strokeStyle = '#4aff8a'; ctx.stroke();
+  // fulmine giallo
+  ctx.save();
+  ctx.translate(128, 128); ctx.scale(7, 7); ctx.translate(-12, -12);
+  ctx.fillStyle = '#ffe14a'; ctx.fill(_boltPath2D);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(c);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(0.7, 0.7, 0.7);
+  return sp;
+}
+
 function createInteractableVisual(radius) {
   const group = new THREE.Group();
   const col = 0xffb84a;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 48),
     new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; ring.scale.setScalar(radius);
+  ring.visible = false;   // l'anello del raggio si vede solo quando l'interactable è selezionato
   group.add(ring); group.userData.ring = ring;
   const sprite = makeHandSprite(); sprite.position.y = 1.4; group.add(sprite);
   group.userData.sprite = sprite;
@@ -1519,8 +1559,7 @@ function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, ta
   const group = createInteractableVisual(radius);
   group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
   group.userData.gizmoName = `Interagibile ${id}`;
-  group.userData.ring.visible = showRing;
-  scene.add(group);
+  scene.add(group);   // l'anello del raggio resta nascosto finché non si seleziona
   const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
@@ -1730,13 +1769,28 @@ function rebuildQuestTriggerVisuals() {
   _questTrigGroup = new THREE.Group();
   _questTrigGroup.visible = EDIT_MODE;
   for (const tr of questTriggers) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.04, 8, 40),
-      new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.45, depthWrite: false }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 8, 40),
+      new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: 0.28, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.scale.setScalar(tr.radius);
     ring.position.set(tr.pos[0], (tr.pos[1] || 0) + 0.05, tr.pos[2]);
     _questTrigGroup.add(ring);
+    const bolt = makeBoltSprite();                         // icona ⚡ distintiva del trigger
+    bolt.position.set(tr.pos[0], (tr.pos[1] || 0) + 1.2, tr.pos[2]);
+    _questTrigGroup.add(bolt);
   }
   scene.add(_questTrigGroup);
+}
+// Anelli del raggio (interactable + entrance) visibili solo se l'oggetto è selezionato
+function refreshSelectionRings() {
+  for (const ia of interactables) {
+    const r = ia.group.userData.ring;
+    if (r) r.visible = (gizmoTarget === ia.group);
+  }
+  for (const ep of entrances) {
+    const sel = (gizmoTarget === ep.group);
+    if (ep.group.userData.ring) ep.group.userData.ring.visible = sel;
+    if (ep.group.userData.disc) ep.group.userData.disc.visible = sel;
+  }
 }
 // Prossimità alle zone-trigger: camminandoci dentro si completa la task
 function checkQuestTriggers() {
@@ -1780,29 +1834,43 @@ function completeTask(questId, taskId) {
 }
 function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); renderQuestPanel(); renderQuestEditorList(); }
 
-// ── UI checklist (play) ──
+// ── UI checklist (play + anteprima editor) ──
+let _questCollapsed = false;
 function renderQuestPanel() {
-  const panel = document.getElementById('quest-panel');
+  const panel = document.getElementById('quest-checklist');
   if (!panel) return;
   const active = quests.filter(q => q.tasks.length);
-  if (!active.length) { panel.style.display = 'none'; return; }   // mostra in play e in editor (anteprima)
+  if (!active.length) { panel.style.display = 'none'; return; }
   const q = active.find(x => x.started) || active[0];
   const doneN = q.done.size, totN = q.tasks.length;
-  let html = `<div class="quest-head"><span class="quest-title">${escHtml(q.name)}</span>`
-           + `<span class="quest-count">${doneN}/${totN}</span>`
-           + `<button class="quest-toggle" title="Comprimi/espandi">▾</button></div>`;
+  const complete = doneN >= totN;
+  let html = `<div class="quest-head">`
+           + `<div class="quest-titles">`
+           +   `<div class="quest-eyebrow">QUEST${complete ? ' · completata ✓' : ''}</div>`
+           +   `<div class="quest-title">${escHtml(q.name)}</div>`
+           + `</div>`
+           + `<span class="quest-count${complete ? ' done' : ''}">${doneN}/${totN}</span>`
+           + `<button class="quest-toggle" title="Comprimi / espandi">${_questCollapsed ? '▸' : '▾'}</button>`
+           + `</div>`;
+  html += `<div class="quest-body">`;
   if (q.description) html += `<div class="quest-desc">${escHtml(q.description)}</div>`;
+  html += `<div class="quest-progress"><div class="quest-progress-fill" style="width:${totN ? Math.round(doneN / totN * 100) : 0}%"></div></div>`;
   html += `<div class="quest-tasks">`;
   for (const t of q.tasks) {
     const done = q.done.has(t.id);
     html += `<div class="quest-task${done ? ' done' : ''}" data-task="${t.id}">`
           + `<span class="qt-check">${done ? '✓' : ''}</span><span class="qt-name">${escHtml(t.name)}</span></div>`;
   }
-  html += `</div>`;
+  html += `</div></div>`;
   panel.innerHTML = html;
+  panel.classList.toggle('collapsed', _questCollapsed);
   panel.style.display = 'block';
-  panel.querySelector('.quest-toggle').onclick = e => { e.stopPropagation(); panel.classList.toggle('collapsed'); };
-  panel.querySelectorAll('.quest-task').forEach(el => el.onclick = () => completeTask(q.id, +el.dataset.task));
+  const toggle = panel.querySelector('.quest-toggle');
+  const head = panel.querySelector('.quest-head');
+  const doToggle = e => { if (e) e.stopPropagation(); _questCollapsed = !_questCollapsed; panel.classList.toggle('collapsed', _questCollapsed); toggle.textContent = _questCollapsed ? '▸' : '▾'; };
+  toggle.onclick = doToggle;
+  head.onclick = e => { if (e.target !== toggle) doToggle(e); };   // click sull'header = comprimi/espandi
+  panel.querySelectorAll('.quest-task').forEach(el => el.onclick = e => { e.stopPropagation(); completeTask(q.id, +el.dataset.task); });
 }
 function celebrateQuest(q) {
   const el = document.getElementById('quest-celebrate');
@@ -1874,7 +1942,6 @@ function addInteractableRow(ia) {
     +   `<span class="model-name">Interagibile ${ia.id}</span>`
     +   `<button class="goto-btn"   title="Vai qui">🎯</button>`
     +   `<button class="gizmo-btn"  title="Sposta">✥</button>`
-    +   `<button class="ring-btn"   title="${ia.showRing !== false ? 'Nascondi cerchio raggio' : 'Mostra cerchio raggio'}">${ia.showRing !== false ? '👁' : '🚫'}</button>`
     +   `<button class="confirm-btn" title="Salva">✓</button>`
     +   `<button class="delete-btn" title="Rimuovi">🗑</button>`
     + `</div>`
@@ -1895,16 +1962,6 @@ function addInteractableRow(ia) {
 
   const gb = card.querySelector('.gizmo-btn');
   gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ia.group, gb); });
-
-  const rb = card.querySelector('.ring-btn');
-  rb.addEventListener('click', e => {
-    e.stopPropagation();
-    ia.showRing = !ia.showRing;
-    ia.group.userData.ring.visible = ia.showRing;
-    rb.textContent = ia.showRing ? '👁' : '🚫';
-    rb.title = ia.showRing ? 'Nascondi cerchio raggio' : 'Mostra cerchio raggio';
-    saveInteractables();
-  });
 
   card.querySelector('.confirm-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -4145,6 +4202,7 @@ function animate(timestamp, frame) {
   if (cameraMode === 'fps' || renderer.xr.isPresenting) checkSpatialInteractables();
   else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
+  if (EDIT_MODE) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato
 
   // Aggiorna HUD coordinate camera
   const hud = document.getElementById('cam-hud');
