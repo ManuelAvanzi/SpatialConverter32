@@ -127,12 +127,12 @@
 
     /* Notifica azione */
     #notification {
-      position: fixed; top: 68px; left: 50%;
-      transform: translateX(-50%) translateY(-10px);
-      background: rgba(74,158,255,.9); color: #fff;
-      border-radius: 8px; padding: 10px 20px;
-      font-size: .9rem; opacity: 0;
-      transition: all .3s ease; z-index: 30;
+      position: fixed; bottom: 86px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: rgba(74,158,255,.92); color: #fff;
+      border-radius: 8px; padding: 9px 18px;
+      font-size: .86rem; opacity: 0;
+      transition: all .3s ease; z-index: 46;
       pointer-events: none;
     }
     #notification.show {
@@ -276,27 +276,29 @@
 
     /* Editor coordinate manuale */
     #coord-editor {
-      position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,.8); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,159,74,.5); border-radius: 10px;
-      padding: 10px 14px; color: #fff; z-index: 40; display: none;
-      font-size: .8rem;
+      position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.82); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,159,74,.5); border-radius: 9px;
+      padding: 7px 9px; color: #fff; z-index: 41; display: none;
+      font-size: .74rem;
     }
-    #coord-editor .ce-title { font-size: .75rem; color: #ffb060; margin-bottom: 8px; font-weight: 600; }
-    #coord-editor .ce-modes { display: flex; gap: 5px; margin-bottom: 8px; }
+    #coord-editor .ce-title { font-size: .7rem; color: #ffb060; margin-bottom: 5px; font-weight: 600; }
+    #coord-editor .ce-modes { display: flex; gap: 4px; margin-bottom: 5px; }
     #coord-editor .ce-mode { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-      color: #ccc; border-radius: 5px; padding: 4px 6px; cursor: pointer; font-size: .7rem; }
+      color: #ccc; border-radius: 5px; padding: 3px 5px; cursor: pointer; font-size: .66rem; }
     #coord-editor .ce-mode.active { background: rgba(255,159,74,.3); border-color: rgba(255,159,74,.5); color: #ffd0a0; }
-    #coord-editor .ce-row { display: flex; align-items: center; gap: 6px; }
-    #coord-editor .ce-row label { color: #ff9f4a; font-weight: 600; width: 12px; }
+    #coord-editor .ce-row { display: flex; align-items: center; gap: 5px; }
+    #coord-editor .ce-row label { color: #ff9f4a; font-weight: 600; width: 11px; }
     #coord-editor .ce-row input {
-      width: 88px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
-      color: #fff; border-radius: 5px; padding: 4px 6px; font-size: .8rem; font-family: monospace;
+      width: 62px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 5px; padding: 3px 5px; font-size: .72rem; font-family: monospace;
+      cursor: ew-resize;   /* trascina per scrubare il valore */
     }
-    #coord-editor .ce-actions { display: flex; gap: 6px; margin-top: 8px; }
+    #coord-editor .ce-row input:focus { cursor: text; }
+    #coord-editor .ce-actions { display: flex; gap: 5px; margin-top: 6px; }
     #coord-editor .ce-actions button {
       flex: 1; background: rgba(255,159,74,.25); border: 1px solid rgba(255,159,74,.5);
-      color: #ffd0a0; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: .72rem;
+      color: #ffd0a0; border-radius: 5px; padding: 4px 6px; cursor: pointer; font-size: .67rem; white-space: nowrap;
     }
     #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
     #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
@@ -1794,8 +1796,8 @@ async function init() {
   transformControls.addEventListener('dragging-changed', e => {
     gizmoDragging = e.value;
     if (orbitControls) orbitControls.enabled = !e.value; // non ruotare mentre sposti (vista aerea)
-    // al RILASCIO (e.value=false) salva la nuova posizione
-    if (!e.value && gizmoTarget) persistGizmoTarget(gizmoTarget);
+    if (e.value && gizmoTarget) captureUndo(gizmoTarget);          // snapshot prima del drag (undo)
+    if (!e.value && gizmoTarget) persistGizmoTarget(gizmoTarget);  // al rilascio: salva
   });
   // mentre trascini il gizmo, aggiorna i campi X/Y/Z
   transformControls.addEventListener('objectChange', () => {
@@ -1876,6 +1878,9 @@ async function init() {
     // Non intercettare i tasti mentre si scrive in un campo del pannello
     const _tag = e.target.tagName;
     if (_tag === 'INPUT' || _tag === 'SELECT' || _tag === 'TEXTAREA') return;
+
+    // Ctrl/Cmd+Z = annulla (solo in editor)
+    if (EDIT_MODE && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); doUndo(); return; }
 
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
@@ -2741,14 +2746,61 @@ function showCoordEditor(obj, name) {
   document.getElementById('coord-editor').style.display = 'block';
 }
 function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
-function applyCoordEditor() {
-  if (!gizmoTarget) return;
+function applyCoordEditorValues() {           // imposta solo la posizione (no persist)
+  if (!gizmoTarget) return false;
   const x = parseFloat(document.getElementById('ce-x').value);
   const y = parseFloat(document.getElementById('ce-y').value);
   const z = parseFloat(document.getElementById('ce-z').value);
-  if ([x, y, z].some(v => Number.isNaN(v))) { showNotification('Coordinate non valide'); return; }
+  if ([x, y, z].some(v => Number.isNaN(v))) return false;
   gizmoTarget.position.set(x, y, z);
-  persistGizmoTarget(gizmoTarget);
+  return true;
+}
+function applyCoordEditor() {
+  if (applyCoordEditorValues()) persistGizmoTarget(gizmoTarget);
+}
+
+// ─── Undo (Ctrl+Z) per le trasformazioni degli oggetti ──────────────────────
+const undoStack = [];
+function captureUndo(obj) {
+  if (!obj) return;
+  const p = obj.position.clone(), r = obj.rotation.clone(), s = obj.scale.clone();
+  undoStack.push(() => {
+    obj.position.copy(p); obj.rotation.copy(r); obj.scale.copy(s);
+    persistGizmoTarget(obj);
+    if (gizmoTarget === obj) updateCoordEditorFields(obj);
+  });
+  if (undoStack.length > 60) undoStack.shift();
+}
+function doUndo() {
+  const fn = undoStack.pop();
+  if (fn) { fn(); showNotification('↩️ Annullato'); } else showNotification('Niente da annullare');
+}
+
+// Trascina sopra un campo numerico per modificarne il valore (come negli editor moderni)
+function makeScrubbable(input) {
+  let down = false, scrubbing = false, sx = 0, sv = 0, pid = 0;
+  input.addEventListener('pointerdown', e => { down = true; scrubbing = false; sx = e.clientX; sv = parseFloat(input.value) || 0; pid = e.pointerId; });
+  input.addEventListener('pointermove', e => {
+    if (!down) return;
+    if (!scrubbing && Math.abs(e.clientX - sx) > 3) {
+      scrubbing = true; try { input.setPointerCapture(pid); } catch {}
+      input.blur();
+      captureUndo(gizmoTarget);   // snapshot prima dello scrub
+    }
+    if (scrubbing) {
+      const step = e.shiftKey ? 0.005 : 0.03;   // Shift = fine
+      input.value = (sv + (e.clientX - sx) * step).toFixed(2);
+      applyCoordEditorValues();
+      e.preventDefault();
+    }
+  });
+  const stop = () => {
+    if (!down) return;
+    down = false;
+    if (scrubbing) { scrubbing = false; try { input.releasePointerCapture(pid); } catch {} if (gizmoTarget) persistGizmoTarget(gizmoTarget); }
+  };
+  input.addEventListener('pointerup', stop);
+  input.addEventListener('pointercancel', stop);
 }
 function setGizmoMode(mode, btnId) {
   if (transformControls) transformControls.setMode(mode);
@@ -2756,8 +2808,12 @@ function setGizmoMode(mode, btnId) {
   const b = document.getElementById(btnId); if (b) b.classList.add('active');
 }
 function setupCoordEditor() {
-  ['ce-x', 'ce-y', 'ce-z'].forEach(id =>
-    document.getElementById(id).addEventListener('change', applyCoordEditor));
+  ['ce-x', 'ce-y', 'ce-z'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('focus', () => captureUndo(gizmoTarget));   // snapshot prima di digitare
+    el.addEventListener('change', applyCoordEditor);
+    makeScrubbable(el);
+  });
   document.getElementById('ce-mode-t').addEventListener('click', () => setGizmoMode('translate', 'ce-mode-t'));
   document.getElementById('ce-mode-r').addEventListener('click', () => setGizmoMode('rotate', 'ce-mode-r'));
   document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
@@ -2768,6 +2824,7 @@ function setupCoordEditor() {
   // "Porta davanti a me": utile per oggetti lontanissimi (es. Z 39780)
   document.getElementById('ce-here').addEventListener('click', () => {
     if (!gizmoTarget) return;
+    captureUndo(gizmoTarget);
     const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
     const p = camera.position.clone().add(fwd.multiplyScalar(5));
     gizmoTarget.position.set(p.x, 0, p.z);   // a terra, 5m davanti
