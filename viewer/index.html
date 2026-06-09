@@ -109,6 +109,35 @@
       color: #d7c4ff; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
       font-weight: 600; margin-bottom: 8px; transition: background .15s; }
     .import-unity-btn:hover { background: rgba(180,120,255,.32); }
+    /* Sezioni a scomparsa della tab Spatial */
+    #tab-spatial .sec { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.07); padding-top: 8px; }
+    #tab-spatial .sec:first-of-type { border-top: none; padding-top: 0; }
+    #tab-spatial .sec-head { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+      padding: 3px 2px; border-radius: 6px; }
+    #tab-spatial .sec-head:hover { background: rgba(255,255,255,.05); }
+    #tab-spatial .sec-count { background: rgba(74,158,255,.18); border: 1px solid rgba(74,158,255,.35);
+      color: #9fccff; border-radius: 999px; padding: 0 7px; font-size: .66rem; font-weight: 700; line-height: 1.5; }
+    #tab-spatial .sec-count:empty { display: none; }
+    #tab-spatial .sec-arrow { margin-left: auto; color: #8ea0b8; font-size: .7rem; transition: transform .15s; }
+    #tab-spatial .sec.collapsed .sec-arrow { transform: rotate(-90deg); }
+    #tab-spatial .sec.collapsed .sec-body { display: none; }
+    /* Card quest editabile */
+    .quest-card .q-name { flex: 1; min-width: 0; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+      color: #fff; border-radius: 5px; padding: 4px 7px; font-size: .82rem; font-weight: 600; }
+    .quest-card .q-desc { width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+      color: #cdd6e6; border-radius: 5px; padding: 4px 7px; font-size: .73rem; margin-top: 6px; }
+    .quest-card .q-meta { font-size: .68rem; color: #8ea0b8; margin: 5px 0 4px; }
+    .q-task-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .q-task-state { width: 16px; text-align: center; font-size: .75rem; flex: 0 0 16px; }
+    .q-task-row .q-task-name { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+      color: #e6ecf5; border-radius: 5px; padding: 3px 7px; font-size: .76rem; }
+    .q-task-row .q-task-del { width: 24px; height: 23px; border-radius: 6px; background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1); color: #c5cad4; cursor: pointer; font-size: .7rem; flex: 0 0 24px; }
+    .q-task-row .q-task-del:hover { background: rgba(255,90,90,.35); color: #fff; }
+    .q-add-task { width: 100%; margin-top: 7px; background: rgba(74,158,255,.14); border: 1px solid rgba(74,158,255,.32);
+      color: #bcd9ff; border-radius: 6px; padding: 5px; cursor: pointer; font-size: .73rem; font-weight: 600; }
+    .q-add-task:hover { background: rgba(74,158,255,.3); }
+    .quest-card .q-del:hover { background: rgba(255,90,90,.35); }
     /* Lista quest nel pannello editor */
     .quest-card { background: rgba(74,158,255,.07); border: 1px solid rgba(74,158,255,.25); border-radius: 10px; padding: 9px 11px; margin-bottom: 8px; }
     .quest-card-head { display: flex; align-items: center; gap: 8px; }
@@ -577,21 +606,37 @@
   </div>
   <div id="tab-spatial" class="menu-tab-content">
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
-    <h3>Spatial Features</h3>
-    <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
-    <div id="spatial-palette"></div>
-    <h3 style="margin-top:14px">Teleport piazzati</h3>
-    <div id="teleport-list"></div>
-    <h3 style="margin-top:14px">Entrance Points</h3>
-    <div id="entrance-list"></div>
-    <h3 style="margin-top:14px">Interactable</h3>
-    <button id="btn-import-unity" class="import-unity-btn" title="Importa interactable e quest esportati da Unity (file JSON)">🎮 Importa da Unity…</button>
-    <input id="import-unity-input" type="file" accept="application/json,.json" style="display:none">
-    <div id="interactable-list"></div>
-    <h3 style="margin-top:14px">Quest</h3>
-    <div id="quest-list"></div>
-    <h3 style="margin-top:14px">Trigger (zone task)</h3>
-    <div id="trigger-list"></div>
+    <div class="sec" data-sec="palette">
+      <h3 class="sec-head">Spatial Features <span class="sec-arrow">▾</span></h3>
+      <div class="sec-body">
+        <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
+        <div id="spatial-palette"></div>
+      </div>
+    </div>
+    <div class="sec collapsed" data-sec="teleport">
+      <h3 class="sec-head">Teleport <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body"><div id="teleport-list"></div></div>
+    </div>
+    <div class="sec collapsed" data-sec="entrance">
+      <h3 class="sec-head">Entrance Points <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body"><div id="entrance-list"></div></div>
+    </div>
+    <div class="sec collapsed" data-sec="interactable">
+      <h3 class="sec-head">Interactable <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body">
+        <button id="btn-import-unity" class="import-unity-btn" title="Importa interactable e quest esportati da Unity (file JSON)">🎮 Importa da Unity…</button>
+        <input id="import-unity-input" type="file" accept="application/json,.json" style="display:none">
+        <div id="interactable-list"></div>
+      </div>
+    </div>
+    <div class="sec collapsed" data-sec="quest">
+      <h3 class="sec-head">Quest <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body"><div id="quest-list"></div></div>
+    </div>
+    <div class="sec collapsed" data-sec="trigger">
+      <h3 class="sec-head">Trigger (zone task) <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body"><div id="trigger-list"></div></div>
+    </div>
   </div>
 </div>
 
@@ -1154,11 +1199,14 @@ function buildSpatialPalette() {
       featureCardHTML('teleport',     '🌀', 'Teleport', 'Sali sul cilindro → ti sposti')
     + featureCardHTML('entrance',     '📍', 'Entrance Point', 'Dove appari entrando nella scena')
     + featureCardHTML('interactable', '👆', 'Interactable', 'Avvicinati → testo + tasto, parte un\'animazione')
-    + featureCardHTML('trigger',      '⚡', 'Trigger Quest', 'Entra nella zona → spunta una task');
+    + featureCardHTML('trigger',      '⚡', 'Trigger Quest', 'Entra nella zona → spunta una task')
+    + featureCardHTML('quest',        '🧭', 'Quest', 'Missione: lista di task da completare');
 
   pal.querySelectorAll('.spatial-feature').forEach(feat => {
     const kind = feat.dataset.feature;
+    if (kind === 'quest') feat.removeAttribute('draggable');   // la quest non si piazza nella scena
     feat.addEventListener('dragstart', e => {
+      if (kind === 'quest') { e.preventDefault(); return; }
       _draggingFeature = kind;
       e.dataTransfer.setData('text/plain', kind);
       e.dataTransfer.effectAllowed = 'copy';
@@ -1169,6 +1217,7 @@ function buildSpatialPalette() {
       if (kind === 'teleport') addTeleportInFront();
       else if (kind === 'entrance') addEntranceAtMe();
       else if (kind === 'trigger') addTriggerInFront();
+      else if (kind === 'quest') addQuestFromEditor();
       else addInteractableInFront();
     });
   });
@@ -1180,6 +1229,7 @@ function addTeleportInFront() {
   const target = pad.clone().addScaledVector(fwd, 3);
   const tp = addTeleport([pad.x, 0, pad.z], [target.x, 0, target.z], null, true);
   switchMenuTab('spatial');
+  expandSection('teleport');
   enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
 }
 
@@ -1209,22 +1259,64 @@ function onCanvasDrop(e) {
     const q0 = quests[0];
     const tr = addQuestTrigger([pt.x, pt.y, pt.z], q0 ? q0.id : 0, 0, QUEST_TRIGGER_R, null, true);
     switchMenuTab('spatial');
+    expandSection('trigger');
     showNotification(`⚡ Trigger ${tr.id} piazzato — assegna quest e task nella card`);
     return;
   }
   if (kind === 'teleport') {
     const tp = addTeleport([pt.x, pt.y, pt.z], [pt.x + 2, pt.y, pt.z], null, true);
     switchMenuTab('spatial');
+    expandSection('teleport');
     enterPlaceTargetMode(tp);   // clicca subito dove vuoi atterrare
   } else if (kind === 'entrance') {
     const ep = addEntrance([pt.x, pt.y, pt.z], cameraYaw, 1.5, null, true);
     switchMenuTab('spatial');
+    expandSection('entrance');
     showNotification(`📍 Entrance ${ep.id} piazzato — usa ⟳ per la direzione di spawn`);
   } else {
     const ia = addInteractable([pt.x, pt.y, pt.z], '', 3, '', true, null, true);
     switchMenuTab('spatial');
+    expandSection('interactable');
     showNotification(`👆 Interagibile ${ia.id} piazzato — scrivi il testo e scegli l'animazione`);
   }
+}
+
+// ── Sezioni a scomparsa della tab Spatial (stato persistito) ────────────────
+const SEC_STATE_KEY = 'sc32-sections' + _KP;
+function setupSpatialSections() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(SEC_STATE_KEY)) || {}; } catch {}
+  document.querySelectorAll('#tab-spatial .sec').forEach(sec => {
+    const k = sec.dataset.sec;
+    if (k in saved) sec.classList.toggle('collapsed', !!saved[k]);
+    sec.querySelector('.sec-head').addEventListener('click', () => {
+      sec.classList.toggle('collapsed');
+      const st = {};
+      document.querySelectorAll('#tab-spatial .sec').forEach(s => st[s.dataset.sec] = s.classList.contains('collapsed'));
+      localStorage.setItem(SEC_STATE_KEY, JSON.stringify(st));
+    });
+  });
+  // Contatori per categoria, aggiornati automaticamente quando le liste cambiano
+  const obs = new MutationObserver(updateSectionCounts);
+  document.querySelectorAll('#tab-spatial .sec-body > div[id$="-list"]').forEach(l => obs.observe(l, { childList: true }));
+  updateSectionCounts();
+}
+function updateSectionCounts() {
+  document.querySelectorAll('#tab-spatial .sec').forEach(sec => {
+    const badge = sec.querySelector('.sec-count');
+    const list = sec.querySelector('.sec-body > div[id$="-list"]');
+    if (!badge || !list) return;
+    const n = list.querySelectorAll(':scope > .model-item, :scope > .ia-card, :scope > .quest-card').length;
+    badge.textContent = n ? String(n) : '';
+  });
+}
+function expandSection(key) {
+  const sec = document.querySelector(`#tab-spatial .sec[data-sec="${key}"]`);
+  if (sec) sec.classList.remove('collapsed');
+}
+function expandSectionFor(el) {
+  const sec = el && el.closest && el.closest('#tab-spatial .sec');
+  if (sec) sec.classList.remove('collapsed');
 }
 
 function switchMenuTab(name) {
@@ -1460,6 +1552,7 @@ function addEntranceAtMe() {
   const p = camera.position;
   const ep = addEntrance([p.x, Math.max(0, p.y - PLAYER_HEIGHT), p.z], cameraYaw, 1.5, null, true);
   switchMenuTab('spatial');
+  expandSection('entrance');
   showNotification(`📍 Entrance ${ep.id} qui — direzione = vista attuale`);
 }
 
@@ -1692,9 +1785,9 @@ function importFromUnity(payload) {
   const nL = applyTaskLinks(payload.links) + applyTaskTriggers(payload.taskTriggers);
   renderQuestEditorList();
   const parts = [];
-  if (ia) parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`);
-  if (nQ) parts.push(`${nQ} quest`);
-  if (nL) parts.push(`${nL} zone task`);
+  if (ia) { parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`); expandSection('interactable'); }
+  if (nQ) { parts.push(`${nQ} quest`); expandSection('quest'); }
+  if (nL) { parts.push(`${nL} zone task`); expandSection('trigger'); }
   showNotification(parts.length ? `🎮 Import Unity — ${parts.join(' · ')}` : '⚠️ Niente da importare nel file');
 }
 // Ricostruisce le righe del pannello dagli oggetti correnti (dopo un import)
@@ -1840,6 +1933,7 @@ function addTriggerInFront() {
   const q0 = quests[0];
   const tr = addQuestTrigger([p.x, Math.max(0, p.y - PLAYER_HEIGHT), p.z], q0 ? q0.id : 0, 0, QUEST_TRIGGER_R, null, true);
   switchMenuTab('spatial');
+  expandSection('trigger');
   showNotification(`⚡ Trigger ${tr.id} — assegna quest e task nella card`);
   return tr;
 }
@@ -2124,27 +2218,99 @@ function spawnConfetti() {
 }
 
 // ── Lista quest nel pannello editor (tab Spatial) ──
+// Card quest EDITABILE: nome, descrizione e task modificabili dalla redazione
 function renderQuestEditorList() {
   const list = document.getElementById('quest-list');
   if (!list) return;
-  if (!quests.length) { list.innerHTML = `<div class="sf-hint">Nessuna quest. Esporta da Unity e importa col pulsante sopra.</div>`; return; }
-  let html = '';
-  for (const q of quests) {
-    const nZones = questTriggers.filter(t => t.questId === q.id).length;
-    html += `<div class="quest-card"><div class="quest-card-head">`
-          + `<span class="model-name">🧭 ${escHtml(q.name)}</span>`
-          + `<span class="quest-count">${q.tasks.length} task · ${nZones} zone</span>`
-          + `<button class="reset-quest-btn" data-q="${q.id}" title="Azzera progresso">↻</button></div>`;
-    html += `<div class="quest-card-tasks">`;
-    for (const t of q.tasks) {
-      const zoned = questTriggers.some(z => z.questId === q.id && z.taskId === t.id);
-      const done = q.done.has(t.id);
-      html += `<div class="quest-card-task">${done ? '✓' : (zoned ? '📍' : '○')} ${escHtml(t.name)}</div>`;
-    }
-    html += `</div></div>`;
+  list.innerHTML = '';
+  if (!quests.length) {
+    list.innerHTML = `<div class="sf-hint">Nessuna quest. Creane una dalla palette (🧭 Quest) o importa da Unity.</div>`;
+    return;
   }
-  list.innerHTML = html;
-  list.querySelectorAll('.reset-quest-btn').forEach(b => b.onclick = e => { e.stopPropagation(); resetQuest(questById(+b.dataset.q)); });
+  for (const q of quests) list.appendChild(buildQuestCard(q));
+}
+function buildQuestCard(q) {
+  const nZones = questTriggers.filter(t => t.questId === q.id).length;
+  const card = document.createElement('div');
+  card.className = 'quest-card';
+  card.innerHTML =
+      `<div class="quest-card-head">`
+    +   `<span>🧭</span>`
+    +   `<input class="q-name" type="text" value="${escHtml(q.name)}" placeholder="Nome quest">`
+    +   `<button class="reset-quest-btn" title="Azzera progresso">↻</button>`
+    +   `<button class="reset-quest-btn q-del" title="Elimina quest">🗑</button>`
+    + `</div>`
+    + `<input class="q-desc" type="text" value="${escHtml(q.description)}" placeholder="Descrizione (opzionale)">`
+    + `<div class="q-meta">${q.tasks.length} task · ${nZones} zone collegate</div>`
+    + `<div class="q-tasks"></div>`
+    + `<button class="q-add-task">＋ Aggiungi task</button>`;
+
+  const stop = el => el.addEventListener('click', e => e.stopPropagation());
+
+  const nameIn = card.querySelector('.q-name'); stop(nameIn);
+  nameIn.addEventListener('input', () => { q.name = nameIn.value; saveQuestDefs(); renderQuestPanel(); renderQuestVrPanel(); });
+  nameIn.addEventListener('change', rebuildTriggerList);   // aggiorna le select dei trigger
+
+  const descIn = card.querySelector('.q-desc'); stop(descIn);
+  descIn.addEventListener('input', () => { q.description = descIn.value; saveQuestDefs(); renderQuestPanel(); });
+
+  card.querySelector('.reset-quest-btn').addEventListener('click', e => { e.stopPropagation(); resetQuest(q); });
+  card.querySelector('.q-del').addEventListener('click', e => {
+    e.stopPropagation();
+    if (!confirm(`Eliminare la quest "${q.name}" e le sue task?`)) return;
+    const i = quests.indexOf(q); if (i !== -1) quests.splice(i, 1);
+    for (const tr of questTriggers) if (tr.questId === q.id) { tr.questId = 0; tr.taskId = 0; }  // sgancia le zone
+    saveQuestDefs(); saveQuestTriggers(); saveQuestProgress();
+    renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); rebuildTriggerList(); refreshAllTriggerVisibility();
+  });
+
+  const tasksDiv = card.querySelector('.q-tasks');
+  for (const t of q.tasks) {
+    const row = document.createElement('div');
+    row.className = 'q-task-row';
+    const done = q.done.has(t.id);
+    const zoned = questTriggers.some(z => z.questId === q.id && z.taskId === t.id);
+    row.innerHTML =
+        `<span class="q-task-state" title="${done ? 'Completata' : (zoned ? 'Collegata a una zona' : 'Senza zona')}">${done ? '✓' : (zoned ? '📍' : '○')}</span>`
+      + `<input class="q-task-name" type="text" value="${escHtml(t.name)}" placeholder="Nome task">`
+      + `<button class="q-task-del" title="Rimuovi task">🗑</button>`;
+    const ti = row.querySelector('.q-task-name'); stop(ti);
+    ti.addEventListener('input', () => { t.name = ti.value; saveQuestDefs(); renderQuestPanel(); renderQuestVrPanel(); });
+    ti.addEventListener('change', rebuildTriggerList);
+    row.querySelector('.q-task-del').addEventListener('click', e => {
+      e.stopPropagation();
+      q.tasks = q.tasks.filter(x => x !== t); q.done.delete(t.id);
+      for (const tr of questTriggers) if (tr.questId === q.id && tr.taskId === t.id) tr.taskId = 0;
+      saveQuestDefs(); saveQuestProgress(); saveQuestTriggers();
+      renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); rebuildTriggerList(); refreshAllTriggerVisibility();
+    });
+    tasksDiv.appendChild(row);
+  }
+
+  card.querySelector('.q-add-task').addEventListener('click', e => {
+    e.stopPropagation();
+    const nid = q.tasks.reduce((a, t) => Math.max(a, t.id), 0) + 1;
+    q.tasks.push({ id: nid, name: `Task ${q.tasks.length + 1}`, type: 0, progressSteps: 1 });
+    saveQuestDefs();
+    renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); rebuildTriggerList();
+  });
+  return card;
+}
+// Nuova quest creata dalla palette (🧭)
+function addQuestFromEditor() {
+  const id = quests.reduce((a, q) => Math.max(a, q.id), 0) + 1;
+  quests.push(makeQuestObj({ id, name: `Quest ${id}`, description: '', tasks: [] }));
+  saveQuestDefs();
+  renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList();
+  switchMenuTab('spatial');
+  expandSection('quest');
+  showNotification('🧭 Nuova quest creata — dalle un nome e aggiungi le task');
+}
+// Ricostruisce le card dei trigger (dopo modifiche a quest/task: select aggiornate)
+function rebuildTriggerList() {
+  const list = document.getElementById('trigger-list');
+  if (list) list.innerHTML = '';
+  for (const tr of questTriggers) { tr.row = null; addQuestTriggerRow(tr); }
 }
 
 // Opzioni animazione = personaggi glTF caricati
@@ -2227,6 +2393,7 @@ function addInteractableInFront() {
   const p = camera.position.clone().addScaledVector(fwd, 3);
   const ia = addInteractable([p.x, 0, p.z], '', 3, '', true, null, true);
   switchMenuTab('spatial');
+  expandSection('interactable');
   showNotification(`👆 Interagibile ${ia.id} aggiunto — scrivi il testo e scegli l'animazione`);
 }
 
@@ -2610,6 +2777,7 @@ async function init() {
   document.querySelectorAll('.menu-tab').forEach(tab =>
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
+  setupSpatialSections();
   const _exportBtn = document.getElementById('btn-export-config');
   _exportBtn.addEventListener('click', exportSceneConfig);
 
@@ -3474,6 +3642,7 @@ function selectSpatialFeature(entry) {
   if (gb) gb.classList.add('active');
   showCoordEditor(group, group.userData.gizmoName);
   if (row) {
+    expandSectionFor(row);             // apre la sezione a scomparsa che contiene la card
     row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     row.classList.remove('sf-selected-flash');
     void row.offsetWidth;              // forza il restart dell'animazione
