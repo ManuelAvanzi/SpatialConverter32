@@ -105,6 +105,10 @@
       color: #9cffc0; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
       font-weight: 600; margin-bottom: 12px; transition: background .15s; }
     .export-cfg-btn:hover { background: rgba(74,255,138,.32); }
+    .import-unity-btn { width: 100%; background: rgba(180,120,255,.18); border: 1px solid rgba(180,120,255,.45);
+      color: #d7c4ff; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
+      font-weight: 600; margin-bottom: 8px; transition: background .15s; }
+    .import-unity-btn:hover { background: rgba(180,120,255,.32); }
 
     /* Modalità PLAY: nascondi tutti gli strumenti da editor */
     body.play-mode #btn-models,
@@ -523,6 +527,8 @@
     <h3 style="margin-top:14px">Entrance Points</h3>
     <div id="entrance-list"></div>
     <h3 style="margin-top:14px">Interactable</h3>
+    <button id="btn-import-unity" class="import-unity-btn" title="Importa gli interactable esportati da Unity (file JSON)">🎮 Importa da Unity…</button>
+    <input id="import-unity-input" type="file" accept="application/json,.json" style="display:none">
     <div id="interactable-list"></div>
   </div>
 </div>
@@ -1461,7 +1467,7 @@ function nextInteractableId() {
   return Math.max(m, _iaSeq) + 1;
 }
 
-function addInteractable(posArr, text, radius, anim, showRing, id, save) {
+function addInteractable(posArr, text, radius, anim, showRing, id, save, uid) {
   if (id == null) id = nextInteractableId();
   _iaSeq = Math.max(_iaSeq, id);
   radius = radius || 3;
@@ -1471,7 +1477,7 @@ function addInteractable(posArr, text, radius, anim, showRing, id, save) {
   group.userData.gizmoName = `Interagibile ${id}`;
   group.userData.ring.visible = showRing;
   scene.add(group);
-  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, row: null };
+  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
   if (save) saveInteractables();
@@ -1497,6 +1503,7 @@ function saveInteractables() {
     id: ia.id,
     pos: ia.group.position.toArray().map(v => +v.toFixed(3)),
     text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '', showRing: ia.showRing !== false,
+    ...(ia.uid ? { uid: ia.uid } : {}),
   }));
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
 }
@@ -1506,6 +1513,69 @@ function loadSavedInteractables() {
     if (ls) { try { return JSON.parse(ls); } catch {} }
   }
   return SCENE_CONFIG.interactables || [];
+}
+
+// ─── Importa interactable esportati da Unity (file JSON) ─────────────────────
+// Formato atteso: { interactables: [{ uid, name?, pos:[x,y,z], text, radius, anim? }] }
+// Merge per `uid`: se esiste già lo aggiorna (mantenendo l'anim assegnata a mano),
+// altrimenti lo crea. Prova ad auto-assegnare l'anim per nome se vuota.
+function findAnimByName(hint) {
+  if (!hint) return '';
+  const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const h = norm(hint);
+  let best = '';
+  for (const ch of gltfCharacters) {
+    const n = norm(ch.name);
+    if (n === h) return ch.name;                          // match esatto
+    if (!best && (n.includes(h) || h.includes(n))) best = ch.name;  // match parziale
+  }
+  return best;
+}
+function importInteractablesFromUnity(payload) {
+  const list = Array.isArray(payload) ? payload : (payload && payload.interactables);
+  if (!Array.isArray(list) || !list.length) { showNotification('⚠️ Nessun interactable nel file'); return; }
+  let added = 0, updated = 0, skipped = 0;
+  for (const it of list) {
+    if (!it || !Array.isArray(it.pos)) { skipped++; continue; }
+    const uid  = it.uid || it.name || null;
+    const text = it.text || '';
+    const radius = it.radius || 3;
+    // anim: alias esplicito → auto-match per nome → vuota (assegni a mano nel menu)
+    const animHint = it.anim || it.name || it.uid || text;
+    const existing = uid && interactables.find(x => x.uid === uid);
+    if (existing) {
+      existing.group.position.set(it.pos[0], it.pos[1] || 0, it.pos[2]);
+      existing.text = text; existing.radius = radius;
+      existing.group.userData.ring.scale.setScalar(radius);
+      if (!existing.anim) existing.anim = it.anim || findAnimByName(animHint);
+      updated++;
+    } else {
+      const anim = it.anim || findAnimByName(animHint);
+      addInteractable(it.pos, text, radius, anim, it.showRing !== false, null, false, uid);
+      added++;
+    }
+  }
+  // ricostruisci le card e salva
+  rebuildInteractableList();
+  saveInteractables();
+  showNotification(`🎮 Import Unity: ${added} nuovi, ${updated} aggiornati${skipped ? ', ' + skipped + ' saltati' : ''}`);
+}
+// Ricostruisce le righe del pannello dagli oggetti correnti (dopo un import)
+function rebuildInteractableList() {
+  const list = document.getElementById('interactable-list');
+  if (list) list.innerHTML = '';
+  for (const ia of interactables) { ia.row = null; addInteractableRow(ia); }
+}
+function handleUnityImportFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';                                    // permette di re-importare lo stesso file
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { importInteractablesFromUnity(JSON.parse(reader.result)); }
+    catch (e) { console.error(e); showNotification('❌ File non valido (JSON atteso)'); }
+  };
+  reader.readAsText(file);
 }
 
 // Opzioni animazione = personaggi glTF caricati
@@ -1967,6 +2037,14 @@ async function init() {
   buildSpatialPalette();
   const _exportBtn = document.getElementById('btn-export-config');
   _exportBtn.addEventListener('click', exportSceneConfig);
+
+  // Importa interactable da Unity (file JSON)
+  const _impBtn = document.getElementById('btn-import-unity');
+  const _impInput = document.getElementById('import-unity-input');
+  if (_impBtn && _impInput) {
+    _impBtn.addEventListener('click', () => _impInput.click());
+    _impInput.addEventListener('change', handleUnityImportFile);
+  }
   // Pulsante "Salva" in toolbar (solo in editor su un progetto)
   const _saveTop = document.getElementById('btn-save-top');
   _saveTop.addEventListener('click', saveSceneToServer);
@@ -2295,7 +2373,7 @@ async function loadScene() {
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
-  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false);
+  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid);
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
   applyLighting(SCENE_CONFIG.lighting);
