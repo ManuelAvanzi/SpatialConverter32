@@ -137,8 +137,11 @@
     .quest-toggle:hover { background: rgba(74,158,255,.3); color: #fff; }
     /* Body (comprimibile) */
     .quest-body { overflow: hidden; max-height: 52vh; overflow-y: auto; margin-top: 10px; }
-    #quest-checklist.collapsed { width: 250px; }
+    #quest-checklist.collapsed { width: max-content; max-width: 270px; }
     #quest-checklist.collapsed .quest-body { display: none; }
+    /* In EDITOR la colonna sinistra è del menu: la checklist si aggancia in basso
+       a DESTRA (sopra l'HUD coordinate) e parte compressa — anteprima non invasiva */
+    body:not(.play-mode) #quest-checklist { left: auto; right: 16px; bottom: 58px; }
     .quest-desc { font-size: .76rem; color: #aeb9cb; margin: 0 0 9px; line-height: 1.4; }
     .quest-progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; margin: 0 0 10px; }
     .quest-progress-fill { height: 100%; background: linear-gradient(90deg, #4a9eff, #4aff8a); border-radius: 999px; transition: width .35s ease; }
@@ -2003,7 +2006,7 @@ function completeTask(questId, taskId) {
 function resetQuest(q) { if (!q) return; q.done.clear(); q.started = !!q.startAutomatically; saveQuestProgress(); for (const tr of questTriggers) tr.entered = false; refreshAllTriggerVisibility(); renderQuestPanel(); renderQuestVrPanel(); renderQuestEditorList(); }
 
 // ── UI checklist (play + anteprima editor) ──
-let _questCollapsed = false;
+let _questCollapsed = EDIT_MODE;   // in editor parte compressa (pillola): non copre il menu
 function renderQuestPanel() {
   const panel = document.getElementById('quest-checklist');
   if (!panel) return;
