@@ -643,6 +643,7 @@
 <!-- Toolbar -->
 <div id="toolbar">
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
+  <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)">🎥 Terza persona</button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
   <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
@@ -1239,7 +1240,7 @@ function screenToScenePoint(clientX, clientY) {
   const ndc = new THREE.Vector2(
     ((clientX - rect.left) / rect.width) * 2 - 1,
     -((clientY - rect.top) / rect.height) * 2 + 1);
-  raycaster.setFromCamera(ndc, camera);
+  raycaster.setFromCamera(ndc, viewCam());
   if (environmentScene) {
     const hits = raycaster.intersectObject(environmentScene, true);
     if (hits.length) return hits[0].point.clone();
@@ -2015,7 +2016,7 @@ function pickQuestTrigger(clientX, clientY) {
   const r = renderer.domElement.getBoundingClientRect();
   _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
   _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
-  _qRay.setFromCamera(_qNdc, camera);
+  _qRay.setFromCamera(_qNdc, viewCam());
   const hits = _qRay.intersectObjects(meshes, false);
   return hits.length ? hits[0].object.userData.qtr : null;
 }
@@ -2035,7 +2036,7 @@ function pickInteractableSprite(clientX, clientY) {
   const r = renderer.domElement.getBoundingClientRect();
   _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
   _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
-  _qRay.setFromCamera(_qNdc, camera);
+  _qRay.setFromCamera(_qNdc, viewCam());
   const hits = _qRay.intersectObjects(sprites, false);
   if (!hits.length) return null;
   return interactables.find(ia => ia.group.userData.sprite === hits[0].object) || null;
@@ -2473,6 +2474,140 @@ const moveDir = new THREE.Vector3();
 const fwdVec   = new THREE.Vector3();
 const rightVec = new THREE.Vector3();
 
+// ─── Terza persona: avatar + follow-cam ─────────────────────────────────────
+// La camera principale resta la "testa" invisibile del player (fa tutta la
+// fisica come in prima persona); in terza persona si renderizza da una
+// follow-cam dietro la testa e si disegna l'avatar ai suoi piedi.
+let thirdPerson = false;
+let followCam = null;
+const AVATAR_URL = 'avatar/Xbot.glb';   // manichino neutro (idle/walk/run), ~3 MB, lazy load
+const avatar = { root: null, mixer: null, actions: {}, current: '', loading: false, bones: null };
+const _tpPrevHead = new THREE.Vector3();
+const _tpFwd = new THREE.Vector3();
+const _tpRay = new THREE.Raycaster();
+let _tpYaw = 0, _airBlend = 0;
+
+// Camera attiva per il rendering e per i raycast di picking
+function viewCam() {
+  return (thirdPerson && followCam && cameraMode === 'fps' && !renderer.xr.isPresenting) ? followCam : camera;
+}
+
+function loadAvatar() {
+  if (avatar.root || avatar.loading) return;
+  avatar.loading = true;
+  new GLTFLoader().load(AVATAR_URL, g => {
+    avatar.loading = false;
+    avatar.root = g.scene;
+    // Colori tenui: corpo sabbia chiaro, giunti grigio-azzurro (niente texture)
+    avatar.root.traverse(o => {
+      if (o.isMesh || o.isSkinnedMesh) {
+        o.frustumCulled = false;
+        if (o.material) {
+          o.material = o.material.clone();
+          const joints = (o.material.name || '').toLowerCase().includes('joint');
+          o.material.map = null;
+          o.material.color = new THREE.Color(joints ? 0x8a93a5 : 0xd8d3c8);
+          o.material.needsUpdate = true;
+        }
+      }
+    });
+    avatar.mixer = new THREE.AnimationMixer(avatar.root);
+    for (const clip of g.animations) avatar.actions[clip.name] = avatar.mixer.clipAction(clip);
+    const b = {};
+    avatar.root.traverse(o => { if (o.isBone) b[o.name] = o; });
+    avatar.bones = b;
+    avatar.root.visible = thirdPerson;
+    scene.add(avatar.root);
+    setAvatarAnim('idle');
+  }, undefined, err => {
+    avatar.loading = false;
+    console.error('Avatar non caricato:', err);
+    showNotification('❌ Avatar non disponibile');
+  });
+}
+
+function setAvatarAnim(name) {
+  if (!avatar.mixer || avatar.current === name || !avatar.actions[name]) return;
+  const prev = avatar.actions[avatar.current];
+  const next = avatar.actions[name];
+  next.enabled = true;
+  next.reset().play();
+  if (prev && prev !== next) next.crossFadeFrom(prev, 0.22, true);
+  avatar.current = name;
+}
+
+function toggleThirdPerson() {
+  if (renderer.xr.isPresenting) { showNotification('In VR la visuale resta in prima persona'); return; }
+  if (cameraMode !== 'fps') { showNotification('Torna alla vista FPS per la terza persona'); return; }
+  thirdPerson = !thirdPerson;
+  if (thirdPerson) {
+    if (!followCam) followCam = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+    loadAvatar();
+    _tpPrevHead.copy(camera.position);
+    _tpYaw = cameraYaw + Math.PI;        // l'avatar parte voltato come la vista
+    if (avatar.root) avatar.root.rotation.y = _tpYaw;
+  }
+  if (avatar.root) avatar.root.visible = thirdPerson;
+  const b = document.getElementById('btn-camera');
+  if (b) { b.classList.toggle('active', thirdPerson); b.textContent = thirdPerson ? '👁 Prima persona' : '🎥 Terza persona'; }
+  showNotification(thirdPerson ? '🎥 Terza persona — V per tornare' : '👁 Prima persona');
+}
+
+function updateThirdPerson(dt) {
+  const active = thirdPerson && cameraMode === 'fps' && !renderer.xr.isPresenting;
+  if (avatar.root) avatar.root.visible = active;
+  if (!active || !followCam) return;
+  const head = camera.position;
+
+  // velocità orizzontale della testa → stato animazione e rotazione avatar
+  const dx = head.x - _tpPrevHead.x, dz = head.z - _tpPrevHead.z;
+  const speed = Math.hypot(dx, dz) / Math.max(dt, 1e-4);
+  _tpPrevHead.copy(head);
+
+  if (avatar.root) {
+    avatar.root.position.set(head.x, head.y - PLAYER_HEIGHT, head.z);
+    if (speed > 0.5) {                                   // ruota verso la direzione di movimento
+      const target = Math.atan2(dx, dz);
+      let d = target - _tpYaw;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      _tpYaw += d * Math.min(1, dt * 10);
+      avatar.root.rotation.y = _tpYaw;
+    }
+    let anim = 'idle';
+    if (!isOnGround)      anim = speed > 1 ? 'run' : 'idle';   // base in aria (sopra ci va la posa salto)
+    else if (speed > 6)   anim = 'run';
+    else if (speed > 0.5) anim = 'walk';
+    setAvatarAnim(anim);
+    if (avatar.mixer) avatar.mixer.update(dt);
+
+    // Posa "in aria" (il rig mixamo non ha la clip jump): gambe raccolte,
+    // braccia leggermente aperte — applicata DOPO il mixer, con blend morbido
+    _airBlend += ((!isOnGround ? 1 : 0) - _airBlend) * Math.min(1, dt * 10);
+    if (_airBlend > 0.01 && avatar.bones) {
+      const a = _airBlend;
+      const bend = (n, axis, rad) => { const o = avatar.bones['mixamorig:' + n]; if (o) o.rotation[axis] += rad * a; };
+      bend('LeftUpLeg',  'x', -0.55); bend('RightUpLeg', 'x', -0.75);
+      bend('LeftLeg',    'x',  0.95); bend('RightLeg',   'x',  1.15);
+      bend('LeftArm',    'z', -0.25); bend('RightArm',   'z',  0.25);
+      bend('Spine',      'x',  0.12);
+    }
+  }
+
+  // Follow-cam dietro la testa, con anti-muro (raycast all'indietro)
+  camera.getWorldDirection(_tpFwd);
+  let dist = 3.4;
+  if (collidableMeshes.length) {
+    _tpRay.set(head, _tpFwd.clone().negate());
+    _tpRay.near = 0; _tpRay.far = dist + 0.3;
+    const hits = _tpRay.intersectObjects(collidableMeshes, false);
+    if (hits.length) dist = Math.max(0.6, hits[0].distance - 0.25);
+  }
+  followCam.position.set(head.x - _tpFwd.x * dist, head.y - _tpFwd.y * dist + 0.35, head.z - _tpFwd.z * dist);
+  followCam.position.y = Math.max(followCam.position.y, head.y - PLAYER_HEIGHT + 0.25);  // mai sotto i piedi
+  followCam.lookAt(head.x + _tpFwd.x * 2, head.y + _tpFwd.y * 2 - 0.15, head.z + _tpFwd.z * 2);
+}
+
 // ─── VR / player rig ────────────────────────────────────────────────────────
 let playerRig = null;            // contiene la camera; lo muoviamo per la locomozione VR
 let _vrSnapReady = true;
@@ -2737,6 +2872,9 @@ async function init() {
     // F: interagisci con l'interactable vicino
     if (e.code === 'KeyF' && currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
 
+    // V: alterna prima/terza persona
+    if (e.code === 'KeyV') { toggleThirdPerson(); return; }
+
     // ESC: annulla la modalità "posiziona destinazione"
     if (e.code === 'Escape' && placingTarget) { exitPlaceTargetMode(); return; }
 
@@ -2756,6 +2894,7 @@ async function init() {
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    if (followCam) { followCam.aspect = camera.aspect; followCam.updateProjectionMatrix(); }
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
@@ -2764,6 +2903,7 @@ async function init() {
 
   // ── Pulsante Vista Aerea ─────────────────────────────────────────────────
   document.getElementById('btn-overhead').addEventListener('click', toggleOverhead);
+  document.getElementById('btn-camera').addEventListener('click', toggleThirdPerson);
 
   // ── Pulsante Modelli ─────────────────────────────────────────────────────
   document.getElementById('btn-models').addEventListener('click', () => {
@@ -3621,7 +3761,7 @@ function pickSpatialFeature(clientX, clientY) {
   const r = renderer.domElement.getBoundingClientRect();
   _selNdc.x =  ((clientX - r.left) / r.width)  * 2 - 1;
   _selNdc.y = -((clientY - r.top)  / r.height) * 2 + 1;
-  _selRay.setFromCamera(_selNdc, camera);
+  _selRay.setFromCamera(_selNdc, viewCam());
   const hits = _selRay.intersectObjects(entries.map(e => e.group), true);
   if (!hits.length) return null;
   let obj = hits[0].object;            // risali fino al gruppo radice della feature
@@ -4634,7 +4774,8 @@ function animate(timestamp, frame) {
   // Anima gli hotspot interactable (bob)
   animateInteractables(t);
 
-  renderer.render(scene, camera);
+  updateThirdPerson(delta);
+  renderer.render(scene, viewCam());
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────
