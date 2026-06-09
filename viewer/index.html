@@ -121,6 +121,10 @@
     #tab-spatial .sec-arrow { margin-left: auto; color: #8ea0b8; font-size: .7rem; transition: transform .15s; }
     #tab-spatial .sec.collapsed .sec-arrow { transform: rotate(-90deg); }
     #tab-spatial .sec.collapsed .sec-body { display: none; }
+    .av-row { display: flex; align-items: center; gap: 10px; font-size: .76rem; color: #cdd6e6; margin-bottom: 6px; }
+    .av-row label { width: 60px; opacity: .7; }
+    .av-row input[type=color] { width: 46px; height: 26px; border: 1px solid rgba(255,255,255,.2);
+      border-radius: 6px; background: rgba(255,255,255,.06); padding: 1px 2px; cursor: pointer; }
     /* Card quest editabile */
     .quest-card .q-name { flex: 1; min-width: 0; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
       color: #fff; border-radius: 5px; padding: 4px 7px; font-size: .82rem; font-weight: 600; }
@@ -611,6 +615,14 @@
       <div class="sec-body">
         <div class="sf-hint">Trascina una feature nella scena, oppure premi ＋ per metterla davanti a te.</div>
         <div id="spatial-palette"></div>
+      </div>
+    </div>
+    <div class="sec collapsed" data-sec="avatar">
+      <h3 class="sec-head">Avatar <span class="sec-arrow">▾</span></h3>
+      <div class="sec-body">
+        <div class="av-row"><label>Corpo</label><input type="color" id="av-color-body" value="#d8d3c8"></div>
+        <div class="av-row"><label>Dettagli</label><input type="color" id="av-color-joints" value="#8a93a5"></div>
+        <div class="sf-hint">Colori dell'avatar in terza persona — salvati col progetto.</div>
       </div>
     </div>
     <div class="sec collapsed" data-sec="teleport">
@@ -2486,6 +2498,28 @@ const _tpPrevHead = new THREE.Vector3();
 const _tpFwd = new THREE.Vector3();
 const _tpRay = new THREE.Raycaster();
 let _tpYaw = 0, _airBlend = 0;
+const _hipQ = new THREE.Quaternion(), _hipE = new THREE.Euler();
+// Smorzamento dell'ancheggiamento (l'anim walk Mixamo è molto femminile): 1 = invariato
+const HIP_DAMP = { walk: 0.4, run: 0.75 };
+
+// Colori avatar (scelti in editor, salvati nel progetto)
+const AVATAR_COLORS_KEY = 'sc32-avatar' + _KP;
+function getAvatarColors() {
+  if (EDIT_MODE) {
+    try { const c = JSON.parse(localStorage.getItem(AVATAR_COLORS_KEY)); if (c && c.body) return c; } catch {}
+  }
+  const sc = SCENE_CONFIG.avatar;
+  return (sc && sc.body) ? sc : { body: '#d8d3c8', joints: '#8a93a5' };
+}
+function applyAvatarColors(c) {
+  if (!avatar.root) return;
+  avatar.root.traverse(o => {
+    if ((o.isMesh || o.isSkinnedMesh) && o.material) {
+      const joints = (o.material.name || '').toLowerCase().includes('joint');
+      o.material.color.set(joints ? c.joints : c.body);
+    }
+  });
+}
 
 // Camera attiva per il rendering e per i raycast di picking
 function viewCam() {
@@ -2498,15 +2532,13 @@ function loadAvatar() {
   new GLTFLoader().load(AVATAR_URL, g => {
     avatar.loading = false;
     avatar.root = g.scene;
-    // Colori tenui: corpo sabbia chiaro, giunti grigio-azzurro (niente texture)
+    // Colori tenui (default) o scelti in editor: niente texture, tinta piatta
     avatar.root.traverse(o => {
       if (o.isMesh || o.isSkinnedMesh) {
         o.frustumCulled = false;
         if (o.material) {
           o.material = o.material.clone();
-          const joints = (o.material.name || '').toLowerCase().includes('joint');
           o.material.map = null;
-          o.material.color = new THREE.Color(joints ? 0x8a93a5 : 0xd8d3c8);
           o.material.needsUpdate = true;
         }
       }
@@ -2516,6 +2548,10 @@ function loadAvatar() {
     const b = {};
     avatar.root.traverse(o => { if (o.isBone) b[o.name] = o; });
     avatar.bones = b;
+    // Rest pose del bacino (serve per smorzare l'ancheggiamento in modo robusto)
+    const hips = b['mixamorig:Hips'];
+    if (hips) avatar.hipsRest = { q: hips.quaternion.clone(), x: hips.position.x };
+    applyAvatarColors(getAvatarColors());
     avatar.root.visible = thirdPerson;
     scene.add(avatar.root);
     setAvatarAnim('idle');
@@ -2580,6 +2616,19 @@ function updateThirdPerson(dt) {
     else if (speed > 0.5) anim = 'walk';
     setAvatarAnim(anim);
     if (avatar.mixer) avatar.mixer.update(dt);
+
+    // Smorza l'ancheggiamento (twist + rollio + oscillazione laterale del bacino),
+    // calcolato RELATIVO alla rest pose così non distorce la posa di base
+    const damp = HIP_DAMP[avatar.current];
+    const hips = avatar.bones && avatar.bones['mixamorig:Hips'];
+    if (hips && avatar.hipsRest && damp != null && damp < 1) {
+      _hipQ.copy(avatar.hipsRest.q).invert().multiply(hips.quaternion);  // rotazione relativa
+      _hipE.setFromQuaternion(_hipQ);
+      _hipE.y *= damp; _hipE.z *= damp;                                  // tieni il beccheggio (x)
+      _hipQ.setFromEuler(_hipE);
+      hips.quaternion.copy(avatar.hipsRest.q).multiply(_hipQ);
+      hips.position.x = avatar.hipsRest.x + (hips.position.x - avatar.hipsRest.x) * damp;
+    }
 
     // Posa "in aria" (il rig mixamo non ha la clip jump): gambe raccolte,
     // braccia leggermente aperte — applicata DOPO il mixer, con blend morbido
@@ -2918,6 +2967,22 @@ async function init() {
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
   setupSpatialSections();
+
+  // Color picker avatar (sezione Avatar della tab Spatial)
+  const _avBody = document.getElementById('av-color-body');
+  const _avJoints = document.getElementById('av-color-joints');
+  if (_avBody && _avJoints) {
+    const c0 = getAvatarColors();
+    _avBody.value = c0.body; _avJoints.value = c0.joints;
+    const onAvColor = () => {
+      const c = { body: _avBody.value, joints: _avJoints.value };
+      localStorage.setItem(AVATAR_COLORS_KEY, JSON.stringify(c));
+      applyAvatarColors(c);
+    };
+    _avBody.addEventListener('input', onAvColor);
+    _avJoints.addEventListener('input', onAvColor);
+  }
+
   const _exportBtn = document.getElementById('btn-export-config');
   _exportBtn.addEventListener('click', exportSceneConfig);
 
@@ -4141,6 +4206,7 @@ function buildSceneConfigObject() {
     interactables: loadSavedInteractables(),
     quests:        questDefArray(),
     taskTriggers:  questTriggerDefArray(),
+    avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
   };
