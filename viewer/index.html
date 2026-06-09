@@ -17,18 +17,27 @@
       display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
       z-index: 100; color: #fff; padding-bottom: 12vh;
     }
-    /* Copertina animata (Ken Burns: lento zoom + pan) */
+    /* Copertina (immagine intera, leggero respiro) */
     #loader-bg {
       position: absolute; inset: 0; z-index: 0;
-      background: #0d0d1a center center / cover no-repeat;   /* immagine impostata via JS */
-      transform: scale(1.15);
-      animation: coverKenBurns 24s ease-in-out infinite alternate;
+      background: #0d0d1a center center / contain no-repeat;   /* immagine impostata via JS */
+      transform: scale(1.04);
+      animation: coverKenBurns 26s ease-in-out infinite alternate;
       will-change: transform;
     }
     @keyframes coverKenBurns {
-      from { transform: scale(1.16) translate(1.5%, -1.2%); }
-      to   { transform: scale(1.02) translate(-1.5%, 1.2%); }
+      from { transform: scale(1.04) translate(0.6%, -0.5%); }
+      to   { transform: scale(1.0)  translate(-0.6%, 0.5%); }
     }
+    /* Badge modalità (Editor / Play) sul loader */
+    #loader-mode {
+      position: relative; z-index: 2; display: none; margin-bottom: 14px;
+      font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      padding: 7px 16px; border-radius: 999px;
+      background: rgba(255,159,74,.95); color: #1a1205;
+      box-shadow: 0 3px 14px rgba(0,0,0,.4);
+    }
+    #loader-mode.play { background: rgba(74,158,255,.95); color: #05122a; }
     #loader::after {
       content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
       background: linear-gradient(to bottom, rgba(13,13,26,.1) 0%, rgba(13,13,26,.28) 45%, rgba(13,13,26,.92) 100%);
@@ -454,6 +463,7 @@
 <!-- Loader -->
 <div id="loader">
   <div id="loader-bg"></div>
+  <div id="loader-mode"></div>
   <h1 id="loader-title">Caricamento ambiente...</h1>
   <div id="progress-bar"><div id="progress-fill"></div></div>
   <div id="progress-label">Inizializzazione...</div>
@@ -1726,6 +1736,16 @@ async function init() {
     else if (CURRENT_PROJECT && CURRENT_PROJECT.cover) coverUrl = CURRENT_PROJECT.cover;
     if (coverUrl) _lb.style.backgroundImage = `url("${coverUrl}")`;
     else _lb.style.display = 'none';
+  }
+
+  // Badge modalità sul loader: chiaro che stai aprendo questo progetto in Editor (o Play)
+  if (PROJECT_SLUG && CURRENT_PROJECT) {
+    const lm = document.getElementById('loader-mode');
+    if (lm) {
+      lm.textContent = (EDIT_MODE ? '✏️ Editor' : '▶️ Play') + ' · ' + CURRENT_PROJECT.name;
+      lm.classList.toggle('play', !EDIT_MODE);
+      lm.style.display = 'inline-block';
+    }
   }
 
   // Renderer
