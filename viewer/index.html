@@ -1608,7 +1608,8 @@ function makeHandSprite() {
   const ctx = canvas.getContext('2d');
   drawTouchIcon(ctx, 'rgba(255,255,255,0.92)', 0);
   const tex = new THREE.CanvasTexture(canvas);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  // depthTest attivo: l'icona è occlusa dalle pareti (niente effetto raggi-X)
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
   sp.scale.set(0.7, 0.7, 0.7);
   // Permette di ridisegnare l'anello (colore + alone) per l'effetto al trigger
   sp.userData.redraw = (color, glow) => { drawTouchIcon(ctx, color, glow); tex.needsUpdate = true; };
@@ -1649,7 +1650,8 @@ function makeBoltSprite() {
   ctx.fillStyle = '#ffe14a'; ctx.fill(_boltPath2D);
   ctx.restore();
   const tex = new THREE.CanvasTexture(c);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  // depthTest attivo: anche la ⚡ è occlusa dalle pareti
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
   sp.scale.set(0.7, 0.7, 0.7);
   return sp;
 }
@@ -1673,7 +1675,7 @@ function nextInteractableId() {
   return Math.max(m, _iaSeq) + 1;
 }
 
-function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, taskLink) {
+function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, taskLink, vis) {
   if (id == null) id = nextInteractableId();
   _iaSeq = Math.max(_iaSeq, id);
   radius = radius || 3;
@@ -1682,7 +1684,7 @@ function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, ta
   group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
   group.userData.gizmoName = `Interagibile ${id}`;
   scene.add(group);   // l'anello del raggio resta nascosto finché non si seleziona
-  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, row: null };
+  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, vis: vis || 0, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
   if (save) saveInteractables();
@@ -1709,6 +1711,7 @@ function saveInteractables() {
     pos: ia.group.position.toArray().map(v => +v.toFixed(3)),
     text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '', showRing: ia.showRing !== false,
     ...(ia.uid ? { uid: ia.uid } : {}),
+    ...(ia.vis ? { vis: +ia.vis.toFixed(2) } : {}),
     ...(ia.taskLink ? { taskLink: ia.taskLink } : {}),
   }));
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
@@ -1754,10 +1757,11 @@ function importInteractablesFromUnity(list) {
       existing.group.userData.ring.scale.setScalar(radius);
       if (!existing.anim) existing.anim = it.anim || findAnimByName(animHint);
       if (it.taskLink) existing.taskLink = it.taskLink;
+      if (it.visibilityRadius) existing.vis = it.visibilityRadius;
       updated++;
     } else {
       const anim = it.anim || findAnimByName(animHint);
-      addInteractable(it.pos, text, radius, anim, it.showRing !== false, null, false, uid, it.taskLink);
+      addInteractable(it.pos, text, radius, anim, it.showRing !== false, null, false, uid, it.taskLink, it.visibilityRadius);
       added++;
     }
   }
@@ -2070,6 +2074,14 @@ function checkQuestTriggers() {
   if (!questTriggers.length) return;
   const pw = playerWorld();
   for (const tr of questTriggers) {
+    // In play la ⚡ si vede solo entro ~20 m (in editor sempre, per lavorarci)
+    if (!EDIT_MODE && !triggerIsDone(tr)) {
+      const u = tr.group.userData, pb = tr.group.position;
+      const vx = pw.x - pb.x, vz = pw.z - pb.z;
+      const near = (vx * vx + vz * vz) < 400;
+      if (u.bolt) u.bolt.visible = near;
+      if (u.hit) u.hit.visible = near;
+    }
     if (!tr.taskId) continue;                                          // trigger non ancora assegnato
     const q = questById(tr.questId);
     if (q && q.done.has(tr.taskId)) { tr.entered = true; continue; }   // già fatta
@@ -2419,6 +2431,10 @@ function checkSpatialInteractables() {
     const dx = pw.x - p.x, dz = pw.z - p.z;
     const d = dx * dx + dz * dz;
     if (d < ia.radius * ia.radius && d < bestD) { best = ia; bestD = d; }
+    // In play l'icona compare solo entro il visibilityRadius (come su Spatial);
+    // in editor restano tutte visibili per lavorarci.
+    const s = ia.group.userData.sprite;
+    if (s && !EDIT_MODE) { const vr = ia.vis || 14; s.visible = d < vr * vr; }
   }
   if (best !== currentSpatialIA) {
     currentSpatialIA = best;
@@ -3323,7 +3339,7 @@ async function loadScene() {
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
-  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid, ia.taskLink);
+  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid, ia.taskLink, ia.vis);
   loadQuests();
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
