@@ -322,12 +322,13 @@
     .model-item .goto-btn, .model-item .gizmo-btn, .model-item .collider-btn,
     .model-item .confirm-btn, .model-item .play-btn, .model-item .delete-btn,
     .model-item .tp-target-btn, .model-item .face-btn, .model-item .ring-btn,
-    .ia-card .goto-btn, .ia-card .gizmo-btn, .ia-card .delete-btn {
+    .ia-card .goto-btn, .ia-card .gizmo-btn, .ia-card .delete-btn, .ia-card .state-btn {
       width: 29px; height: 27px; padding: 0; border-radius: 8px;
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
       color: #c5cad4; font-size: .82rem; transition: all .12s;
       display: inline-flex; align-items: center; justify-content: center;
     }
+    .ia-actions-badge { font-size: .68rem; color: #9fb4d4; margin-top: 5px; cursor: help; }
     .model-item button:hover, .ia-card button:hover {
       background: rgba(74,158,255,.22); border-color: rgba(74,158,255,.45); color: #fff;
     }
@@ -1684,7 +1685,7 @@ function addInteractable(posArr, text, radius, anim, showRing, id, save, uid, ta
   group.position.set(posArr[0], posArr[1] || 0, posArr[2]);
   group.userData.gizmoName = `Interagibile ${id}`;
   scene.add(group);   // l'anello del raggio resta nascosto finché non si seleziona
-  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, vis: vis || 0, row: null };
+  const ia = { id, group, text: text || '', radius, anim: anim || '', showRing, uid: uid || null, taskLink: taskLink || null, vis: vis || 0, enabled: true, on: true, actions: null, row: null };
   interactables.push(ia);
   addInteractableRow(ia);
   if (save) saveInteractables();
@@ -1712,6 +1713,8 @@ function saveInteractables() {
     text: ia.text || '', radius: +ia.radius.toFixed(3), anim: ia.anim || '', showRing: ia.showRing !== false,
     ...(ia.uid ? { uid: ia.uid } : {}),
     ...(ia.vis ? { vis: +ia.vis.toFixed(2) } : {}),
+    ...(ia.enabled === false ? { enabled: false } : {}),
+    ...(Array.isArray(ia.actions) && ia.actions.length ? { actions: ia.actions } : {}),
     ...(ia.taskLink ? { taskLink: ia.taskLink } : {}),
   }));
   localStorage.setItem(IA_STORE_KEY, JSON.stringify(data));
@@ -1800,11 +1803,13 @@ function importFromUnity(payload) {
   const ia = importInteractablesFromUnity(Array.isArray(payload) ? payload : payload.interactables);
   const nQ = importQuestsFromUnity(payload.quests);
   const nL = applyTaskLinks(payload.links) + applyTaskTriggers(payload.taskTriggers);
+  const nS = applyActionStates(payload.interactableStates);
   renderQuestEditorList();
   const parts = [];
   if (ia) { parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`); expandSection('interactable'); }
   if (nQ) { parts.push(`${nQ} quest`); expandSection('quest'); }
   if (nL) { parts.push(`${nL} zone task`); expandSection('trigger'); }
+  if (nS) { parts.push(`stati/azioni su ${nS}`); expandSection('interactable'); }
   showNotification(parts.length ? `🎮 Import Unity — ${parts.join(' · ')}` : '⚠️ Niente da importare nel file');
 }
 // Ricostruisce le righe del pannello dagli oggetti correnti (dopo un import)
@@ -2047,7 +2052,7 @@ function pickQuestTriggerFromController(ctrl) {
 }
 // Clic sull'icona ⊙ (sprite mano) di un interactable → ritorna l'interactable
 function pickInteractableSprite(clientX, clientY) {
-  const sprites = interactables.map(ia => ia.group.userData.sprite).filter(Boolean);
+  const sprites = interactables.filter(ia => ia.on !== false && ia.group.visible).map(ia => ia.group.userData.sprite).filter(Boolean);
   if (!sprites.length) return null;
   const r = renderer.domElement.getBoundingClientRect();
   _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
@@ -2360,6 +2365,7 @@ function addInteractableRow(ia) {
     +   `<span class="model-name">Interagibile ${ia.id}</span>`
     +   `<button class="goto-btn"   title="Vai qui">🎯</button>`
     +   `<button class="gizmo-btn"  title="Sposta">✥</button>`
+    +   `<button class="state-btn" title="Stato all'avvio: ${ia.enabled === false ? 'SPENTO (lo accende un\'azione)' : 'acceso'} — clicca per cambiare">${ia.enabled === false ? '🌑' : '🌕'}</button>`
     +   `<button class="confirm-btn" title="Salva">✓</button>`
     +   `<button class="delete-btn" title="Rimuovi">🗑</button>`
     + `</div>`
@@ -2367,7 +2373,10 @@ function addInteractableRow(ia) {
     + `<div class="ia-controls">`
     +   `<label>Raggio</label><input class="ia-radius" type="number" min="0.5" step="0.5" value="${ia.radius}">`
     +   `<label>Anim</label><select class="ia-anim">${animOptions(ia.anim)}</select>`
-    + `</div>`;
+    + `</div>`
+    + (Array.isArray(ia.actions) && ia.actions.length
+        ? `<div class="ia-actions-badge" title="${ia.actions.map(a => a.op + ' → ' + (a.leaf || a.target)).join('&#10;').replace(/"/g, '&quot;')}">⚙ ${ia.actions.length} azioni (da Unity)</div>`
+        : '');
 
   card.querySelector('.goto-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -2380,6 +2389,17 @@ function addInteractableRow(ia) {
 
   const gb = card.querySelector('.gizmo-btn');
   gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ia.group, gb); });
+
+  const stb = card.querySelector('.state-btn');
+  stb.addEventListener('click', e => {
+    e.stopPropagation();
+    ia.enabled = ia.enabled === false ? true : false;
+    ia.on = ia.enabled;
+    applyIaRuntimeVisibility(ia);
+    stb.textContent = ia.enabled === false ? '🌑' : '🌕';
+    stb.title = `Stato all'avvio: ${ia.enabled === false ? "SPENTO (lo accende un'azione)" : 'acceso'} — clicca per cambiare`;
+    saveInteractables();
+  });
 
   card.querySelector('.confirm-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -2427,6 +2447,7 @@ function checkSpatialInteractables() {
   let best = null, bestD = Infinity;
   const pw = playerWorld();   // world (corretta anche in VR)
   for (const ia of interactables) {
+    if (!EDIT_MODE && ia.on === false) continue;   // spento dalla macchina a stati
     const p = ia.group.position;
     const dx = pw.x - p.x, dz = pw.z - p.z;
     const d = dx * dx + dz * dz;
@@ -2444,11 +2465,73 @@ function checkSpatialInteractables() {
 }
 
 // Trigger: fa partire l'animazione scelta
+// ─── Sistema azioni (macchina a stati SetActive importata da Unity) ─────────
+// Ogni interactable può avere: enabled (stato all'avvio) e actions[]
+// (show/hide su altri interactable per uid, o su nodi della scena per nome).
+function _normUid(s) { return String(s || '').split('/').map(x => x.trim()).join('/'); }
+function findIaByUid(uid) {
+  const n = _normUid(uid), leaf = n.split('/').pop();
+  return interactables.find(x => _normUid(x.uid) === n)
+      || interactables.find(x => x.uid && _normUid(x.uid).split('/').pop() === leaf) || null;
+}
+function applyIaRuntimeVisibility(ia) {
+  const s = ia.group.userData.sprite;
+  if (EDIT_MODE) {
+    ia.group.visible = true;                                   // in editor si vede tutto
+    if (s) s.material.opacity = ia.enabled === false ? 0.35 : 1;   // spento all'avvio = semi-trasparente
+  } else {
+    ia.group.visible = ia.on !== false;
+  }
+}
+function setInteractableOn(ia, on) {
+  ia.on = on;
+  applyIaRuntimeVisibility(ia);
+  if (!on && currentSpatialIA === ia) { currentSpatialIA = null; hideIaPrompt(); }
+}
+function findSceneNodeByName(name) {
+  if (!name) return null;
+  let n = scene.getObjectByName(name);
+  if (n) return n;
+  const want = name.trim().toLowerCase();
+  scene.traverse(o => { if (!n && o.name && o.name.trim().toLowerCase() === want) n = o; });
+  return n;
+}
+function execInteractableActions(ia) {
+  if (!Array.isArray(ia.actions) || !ia.actions.length) return;
+  for (const a of ia.actions) {
+    if (a.op !== 'show' && a.op !== 'hide') continue;          // audio/call: non supportati (v1)
+    const tgt = findIaByUid(a.target) || (a.leaf ? findIaByUid(a.leaf) : null);
+    if (tgt) { setInteractableOn(tgt, a.op === 'show'); continue; }
+    const node = findSceneNodeByName(a.leaf || a.target);
+    if (node) { node.visible = (a.op === 'show'); continue; }
+    console.log('[azioni] target non trovato:', a.target);
+  }
+}
+// Import degli stati/azioni (file unity-actions.json): merge per uid
+function applyActionStates(list) {
+  if (!Array.isArray(list) || !list.length) return 0;
+  let n = 0;
+  for (const st of list) {
+    const ia = findIaByUid(st.uid) || (st.name ? findIaByUid(st.name) : null);
+    if (!ia) continue;
+    ia.enabled = st.active !== false;
+    ia.actions = Array.isArray(st.actions) ? st.actions : null;
+    ia.on = ia.enabled;
+    applyIaRuntimeVisibility(ia);
+    n++;
+  }
+  if (n) { saveInteractables(); rebuildInteractableList(); }
+  return n;
+}
+
 function triggerSpatialIA(ia) {
   if (!ia) return;
   if (ia.anim) playInteractableAnim(ia.anim);
   pulseInteractableSprite(ia.group.userData.sprite);   // l'anello lampeggia azzurro (niente popup)
   if (ia.taskLink) completeTask(ia.taskLink.questId, ia.taskLink.taskId);  // spunta la task collegata
+  // Macchina a stati: in play esegue le azioni (accende/spegne interactable e oggetti)
+  if (!EDIT_MODE) execInteractableActions(ia);
+  else if (Array.isArray(ia.actions) && ia.actions.length) showNotification('⚙ ' + ia.actions.length + ' azioni (attive in play)');
 }
 
 function playInteractableAnim(name) {
@@ -3339,7 +3422,13 @@ async function loadScene() {
   for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
-  for (const ia of loadSavedInteractables()) addInteractable(ia.pos, ia.text, ia.radius, ia.anim, ia.showRing !== false, ia.id, false, ia.uid, ia.taskLink, ia.vis);
+  for (const sd of loadSavedInteractables()) {
+    const ia = addInteractable(sd.pos, sd.text, sd.radius, sd.anim, sd.showRing !== false, sd.id, false, sd.uid, sd.taskLink, sd.vis);
+    if (sd.enabled === false) ia.enabled = false;
+    if (Array.isArray(sd.actions)) ia.actions = sd.actions;
+    ia.on = ia.enabled !== false;
+    applyIaRuntimeVisibility(ia);
+  }
   loadQuests();
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
