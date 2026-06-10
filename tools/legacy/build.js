@@ -102,7 +102,7 @@ async function main() {
 }
 
 function copyViewer(outputDir) {
-  const viewerSrc = path.join(__dirname, 'viewer', 'index.html');
+  const viewerSrc = path.join(__dirname, '..', '..', 'viewer', 'index.html');
   const viewerDest = path.join(outputDir, 'index.html');
 
   if (!fs.existsSync(viewerSrc)) {

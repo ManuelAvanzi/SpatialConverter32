@@ -9,8 +9,8 @@
     "manifest": "node scripts/build-manifest.js",
     "upload": "node scripts/upload-to-r2.js",
     "seed": "node scripts/seed-project.js",
-    "convert": "node build.js",
-    "extract": "node extract.js",
+    "convert": "node tools/legacy/build.js",
+    "extract": "node tools/legacy/extract.js",
     "serve": "npx serve viewer -p 3003"
   },
   "engines": {

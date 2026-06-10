@@ -41,13 +41,29 @@ Mini-piattaforma per convertire ambienti **Spatial.io + Unity** in laboratori we
 - Sidebar a sezioni richiudibili con contatori; salvataggio sul server con 💾.
 
 ### Import da Unity (Unity = fonte di verità)
-Script editor C# (in `Assets/Editor/` del progetto Unity, copie versionate qui):
+Script editor C# (in `Assets/Editor/` del progetto Unity, copie versionate in `unity/`):
 - `SpatialInteractableExporter.cs` → **Tools ▸ Esporta Interactable per il Web**
 - `SpatialQuestExporter.cs` → **Tools ▸ Esporta Quest per il Web** (quest + task + zone trigger)
 
 Il JSON esportato si importa dall'editor web (**🎮 Importa da Unity…**) con merge per `uid`:
 ri-esportare aggiorna le posizioni senza duplicare e senza perdere le modifiche manuali.
 Conversione assi Unity→Three: **X=-X, Y=Y, Z=+Z**.
+
+## Struttura del repo
+
+```
+platform/
+├── viewer/      ← l'app web (index.html = viewer/editor, admin.html = redazione)
+├── server/      ← backend Express (auth, store su R2, API progetti)
+├── scripts/     ← script npm (manifest, upload su R2, seed progetto)
+├── tools/       ← parser Unity→Web: parse_actions / parse_quests / parse_quiz
+│   │              (estraggono azioni, quest e quiz dallo scene YAML di Unity)
+│   ├── blender/ ← merge_and_export.py (scena statica FBX → environment.glb)
+│   └── legacy/  ← vecchia pipeline .unitypackage (extract/build/blender-convert)
+├── unity/       ← copie versionate degli script C# per l'editor Unity
+│                  (exporter Interactable/Quest/Scene + SkinnedMeshCombiner)
+└── content/     ← asset e file di lavoro locali (gitignored, vanno su R2)
+```
 
 ## Avvio in locale
 
@@ -70,8 +86,10 @@ Architettura **engine + contenuto** (vedi `DEPLOY.md`):
 
 ## Pipeline contenuti 3D
 
-- **Scena statica**: FBX da Unity (FBX Exporter) → Blender `merge_and_export.py` →
+- **Scena statica**: FBX da Unity (FBX Exporter) → Blender `tools/blender/merge_and_export.py` →
   `environment.glb`.
+- **Quest / azioni / quiz**: `node tools/parse_quests.js` · `parse_actions.js` · `parse_quiz.js`
+  leggono lo scene YAML di Unity e generano i JSON da importare nell'editor web (🎮).
 - **Personaggi animati**: export **direttamente da Unity in glTF** con UnityGLTF
   (la pipeline Blender corrompe i rig Biped — vedi note in `CLAUDE`/memoria).
   Prima dell'export, fondere i multi-SkinnedMeshRenderer con `SkinnedMeshCombiner.cs`
