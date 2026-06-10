@@ -2506,6 +2506,22 @@ function findZoneByUid(uid) {
   return actionZones.find(z => _normUid(z.uid) === n)
       || actionZones.find(z => _normUid(z.uid).split('/').pop() === leaf) || null;
 }
+// Quando un'azione nasconde un nodo, le sue mesh vanno tolte anche dal collider
+// (altrimenti resta un muro invisibile); quando lo mostra, rientrano se il suo
+// modello radice ha il collider attivo.
+function _underColliderRoot(o) {
+  let p = o;
+  while (p) { if (colliderRoots.has(p)) return true; p = p.parent; }
+  return false;
+}
+function setNodeCollision(node, on) {
+  node.traverse(o => {
+    if (!o.isMesh || !o.geometry) return;
+    const idx = collidableMeshes.indexOf(o);
+    if (!on && idx !== -1) collidableMeshes.splice(idx, 1);
+    else if (on && idx === -1 && _underColliderRoot(o)) collidableMeshes.push(o);
+  });
+}
 function execActions(actions) {
   if (!Array.isArray(actions) || !actions.length) return;
   for (const a of actions) {
@@ -2516,7 +2532,7 @@ function execActions(actions) {
     const z = findZoneByUid(a.target) || (a.leaf ? findZoneByUid(a.leaf) : null);
     if (z) { z.on = on; if (on) z.entered = false; continue; }
     const node = findSceneNodeByName(a.leaf || a.target);
-    if (node) { node.visible = on; continue; }
+    if (node) { node.visible = on; setNodeCollision(node, on); continue; }
     console.log('[azioni] target non trovato:', a.target);
   }
 }
