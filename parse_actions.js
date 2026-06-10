@@ -36,6 +36,16 @@ for (const d of docs) if (d.cls === 4) {
   if (go) goTr[go] = d.fid;
   trFather[d.fid] = (d.body.match(/m_Father:\s*\{fileID:\s*(\d+)\}/) || [])[1];
 }
+function goWorldPos(go) {
+  let tr = goTr[go]; let x = 0, y = 0, z = 0, guard = 0;
+  while (tr && tr !== '0' && guard++ < 50) {
+    const d = byFid[tr];
+    const p = d && d.body.match(/m_LocalPosition:\s*\{x:\s*([-\d.eE]+),\s*y:\s*([-\d.eE]+),\s*z:\s*([-\d.eE]+)\}/);
+    if (p) { x += +p[1]; y += +p[2]; z += +p[3]; }
+    tr = trFather[tr];
+  }
+  return [x, y, z];
+}
 function goPath(go) {
   const parts = []; let tr = goTr[go]; let guard = 0;
   while (tr && tr !== '0' && guard++ < 50) {
@@ -94,6 +104,7 @@ function extract(guid, eventKey, nextKeys) {
       uid: goPath(go),
       name: goName[go],
       active: goActive[go],          // stato iniziale (activeSelf)
+      pos_unity: goWorldPos(go).map(v => +v.toFixed(3)),
       actions,
       ...(unresolved ? { unresolved } : {}),
     });

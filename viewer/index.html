@@ -1804,12 +1804,14 @@ function importFromUnity(payload) {
   const nQ = importQuestsFromUnity(payload.quests);
   const nL = applyTaskLinks(payload.links) + applyTaskTriggers(payload.taskTriggers);
   const nS = applyActionStates(payload.interactableStates);
+  const nZ2 = applyActionTriggers(payload.actionTriggers);
   renderQuestEditorList();
   const parts = [];
   if (ia) { parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`); expandSection('interactable'); }
   if (nQ) { parts.push(`${nQ} quest`); expandSection('quest'); }
   if (nL) { parts.push(`${nL} zone task`); expandSection('trigger'); }
   if (nS) { parts.push(`stati/azioni su ${nS}`); expandSection('interactable'); }
+  if (nZ2) parts.push(`${nZ2} zone-azione`);
   showNotification(parts.length ? `🎮 Import Unity — ${parts.join(' · ')}` : '⚠️ Niente da importare nel file');
 }
 // Ricostruisce le righe del pannello dagli oggetti correnti (dopo un import)
@@ -2488,25 +2490,37 @@ function setInteractableOn(ia, on) {
   applyIaRuntimeVisibility(ia);
   if (!on && currentSpatialIA === ia) { currentSpatialIA = null; hideIaPrompt(); }
 }
+function _sanitizeNodeName(name) {   // come THREE.PropertyBinding.sanitizeNodeName
+  return String(name || '').trim().replace(/\s/g, '_').replace(/[^\w-]/g, '');
+}
 function findSceneNodeByName(name) {
   if (!name) return null;
   let n = scene.getObjectByName(name);
   if (n) return n;
-  const want = name.trim().toLowerCase();
-  scene.traverse(o => { if (!n && o.name && o.name.trim().toLowerCase() === want) n = o; });
+  const want = _sanitizeNodeName(name).toLowerCase();
+  scene.traverse(o => { if (!n && o.name && _sanitizeNodeName(o.name).toLowerCase() === want) n = o; });
   return n;
 }
-function execInteractableActions(ia) {
-  if (!Array.isArray(ia.actions) || !ia.actions.length) return;
-  for (const a of ia.actions) {
+function findZoneByUid(uid) {
+  const n = _normUid(uid), leaf = n.split('/').pop();
+  return actionZones.find(z => _normUid(z.uid) === n)
+      || actionZones.find(z => _normUid(z.uid).split('/').pop() === leaf) || null;
+}
+function execActions(actions) {
+  if (!Array.isArray(actions) || !actions.length) return;
+  for (const a of actions) {
     if (a.op !== 'show' && a.op !== 'hide') continue;          // audio/call: non supportati (v1)
+    const on = a.op === 'show';
     const tgt = findIaByUid(a.target) || (a.leaf ? findIaByUid(a.leaf) : null);
-    if (tgt) { setInteractableOn(tgt, a.op === 'show'); continue; }
+    if (tgt) { setInteractableOn(tgt, on); continue; }
+    const z = findZoneByUid(a.target) || (a.leaf ? findZoneByUid(a.leaf) : null);
+    if (z) { z.on = on; if (on) z.entered = false; continue; }
     const node = findSceneNodeByName(a.leaf || a.target);
-    if (node) { node.visible = (a.op === 'show'); continue; }
+    if (node) { node.visible = on; continue; }
     console.log('[azioni] target non trovato:', a.target);
   }
 }
+function execInteractableActions(ia) { execActions(ia.actions); }
 // Import degli stati/azioni (file unity-actions.json): merge per uid
 function applyActionStates(list) {
   if (!Array.isArray(list) || !list.length) return 0;
@@ -2522,6 +2536,41 @@ function applyActionStates(list) {
   }
   if (n) { saveInteractables(); rebuildInteractableList(); }
   return n;
+}
+// Zone-azione: persistenza + import + prossimità
+function actionZoneDefArray() {
+  return actionZones.map(z => ({ uid: z.uid, name: z.name, pos: z.pos, radius: z.radius, active: z.active !== false, actions: z.actions }));
+}
+function saveActionZones() { localStorage.setItem(AZ_STORE_KEY, JSON.stringify(actionZoneDefArray())); }
+function loadActionZoneDefs() {
+  if (EDIT_MODE) { const ls = localStorage.getItem(AZ_STORE_KEY); if (ls) { try { return JSON.parse(ls); } catch {} } }
+  return SCENE_CONFIG.actionZones || [];
+}
+function loadActionZones() {
+  actionZones.length = 0;
+  for (const d of loadActionZoneDefs())
+    actionZones.push({ uid: d.uid, name: d.name || '', pos: d.pos, radius: d.radius || 2.2, active: d.active !== false, on: d.active !== false, actions: d.actions || [], entered: false });
+}
+function applyActionTriggers(list) {
+  if (!Array.isArray(list) || !list.length) return 0;
+  actionZones.length = 0;
+  for (const tr of list) {
+    if (!Array.isArray(tr.pos)) continue;
+    actionZones.push({ uid: tr.uid, name: tr.name || '', pos: tr.pos, radius: tr.radius || 2.2, active: tr.active !== false, on: tr.active !== false, actions: tr.actions || [], entered: false });
+  }
+  saveActionZones();
+  return actionZones.length;
+}
+function checkActionZones() {
+  if (EDIT_MODE || !actionZones.length) return;
+  const pw = playerWorld();
+  for (const z of actionZones) {
+    if (z.on === false) { z.entered = false; continue; }
+    const dx = pw.x - z.pos[0], dz = pw.z - z.pos[2], dy = pw.y - (z.pos[1] || 0);
+    const inside = (dx * dx + dz * dz) < z.radius * z.radius && Math.abs(dy) < 3;
+    if (inside && !z.entered) { z.entered = true; execActions(z.actions); }
+    else if (!inside) z.entered = false;
+  }
 }
 
 function triggerSpatialIA(ia) {
@@ -2828,6 +2877,10 @@ const IA_STORE_KEY = 'sc32-interactables' + _KP; // [{id, pos, text, radius, ani
 const interactables = [];                // {id, group, text, radius, anim, taskLink, row}
 let   _iaSeq = 0;
 let   currentSpatialIA = null;           // interactable attualmente vicino (prompt attivo)
+
+// ─── Zone-azione (SpatialTriggerEvent → onEnterEvent, importate da Unity) ───
+const AZ_STORE_KEY = 'sc32-actionzones' + _KP;
+const actionZones = [];   // {uid, name, pos, radius, active, on, actions, entered}
 
 // ─── Quest (Spatial Quest) ──────────────────────────────────────────────────
 const QUEST_STORE_KEY = 'sc32-quests' + _KP;          // definizioni quest (editor)
@@ -3430,6 +3483,7 @@ async function loadScene() {
     applyIaRuntimeVisibility(ia);
   }
   loadQuests();
+  loadActionZones();
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
   applyLighting(SCENE_CONFIG.lighting);
@@ -4311,6 +4365,7 @@ function buildSceneConfigObject() {
     interactables: loadSavedInteractables(),
     quests:        questDefArray(),
     taskTriggers:  questTriggerDefArray(),
+    actionZones:   actionZoneDefArray(),
     avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
@@ -4926,6 +4981,7 @@ function animate(timestamp, frame) {
   if (cameraMode === 'fps' || renderer.xr.isPresenting) checkSpatialInteractables();
   else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
+  checkActionZones();     // zone-azione (es. siediti alla poltrona → compare il menù)
   if (EDIT_MODE) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato
   if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
