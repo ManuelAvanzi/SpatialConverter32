@@ -36,11 +36,17 @@ const CT = {
   '.json': 'application/json',
 };
 
+// Cartella sorgente dei modelli: default viewer/models (progetto 32);
+// per altri progetti: MODELS_DIR=content/<prefisso> (deve contenere gltfModels/)
+const MODELS_DIR = process.env.MODELS_DIR
+  ? path.resolve(process.env.MODELS_DIR)
+  : path.join(VIEWER, 'models');
+
 function collect() {
   const items = [];
-  const glb = path.join(VIEWER, 'models', 'environment.glb');
+  const glb = path.join(MODELS_DIR, 'environment.glb');
   if (fs.existsSync(glb)) items.push({ abs: glb, key: `${PREFIX}/environment.glb` });
-  const gdir = path.join(VIEWER, 'models', 'gltfModels');
+  const gdir = path.join(MODELS_DIR, 'gltfModels');
   if (fs.existsSync(gdir)) {
     for (const f of fs.readdirSync(gdir)) {
       const abs = path.join(gdir, f);
@@ -53,7 +59,7 @@ function collect() {
 async function main() {
   const items = collect();
   if (!items.length) {
-    console.error('Nessun file trovato in viewer/models. Hai i modelli in locale?');
+    console.error(`Nessun file trovato in ${MODELS_DIR}. Hai i modelli in locale?`);
     process.exit(1);
   }
   console.log(`Carico ${items.length} file su R2: ${BUCKET}/${PREFIX}/\n`);

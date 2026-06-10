@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// Genera viewer/models/gltfModels/models.json = elenco dei file .gltf/.glb personaggi.
+// Genera gltfModels/models.json = elenco dei file .gltf/.glb personaggi.
 // Necessario perché il directory-listing non funziona fuori da `npx serve` (Express/R2).
 // Uso:  node scripts/build-manifest.js
+//       MODELS_DIR=content/<prefisso> node scripts/build-manifest.js   (altri progetti)
 const fs = require('fs');
 const path = require('path');
 
-const dir = path.join(__dirname, '..', 'viewer', 'models', 'gltfModels');
+const dir = process.env.MODELS_DIR
+  ? path.resolve(process.env.MODELS_DIR, 'gltfModels')
+  : path.join(__dirname, '..', 'viewer', 'models', 'gltfModels');
 if (!fs.existsSync(dir)) {
   console.error('Cartella non trovata:', dir);
   process.exit(1);

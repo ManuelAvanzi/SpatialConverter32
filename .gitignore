@@ -24,3 +24,6 @@ __pycache__/
 Thumbs.db
 
 .git_commit_msg.txt
+
+# Contenuti per-progetto (modelli pesanti, vanno su R2)
+content/
