@@ -16,10 +16,17 @@ while ((m = re.exec(text))) idxs.push({ cls: +m[1], fid: m[2], start: m.index })
 const docs = idxs.map((d, i) => ({ ...d, body: text.slice(d.start, i + 1 < idxs.length ? idxs[i + 1].start : text.length) }));
 const byFid = {}; docs.forEach(d => byFid[d.fid] = d);
 
+// I nomi YAML con spazi finali sono quotati ('Nome ') → togli gli apici
+function unquote(s) {
+  if (s.length > 1 && s[0] === "'" && s[s.length - 1] === "'") return s.slice(1, -1).replace(/''/g, "'");
+  if (s.length > 1 && s[0] === '"' && s[s.length - 1] === '"') return s.slice(1, -1);
+  return s;
+}
+
 // GameObject: nome, attivo, componenti
 const goName = {}, goActive = {}, goComponents = {};
 for (const d of docs) if (d.cls === 1) {
-  goName[d.fid] = ((d.body.match(/^\s{2}m_Name:\s*(.*)$/m) || [])[1] || '').trim();
+  goName[d.fid] = unquote(((d.body.match(/^\s{2}m_Name:\s*(.*)$/m) || [])[1] || '').trim());
   goActive[d.fid] = ((d.body.match(/^\s{2}m_IsActive:\s*(\d)/m) || [])[1] || '1') === '1';
   goComponents[d.fid] = [...d.body.matchAll(/component:\s*\{fileID:\s*(\d+)\}/g)].map(x => x[1]);
 }
