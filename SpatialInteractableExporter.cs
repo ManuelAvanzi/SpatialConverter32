@@ -103,8 +103,9 @@ public static class SpatialInteractableExporter
     {
         string[] candidates =
         {
-            @"C:\Users\manue\Downloads\EX-SPATIAL\32 sicurezza nel cantiere e percezione del rischio\claudeSpatConverter\viewer",
-            @"C:\Users\manue\Downloads\EX-SPATIAL\32 sicurezza nel cantiere e percezione del rischio\claudeSpatConverter",
+            @"C:\Users\manue\Desktop\ProgettiClaude\SpatialConverter\platform\content",
+            @"C:\Users\manue\Desktop\ProgettiClaude\SpatialConverter\platform\viewer",
+            @"C:\Users\manue\Desktop\ProgettiClaude\SpatialConverter\platform",
         };
         foreach (var c in candidates) if (Directory.Exists(c)) return c;
         return Application.dataPath;
