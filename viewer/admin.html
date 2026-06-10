@@ -23,12 +23,12 @@
   }
   html[data-theme="dark"] {
     --accent-soft:rgba(249,115,22,.15);
-    --bg:#161310; --panel:#201c18; --sidebar:#1b1814;
-    --text:#ece7df; --muted:#9d958a; --line:#342e26;
+    --bg:#0b0e16; --panel:#121624; --sidebar:#0e1220;
+    --text:#e7eaf2; --muted:#8e96ab; --line:#262d40;
     --green:#3ecf7a; --green-soft:rgba(62,207,122,.13);
     --amber:#ffb84a; --amber-soft:rgba(255,184,74,.13);
     --danger:#ff7a6a; --danger-soft:rgba(255,122,106,.11);
-    --thumb-bg:#15120f;
+    --thumb-bg:#080b12;
     --shadow:0 1px 3px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.25);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -126,7 +126,9 @@
   .tag { font-size:.7rem; color:var(--muted); background:var(--bg); border:1px solid var(--line);
     border-radius:7px; padding:2px 9px; }
   .card .actions { display:grid; gap:7px; }
-  .card .actions.first { grid-template-columns:1fr 1fr; border-top:1px solid var(--line); padding-top:12px; }
+  /* Le azioni si ancorano al fondo: bottoni alla stessa altezza in tutte le card
+     della riga, qualunque sia la lunghezza di titolo e tag */
+  .card .actions.first { grid-template-columns:1fr 1fr; border-top:1px solid var(--line); padding-top:12px; margin-top:auto; }
   .card .actions.mid { grid-template-columns:repeat(3, 1fr); }
   .card .actions.last { grid-template-columns:1fr auto; }
   .card .actions.last .btn.red { padding:7px 12px; }
