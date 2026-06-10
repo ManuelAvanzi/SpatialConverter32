@@ -156,7 +156,8 @@
     #levels-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
       background: rgba(14,18,26,.94); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.14);
       border-radius: 18px; padding: 18px 22px; z-index: 55; display: none; color: #eef2f8;
-      box-shadow: 0 16px 60px rgba(0,0,0,.6); min-width: 480px; }
+      box-shadow: 0 16px 60px rgba(0,0,0,.6); width: min(560px, 94vw);
+      max-height: 86vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     #levels-panel.open { display: block; }
     .lv-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700;
       font-size: 1.05rem; margin-bottom: 14px; }
@@ -200,6 +201,15 @@
       background: rgba(180,120,255,.18); border: 1px solid rgba(180,120,255,.4); color: #e3d2ff; font-size: .72rem; font-weight: 700; }
     .lv-quiz:hover { background: rgba(180,120,255,.4); }
     .lv-go-hint { font-size: .62rem; color: #8ea0b8; margin-top: 6px; }
+    /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
+    @media (max-width: 600px) {
+      #levels-panel { padding: 14px 12px; }
+      #lv-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+      .lv-tile { min-width: 0; padding: 12px 8px; }
+      #uiquiz-panel { padding: 14px 12px; max-height: 86vh; overflow-y: auto; }
+      #uq-answers { flex-wrap: wrap; }
+      .uq-btn { flex: 1 1 30%; }
+    }
 
     /* Quest checklist runtime (play + anteprima editor) — in basso a sinistra */
     #quest-checklist { position: fixed; left: 16px; bottom: 16px; width: 290px; z-index: 47; color: #eef2f8; display: none;
@@ -3022,11 +3032,19 @@ function renderLevelsGrid() {
     el.addEventListener('click', () => travelToLevel(el.dataset.key)));
   g.querySelectorAll('.lv-quiz').forEach(el =>
     el.addEventListener('click', e => { e.stopPropagation(); openQuiz(el.dataset.quiz); }));
+  // Se il pannello 3D VR è aperto sui livelli, ridisegnalo (stati cambiati dalle azioni)
+  if (renderer.xr.isPresenting && _uiVr.mode === 'levels' && _uiVr.mesh && _uiVr.mesh.visible) renderLevelsVrPanel();
 }
 function openLevelsPanel(show) {
   const p = document.getElementById('levels-panel'); if (!p) return;
   renderLevelsGrid();
-  p.classList.toggle('open', show !== false);
+  const on = show !== false;
+  p.classList.toggle('open', on);
+  // In VR il DOM non si vede: replica sul pannello 3D davanti alla camera
+  if (renderer.xr.isPresenting) {
+    if (on) { if (!_uiVr.mesh || !_uiVr.mesh.visible) placeUiVrPanel(); renderLevelsVrPanel(); }
+    else hideUiVrPanel('levels');
+  }
 }
 // Click sintetico (per le azioni op:audio — niente asset)
 let _clickCtx = null;
@@ -3077,44 +3095,278 @@ function travelToLevel(key) {
   showNotification('📍 ' + key.charAt(0).toUpperCase() + key.slice(1));
 }
 // Overlay quiz
-const _uq = { quiz: null, idx: 0 };
+const _uq = { quiz: null, idx: 0, feed: null, lock: false };
 function openQuiz(id) {
   const q = uiQuizzes.find(x => x.id === id);
   if (!q || !q.questions.length) return;
-  _uq.quiz = q; _uq.idx = 0;
+  // Se il quiz nasce dal pannello livelli VR, il pannello 3D riusa quella posizione
+  const fresh = renderer.xr.isPresenting && !(_uiVr.mesh && _uiVr.mesh.visible);
+  _uq.quiz = q; _uq.idx = 0; _uq.feed = null; _uq.lock = false;
   openLevelsPanel(false);
   document.getElementById('uiquiz-panel').classList.add('open');
+  if (fresh) placeUiVrPanel();
   renderQuizQuestion();
 }
-function closeQuiz() { document.getElementById('uiquiz-panel').classList.remove('open'); _uq.quiz = null; }
+function closeQuiz() {
+  document.getElementById('uiquiz-panel').classList.remove('open');
+  _uq.quiz = null;
+  hideUiVrPanel('quiz');
+}
+// Risposta data (da bottone DOM o da zona del pannello 3D VR): stessa logica
+function answerUiQuiz(a) {
+  const q = _uq.quiz; if (!q || _uq.lock) return;
+  if (a.correct) {
+    playClick();
+    _uq.feed = 'ok'; _uq.lock = true;
+    syncQuizFeed();
+    setTimeout(() => {
+      _uq.lock = false;
+      if (_uq.idx < q.questions.length - 1) { _uq.idx++; _uq.feed = null; renderQuizQuestion(); }
+      else {
+        closeQuiz();
+        showNotification('🎉 ' + q.title + ' completato!');
+        if (!EDIT_MODE) execActions(q.onComplete || []);
+      }
+    }, 650);
+  } else { _uq.feed = 'ko'; syncQuizFeed(); }
+}
+function syncQuizFeed() {
+  const feed = document.getElementById('uq-feed');
+  if (feed) {
+    feed.textContent = _uq.feed === 'ok' ? '✅ Corretto!' : (_uq.feed === 'ko' ? '❌ Risposta errata — riprova!' : '');
+    feed.className = _uq.feed === 'ok' ? 'okk' : (_uq.feed === 'ko' ? 'ko' : '');
+  }
+  if (renderer.xr.isPresenting && _uq.quiz) renderQuizVrPanel();
+}
 function renderQuizQuestion() {
   const q = _uq.quiz; if (!q) return;
   const d = q.questions[_uq.idx];
   document.getElementById('uq-title').textContent = q.title + ' — ' + (_uq.idx + 1) + '/' + q.questions.length;
   document.getElementById('uq-text').textContent = d.text;
-  const feed = document.getElementById('uq-feed'); feed.textContent = ''; feed.className = '';
+  syncQuizFeed();
   const box = document.getElementById('uq-answers');
   box.innerHTML = '';
   for (const a of d.answers) {
     const b = document.createElement('button');
     b.className = 'uq-btn'; b.textContent = (a.label || '?').toUpperCase();
-    b.addEventListener('click', () => {
-      if (a.correct) {
-        playClick();
-        feed.textContent = '✅ Corretto!'; feed.className = 'okk';
-        setTimeout(() => {
-          if (_uq.idx < q.questions.length - 1) { _uq.idx++; renderQuizQuestion(); }
-          else {
-            closeQuiz();
-            showNotification('🎉 ' + q.title + ' completato!');
-            if (!EDIT_MODE) execActions(q.onComplete || []);
-          }
-        }, 650);
-      } else {
-        feed.textContent = '❌ Risposta errata — riprova!'; feed.className = 'ko';
-      }
-    });
+    b.addEventListener('click', () => answerUiQuiz(a));
     box.appendChild(b);
+  }
+  if (renderer.xr.isPresenting) renderQuizVrPanel();
+}
+
+// ─── UI 3D per la VR: pannello Simulazioni + quiz nel visore ────────────────
+// Il DOM non si vede in XR: un unico pannello canvas→texture piazzato davanti
+// alla camera replica i due pannelli. I "bottoni" sono zone rettangolari sul
+// canvas: il grilletto del controller le colpisce via raycast (uv del piano).
+const UIVR_W = 1024, UIVR_H = 768;
+const _uiVr = { mesh: null, ctx: null, zones: [], mode: null };
+let _uiVrRestoreFrames = 0;   // ri-mostra il pannello qualche frame dopo l'ingresso in XR (posa camera pronta)
+function ensureUiVrPanel() {
+  if (_uiVr.mesh) return _uiVr.mesh;
+  const c = document.createElement('canvas'); c.width = UIVR_W; c.height = UIVR_H;
+  _uiVr.ctx = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, side: THREE.DoubleSide });
+  _uiVr.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.9), mat);
+  _uiVr.mesh.renderOrder = 1001;
+  _uiVr.mesh.visible = false;
+  scene.add(_uiVr.mesh);
+  return _uiVr.mesh;
+}
+// Piazza il pannello a ~1.5 m davanti alla testa, verticale, rivolto al giocatore
+function placeUiVrPanel() {
+  const m = ensureUiVrPanel();
+  const head = camera.getWorldPosition(new THREE.Vector3());
+  const dir = camera.getWorldDirection(new THREE.Vector3()); dir.y = 0;
+  if (dir.lengthSq() < 1e-4) dir.set(0, 0, -1);
+  dir.normalize();
+  m.position.copy(head).addScaledVector(dir, 1.5);
+  m.position.y = head.y - 0.08;
+  m.lookAt(head.x, m.position.y, head.z);
+  m.visible = true;
+}
+function hideUiVrPanel(mode) {
+  if (!_uiVr.mesh) return;
+  if (mode && _uiVr.mode !== mode) return;   // chiudi solo il pannello del modo giusto
+  _uiVr.mesh.visible = false; _uiVr.mode = null; _uiVr.zones = [];
+}
+function _uiVrCommit() { _uiVr.mesh.material.map.needsUpdate = true; _uiVr.mesh.visible = true; }
+function _uiVrBg(ctx) {
+  ctx.clearRect(0, 0, UIVR_W, UIVR_H);
+  ctx.fillStyle = 'rgba(14,18,26,0.96)'; _roundRect(ctx, 0, 0, UIVR_W, UIVR_H, 36); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(120,180,255,0.45)'; ctx.stroke();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+function _uiVrCloseButton(ctx, cb) {
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; _roundRect(ctx, UIVR_W - 92, 26, 56, 56, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '32px Segoe UI, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('✕', UIVR_W - 64, 55);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  _uiVr.zones.push({ x: UIVR_W - 104, y: 14, w: 80, h: 80, cb });
+}
+function _wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text || '').split(/\n+/)) {
+    let cur = '';
+    for (const w of para.split(/\s+/).filter(Boolean)) {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; }
+      else cur = t;
+    }
+    out.push(cur);
+  }
+  return out;
+}
+// Pannello Simulazioni in 3D: stessa griglia del DOM (#lv-grid)
+function renderLevelsVrPanel() {
+  ensureUiVrPanel();
+  const ctx = _uiVr.ctx;
+  _uiVr.mode = 'levels'; _uiVr.zones = [];
+  _uiVrBg(ctx);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 40px Segoe UI, sans-serif';
+  ctx.fillText('Simulazioni', 36, 66);
+  _uiVrCloseButton(ctx, () => openLevelsPanel(false));
+  if (!_levels.length) { _uiVrCommit(); return; }
+  const cols = _levels.length > 6 ? 4 : 3, gx = 36, top = 100, gap = 16;
+  const tw = (UIVR_W - gx * 2 - gap * (cols - 1)) / cols;
+  const tiles = _levels.map(lv => {
+    const open = lv.state !== 'locked';
+    const qs = open ? uiQuizzes.filter(q => q.level === lv.key) : [];
+    const canGo = open && levelSpawns[lv.key];
+    return { lv, qs, canGo, h: 112 + qs.length * 54 + (canGo ? 28 : 0) };
+  });
+  const rows = []; for (let i = 0; i < tiles.length; i += cols) rows.push(tiles.slice(i, i + cols));
+  const rowHs = rows.map(r => Math.max(...r.map(t => t.h)));
+  const totalH = rowHs.reduce((a, b) => a + b, 0) + gap * (rows.length - 1);
+  const s = Math.min(1, (UIVR_H - top - 24) / totalH);   // se non ci sta, riduci tutto in proporzione
+  const zone = (x, y, w, h, cb) => _uiVr.zones.push({ x: gx + x * s, y: top + y * s, w: w * s, h: h * s, cb });
+  ctx.save(); ctx.translate(gx, top); ctx.scale(s, s);
+  let y = 0;
+  rows.forEach((row, ri) => {
+    row.forEach((t, ci) => {
+      const x = ci * (tw + gap), h = rowHs[ri], lv = t.lv;
+      ctx.fillStyle = 'rgba(40,52,64,0.92)'; _roundRect(ctx, x, y, tw, h, 16); ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = lv.state === 'done' ? 'rgba(74,255,138,0.5)'
+                       : (t.canGo ? 'rgba(74,158,255,0.5)' : 'rgba(255,255,255,0.12)');
+      ctx.stroke();
+      if (lv.state === 'locked') ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(lv.label, x + tw / 2, y + 38);
+      if (lv.state === 'progress') {
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; _roundRect(ctx, x + 18, y + 60, tw - 36, 12, 6); ctx.fill();
+        ctx.fillStyle = '#ffd24a'; _roundRect(ctx, x + 18, y + 60, (tw - 36) * 0.55, 12, 6); ctx.fill();
+      } else {
+        ctx.fillStyle = lv.state === 'done' ? '#4aff8a' : '#fff';
+        ctx.font = '34px Segoe UI, sans-serif';
+        ctx.fillText(lv.state === 'done' ? '✓' : (lv.state === 'locked' ? '🔒' : '🔓'), x + tw / 2, y + 86);
+      }
+      ctx.globalAlpha = 1;
+      let by = y + 100;
+      for (const qz of t.qs) {   // zone quiz PRIMA della zona-tile: hanno priorità sul click
+        ctx.fillStyle = 'rgba(180,120,255,0.2)'; _roundRect(ctx, x + 12, by, tw - 24, 44, 10); ctx.fill();
+        ctx.strokeStyle = 'rgba(180,120,255,0.45)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#e3d2ff'; ctx.font = 'bold 20px Segoe UI, sans-serif';
+        let label = '▶ ' + qz.title;
+        while (ctx.measureText(label).width > tw - 36 && label.length > 4) label = label.slice(0, -2);
+        ctx.fillText(label, x + tw / 2, by + 29);
+        zone(x + 12, by, tw - 24, 44, () => openQuiz(qz.id));
+        by += 54;
+      }
+      if (t.canGo) {
+        ctx.fillStyle = '#8ea0b8'; ctx.font = '17px Segoe UI, sans-serif';
+        ctx.fillText('punta e premi per andarci', x + tw / 2, y + h - 12);
+        zone(x, y, tw, h, () => travelToLevel(lv.key));
+      }
+      ctx.textAlign = 'left';
+    });
+    y += rowHs[ri] + gap;
+  });
+  ctx.restore();
+  _uiVrCommit();
+}
+// Quiz in 3D: domanda + bottoni A/B/C + feedback (stessa logica del DOM via answerUiQuiz)
+function renderQuizVrPanel() {
+  const q = _uq.quiz; if (!q) return;
+  ensureUiVrPanel();
+  const ctx = _uiVr.ctx;
+  _uiVr.mode = 'quiz'; _uiVr.zones = [];
+  _uiVrBg(ctx);
+  const d = q.questions[_uq.idx];
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 34px Segoe UI, sans-serif';
+  let title = q.title + ' — ' + (_uq.idx + 1) + '/' + q.questions.length;
+  while (ctx.measureText(title).width > UIVR_W - 170 && title.length > 4) title = title.slice(0, -2);
+  ctx.fillText(title, 36, 62);
+  _uiVrCloseButton(ctx, closeQuiz);
+  ctx.fillStyle = '#eef2f8'; ctx.font = '30px Segoe UI, sans-serif';
+  const lines = _wrapLines(ctx, d.text, UIVR_W - 72);
+  const maxLines = 12;
+  const shown = lines.slice(0, maxLines);
+  if (lines.length > maxLines) shown[maxLines - 1] += ' …';
+  let y = 118;
+  for (const ln of shown) { ctx.fillText(ln, 36, y); y += 38; }
+  const n = d.answers.length;
+  const bw = Math.min(190, (UIVR_W - 72 - (n - 1) * 36) / Math.max(1, n)), bh = 96, bgap = 36;
+  let bx = (UIVR_W - (n * bw + (n - 1) * bgap)) / 2;
+  const by = UIVR_H - 196;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const a of d.answers) {
+    ctx.fillStyle = 'rgba(74,158,255,0.22)'; _roundRect(ctx, bx, by, bw, bh, 18); ctx.fill();
+    ctx.strokeStyle = 'rgba(74,158,255,0.55)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#d8eaff'; ctx.font = 'bold 44px Segoe UI, sans-serif';
+    ctx.fillText((a.label || '?').toUpperCase(), bx + bw / 2, by + bh / 2);
+    _uiVr.zones.push({ x: bx, y: by, w: bw, h: bh, cb: () => answerUiQuiz(a) });
+    bx += bw + bgap;
+  }
+  if (_uq.feed) {
+    ctx.fillStyle = _uq.feed === 'ok' ? '#8effb4' : '#ff8a8a';
+    ctx.font = 'bold 32px Segoe UI, sans-serif';
+    ctx.fillText(_uq.feed === 'ok' ? '✅ Corretto!' : '❌ Risposta errata — riprova!', UIVR_W / 2, UIVR_H - 56);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  _uiVrCommit();
+}
+// Il raggio del controller colpisce il pannello? Ritorna {zone} (zone:null = pannello
+// colpito ma fuori dai bottoni: il click NON deve passare al mondo dietro).
+function pickUiVrZone(ctrl) {
+  if (!_uiVr.mesh || !_uiVr.mesh.visible) return null;
+  const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+  const dir = ctrl.getWorldDirection(new THREE.Vector3()).negate();
+  _qRay.set(origin, dir); _qRay.near = 0; _qRay.far = 8;
+  const hits = _qRay.intersectObject(_uiVr.mesh, false);
+  _qRay.far = Infinity;
+  if (!hits.length || !hits[0].uv) return null;
+  const px = hits[0].uv.x * UIVR_W, py = (1 - hits[0].uv.y) * UIVR_H;
+  const z = _uiVr.zones.find(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h);
+  return { zone: z || null };
+}
+// Tasto X (controller sinistro): apre/chiude il pannello Simulazioni nel visore
+let _vrXPrev = false;
+function vrUiButtons() {
+  const session = renderer.xr.getSession(); if (!session) return;
+  for (const src of session.inputSources) {
+    if (src.handedness === 'left' && src.gamepad) {
+      const b = src.gamepad.buttons[4];   // X su Meta Quest
+      const pressed = b ? b.pressed : false;
+      if (pressed && !_vrXPrev) {
+        if (_uq.quiz) closeQuiz();
+        else if (_levels.length) openLevelsPanel(!(_uiVr.mesh && _uiVr.mesh.visible && _uiVr.mode === 'levels'));
+      }
+      _vrXPrev = pressed;
+      break;
+    }
+  }
+}
+// Rientro in XR con quiz/pannello già aperti dal desktop: ripristina il pannello 3D
+function restoreUiVrPanel() {
+  if (_uq.quiz) { placeUiVrPanel(); renderQuizVrPanel(); }
+  else {
+    const p = document.getElementById('levels-panel');
+    if (p && p.classList.contains('open')) { placeUiVrPanel(); renderLevelsVrPanel(); }
   }
 }
 
@@ -3469,8 +3721,10 @@ async function setupVR() {
       playerRig.rotation.set(0, cameraYaw, 0);
       vrFloorY = playerRig.position.y; isOnGround = true; velocityY = 0; jumpCount = 0;
       vrBtn.textContent = '❌ Esci da VR';
+      _uiVrRestoreFrames = 20;   // quiz/pannello aperti dal desktop → ricompaiono nel visore
       session.addEventListener('end', () => {
         vrBtn.textContent = '🥽 Entra in VR';
+        hideUiVrPanel();   // il DOM (rimasto in sync) riprende il testimone fuori dal visore
         // riprendi la modalità FPS dove era il rig
         camera.position.set(playerRig.position.x, playerRig.position.y + PLAYER_HEIGHT, playerRig.position.z);
         cameraYaw = playerRig.rotation.y;
@@ -4940,9 +5194,13 @@ function onInteract() {
 }
 
 function onVRInteract(e) {
-  // Prima: il raggio del controller colpisce una ⚡ zona-trigger? → completa la task
   const ctrl = e && e.target;
   if (ctrl && ctrl.isObject3D) {
+    // Il pannello UI 3D (Simulazioni/quiz) è davanti a te: ha priorità su tutto,
+    // e se colpito fuori dai bottoni assorbe il click (non passa al mondo dietro)
+    const ui = pickUiVrZone(ctrl);
+    if (ui) { if (ui.zone) ui.zone.cb(); return; }
+    // Poi: il raggio colpisce una ⚡ zona-trigger? → completa la task
     const qtr = pickQuestTriggerFromController(ctrl);
     if (qtr) { completeTask(qtr.questId, qtr.taskId); return; }
   }
@@ -5217,7 +5475,11 @@ function animate(timestamp, frame) {
   }
 
   // Locomozione VR (rig: stick sx muovi, stick dx snap-turn, A salta, grip teleport)
-  if (renderer.xr.isPresenting) { vrLocomotion(delta); updateVrTeleportArc(); }
+  if (renderer.xr.isPresenting) {
+    vrLocomotion(delta); updateVrTeleportArc();
+    vrUiButtons();   // X (sx) = apri/chiudi pannello Simulazioni
+    if (_uiVrRestoreFrames > 0 && --_uiVrRestoreFrames === 0) restoreUiVrPanel();
+  }
 
   // Teleport: controlla se il player è su un pad (FPS o VR, non in vista aerea)
   if (renderer.xr.isPresenting || cameraMode === 'fps') checkTeleports();
