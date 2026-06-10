@@ -163,6 +163,11 @@ public static class SpatialQuestExporter
         return Application.dataPath;
     }
 
+    private static string F(float v, CultureInfo ci)
+    {
+        return System.Math.Round(v, 3).ToString(ci);
+    }
+
     private static string Escape(string s)
     {
         if (string.IsNullOrEmpty(s)) return "";
