@@ -152,6 +152,30 @@
     .quest-card-tasks { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
     .quest-card-task { font-size: .76rem; color: #cdd6e6; padding-left: 2px; }
 
+    /* Pannello livelli/simulazioni */
+    #levels-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: rgba(14,18,26,.94); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px; padding: 18px 22px; z-index: 55; display: none; color: #eef2f8;
+      box-shadow: 0 16px 60px rgba(0,0,0,.6); min-width: 480px; }
+    #levels-panel.open { display: block; }
+    .lv-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700;
+      font-size: 1.05rem; margin-bottom: 14px; }
+    #lv-close { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); color: #fff;
+      width: 30px; height: 30px; border-radius: 9px; cursor: pointer; font-size: .9rem; }
+    #lv-close:hover { background: rgba(255,90,90,.4); }
+    #lv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .lv-tile { background: rgba(40,52,64,.92); border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
+      padding: 14px 10px; text-align: center; min-width: 130px; }
+    .lv-tile .lv-name { font-weight: 700; font-size: .95rem; margin-bottom: 10px; }
+    .lv-tile .lv-ico { font-size: 2rem; line-height: 1.2; }
+    .lv-tile.locked { opacity: .8; }
+    .lv-tile.done { border-color: rgba(74,255,138,.5); }
+    .lv-tile.done .lv-ico { color: #4aff8a; }
+    .lv-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 12px; }
+    .lv-fill { height: 100%; width: 55%; border-radius: 999px;
+      background: repeating-linear-gradient(45deg, #ffd24a 0 8px, #d9a92f 8px 16px); animation: lvPulse 1.2s linear infinite; }
+    @keyframes lvPulse { from { background-position: 0 0; } to { background-position: 32px 0; } }
+
     /* Quest checklist runtime (play + anteprima editor) — in basso a sinistra */
     #quest-checklist { position: fixed; left: 16px; bottom: 16px; width: 290px; z-index: 47; color: #eef2f8; display: none;
       background: linear-gradient(180deg, rgba(18,24,34,.92), rgba(12,16,24,.92)); backdrop-filter: blur(12px);
@@ -577,6 +601,12 @@
 <div id="notification"></div>
 <div id="place-banner"></div>
 
+<!-- Pannello livelli/simulazioni (stile Spatial) -->
+<div id="levels-panel">
+  <div class="lv-head"><span>Simulazioni</span><button id="lv-close" title="Chiudi">✕</button></div>
+  <div id="lv-grid"></div>
+</div>
+
 <!-- Quest checklist (play + anteprima editor) -->
 <div id="quest-checklist"></div>
 <div id="quest-celebrate"><div class="qc-text"></div></div>
@@ -657,6 +687,7 @@
 <div id="toolbar">
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
   <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)">🎥 Terza persona</button>
+  <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none">🗂 Simulazioni</button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
   <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
@@ -1805,6 +1836,7 @@ function importFromUnity(payload) {
   const nL = applyTaskLinks(payload.links) + applyTaskTriggers(payload.taskTriggers);
   const nS = applyActionStates(payload.interactableStates);
   const nZ2 = applyActionTriggers(payload.actionTriggers);
+  if (nS || nZ2) deriveLevels();
   renderQuestEditorList();
   const parts = [];
   if (ia) { parts.push(`interactable: ${ia.added} nuovi, ${ia.updated} agg.`); expandSection('interactable'); }
@@ -2525,12 +2557,15 @@ function setNodeCollision(node, on) {
 function execActions(actions) {
   if (!Array.isArray(actions) || !actions.length) return;
   for (const a of actions) {
-    if (a.op !== 'show' && a.op !== 'hide') continue;          // audio/call: non supportati (v1)
+    if (a.op === 'audio') { playClick(); continue; }
+    if (a.op !== 'show' && a.op !== 'hide') continue;          // call: non supportato (v1)
     const on = a.op === 'show';
     const tgt = findIaByUid(a.target) || (a.leaf ? findIaByUid(a.leaf) : null);
     if (tgt) { setInteractableOn(tgt, on); continue; }
     const z = findZoneByUid(a.target) || (a.leaf ? findZoneByUid(a.leaf) : null);
     if (z) { z.on = on; if (on) z.entered = false; continue; }
+    const ui = matchUiToken(a.leaf || a.target);
+    if (ui) { applyUiAction(ui, on); continue; }
     const node = findSceneNodeByName(a.leaf || a.target);
     if (node) { node.visible = on; setNodeCollision(node, on); continue; }
     console.log('[azioni] target non trovato:', a.target);
@@ -2894,6 +2929,73 @@ const interactables = [];                // {id, group, text, radius, anim, task
 let   _iaSeq = 0;
 let   currentSpatialIA = null;           // interactable attualmente vicino (prompt attivo)
 
+// ─── Livelli/Simulazioni: UI virtuale pilotata dalle azioni (Luchetto-X, ───
+// Progresso-X, Complettato-X, Panel-Simulazioni). Derivata dalle azioni
+// importate: nessuna configurazione, stato runtime (si resetta al reload).
+const LEVEL_ORDER = ['reception', 'lobby', 'ristorante', 'cucina', 'garage', 'piscina', 'spa', 'camere'];
+const _levels = [];   // {key, label, state: 'locked'|'open'|'progress'|'done'}
+function matchUiToken(name) {
+  const n = String(name || '').trim();
+  if (/^panel[\s-]*simulazioni/i.test(n)) return { kind: 'panel' };
+  const m = n.match(/^(luchetto|progresso|complettato)[\s-]+(.+)$/i);
+  if (!m) return null;
+  return { kind: m[1].toLowerCase(), key: m[2].trim().toLowerCase() };
+}
+function levelByKey(key) { return _levels.find(l => l.key === key) || null; }
+function deriveLevels() {
+  const found = new Map();
+  const scan = list => { for (const o of list) for (const a of (o.actions || [])) {
+    const ui = matchUiToken(a.leaf || a.target);
+    if (ui && ui.key) found.set(ui.key, true);
+  } };
+  scan(interactables); scan(actionZones);
+  _levels.length = 0;
+  const keys = [...found.keys()].sort((a, b) => {
+    const ia = LEVEL_ORDER.indexOf(a), ib = LEVEL_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  for (const k of keys) _levels.push({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1), state: 'locked' });
+  if (_levels.length) _levels[0].state = 'progress';   // si parte dal primo livello
+  const b = document.getElementById('btn-levels');
+  if (b) b.style.display = _levels.length ? '' : 'none';
+  renderLevelsGrid();
+}
+function applyUiAction(ui, on) {
+  if (ui.kind === 'panel') { openLevelsPanel(on); return; }
+  const lv = levelByKey(ui.key); if (!lv) return;
+  if (ui.kind === 'luchetto' && !on && lv.state === 'locked') lv.state = 'open';
+  else if (ui.kind === 'progresso') { if (on && lv.state !== 'done') lv.state = 'progress'; else if (!on && lv.state === 'progress') lv.state = 'open'; }
+  else if (ui.kind === 'complettato' && on) lv.state = 'done';
+  renderLevelsGrid();
+}
+function renderLevelsGrid() {
+  const g = document.getElementById('lv-grid'); if (!g) return;
+  g.innerHTML = _levels.map(lv => {
+    const ico = lv.state === 'done' ? '✓' : (lv.state === 'locked' ? '🔒' : (lv.state === 'progress' ? '' : '🔓'));
+    return '<div class="lv-tile ' + lv.state + '"><div class="lv-name">' + escHtml(lv.label) + '</div>'
+      + (lv.state === 'progress' ? '<div class="lv-bar"><div class="lv-fill"></div></div>' : '<div class="lv-ico">' + ico + '</div>')
+      + '</div>';
+  }).join('');
+}
+function openLevelsPanel(show) {
+  const p = document.getElementById('levels-panel'); if (!p) return;
+  renderLevelsGrid();
+  p.classList.toggle('open', show !== false);
+}
+// Click sintetico (per le azioni op:audio — niente asset)
+let _clickCtx = null;
+function playClick() {
+  try {
+    _clickCtx = _clickCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = _clickCtx.createOscillator(), gn = _clickCtx.createGain();
+    o.frequency.value = 920;
+    gn.gain.setValueAtTime(0.10, _clickCtx.currentTime);
+    gn.gain.exponentialRampToValueAtTime(0.0001, _clickCtx.currentTime + 0.12);
+    o.connect(gn); gn.connect(_clickCtx.destination);
+    o.start(); o.stop(_clickCtx.currentTime + 0.13);
+  } catch {}
+}
+
 // ─── Zone-azione (SpatialTriggerEvent → onEnterEvent, importate da Unity) ───
 const AZ_STORE_KEY = 'sc32-actionzones' + _KP;
 const actionZones = [];   // {uid, name, pos, radius, active, on, actions, entered}
@@ -3121,6 +3223,11 @@ async function init() {
   // ── Pulsante Vista Aerea ─────────────────────────────────────────────────
   document.getElementById('btn-overhead').addEventListener('click', toggleOverhead);
   document.getElementById('btn-camera').addEventListener('click', toggleThirdPerson);
+  document.getElementById('btn-levels').addEventListener('click', () => {
+    const p = document.getElementById('levels-panel');
+    openLevelsPanel(!p.classList.contains('open'));
+  });
+  document.getElementById('lv-close').addEventListener('click', () => openLevelsPanel(false));
 
   // ── Pulsante Modelli ─────────────────────────────────────────────────────
   document.getElementById('btn-models').addEventListener('click', () => {
@@ -3500,6 +3607,7 @@ async function loadScene() {
   }
   loadQuests();
   loadActionZones();
+  deriveLevels();
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
   applyLighting(SCENE_CONFIG.lighting);
