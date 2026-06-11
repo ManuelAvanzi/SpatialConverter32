@@ -1651,6 +1651,8 @@ function animateTeleports(t) {
 // Crea il visual: anello del raggio + disco + pin verticale + freccia direzione
 function createEntranceVisual(radius) {
   const group = new THREE.Group();
+  // Il pin verde serve solo alla redazione: in play l'entrance è invisibile
+  group.visible = EDIT_MODE;
   const col = 0x4aff8a;
   const add = THREE.AdditiveBlending;
 
