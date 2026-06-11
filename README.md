@@ -39,9 +39,24 @@ Mini-piattaforma per convertire ambienti **Spatial.io + Unity** in laboratori we
 - **🧭 Quest** — missione con task editabili (nome, descrizione, aggiungi/rinomina/elimina);
   checklist in stile Spatial con progresso salvato, coriandoli al completamento.
 - Click-to-select stile Unity: clicchi una feature nella scena → gizmo + coordinate + card.
-- Editor coordinate con drag-scrub e undo (Ctrl+Z), pannello luci con preset,
-  audio di sottofondo, mesh collider per i modelli statici, upload modelli nel progetto.
+- Editor coordinate con drag-scrub e undo (Ctrl+Z), mesh collider per i modelli statici,
+  upload modelli nel progetto (entrano in scena senza ricaricare la pagina).
 - Sidebar a sezioni richiudibili con contatori; salvataggio sul server con 💾.
+
+### Sidebar (4 colonne)
+- **📦 Modelli** — lista dei modelli del progetto: goto, gizmo, collider, salva posizione,
+  play/pausa animazioni; pallino blu = animato, verde = statico.
+- **🌀 Spatial** — palette delle feature (teleport, entrance, interactable, quest…) +
+  oggetti del menu ＋, colori avatar.
+- **☀️ Luce** — illuminazione: preset cielo, sfondo, ambiente, sole (intensità/elevazione/
+  azimut), esposizione ACES, **riflessi IBL**, nebbia.
+- **⚙️ Opzioni** — griglia a terra (on/off + metratura 1/2/5/10 m, salvata col progetto),
+  wireframe diagnostico dei modelli, toggle del pannello Scene Vitals.
+
+### Scene Vitals (editor)
+Pannello diagnostico in basso a destra (solo editor): FPS, draw call, triangoli per frame,
+vertici totali della scena, geometrie/texture in GPU, memoria JS — con soglie colorate.
+Utile per capire quanto pesa un progetto prima di pubblicarlo.
 
 ### Import da Unity (Unity = fonte di verità)
 Script editor C# (in `Assets/Editor/` del progetto Unity, copie versionate in `unity/`):
