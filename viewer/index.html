@@ -5386,12 +5386,20 @@ async function loadGltfCharacters() {
         loader.load(encodeURI(url) + '?v=' + Date.now(), res, undefined, rej));
       gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
-      const chars = gltf.scene.children.slice();   // root personaggi (top-level)
+      // Solo il 32 storico spacca i file nei figli root (multi-personaggio);
+      // per tutti gli altri progetti un GLB = UN oggetto unico nella lista
+      let chars;
+      if (usesStatic32()) chars = gltf.scene.children.slice();
+      else {
+        const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/\.(glb|gltf)$/i, '');
+        gltf.scene.name = gltf.scene.name || fileName;
+        chars = [gltf.scene];
+      }
       const anims = gltf.animations || [];
       // un mixer per file (binding glTF corretto), una clip per personaggio (per indice)
       const mixer = anims.length ? new THREE.AnimationMixer(gltf.scene) : null;
       chars.forEach((charRoot, i) => {
-        if (CHAR_FLIP_Z) charRoot.position.z = -charRoot.position.z;
+        if (CHAR_FLIP_Z && usesStatic32()) charRoot.position.z = -charRoot.position.z;
         // posizione salvata col gizmo ha la precedenza (+ imposta gizmoName)
         const saved = SAVED_POSITIONS[charRoot.name];
         applySavedToObject(charRoot, charRoot.name);
