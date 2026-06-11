@@ -813,6 +813,10 @@
       <label>Esposizione</label>
       <input type="range" id="lp-exposure" min="0.3" max="3" step="0.05" value="1.2" class="lp-slider">
       <span id="lp-exposure-val" class="lp-val">1.20</span>
+
+      <label>Riflessi (IBL)</label>
+      <input type="range" id="lp-env" min="0" max="1.5" step="0.05" value="0" class="lp-slider">
+      <span id="lp-env-val" class="lp-val">off</span>
     </div>
   </div>
 
@@ -880,6 +884,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
 // In play: niente strumenti di editing, niente scrittura su localStorage,
@@ -4714,6 +4719,9 @@ function setupLightingPanel() {
     document.getElementById('lp-exposure-val').textContent = (+e.target.value).toFixed(2);
   });
 
+  // Riflessi ambiente (IBL)
+  document.getElementById('lp-env').addEventListener('input', e => applyEnvBoost(+e.target.value));
+
   // Nebbia
   document.getElementById('lp-fog-on').addEventListener('change', e => {
     if (e.target.checked) {
@@ -4818,6 +4826,31 @@ function downloadJSON(filename, obj) {
   URL.revokeObjectURL(a.href);
 }
 
+// ─── Riflessi ambiente (IBL): dà vita ai materiali piatti senza cambiarne i colori ───
+// RoomEnvironment (stanza procedurale) → PMREM → scene.environment; intensità regolabile
+// dal pannello Luce, 0 = spento (default: nessun effetto sui progetti esistenti).
+let _envTex = null, _envBoost = 0;
+function ensureEnvTex() {
+  if (_envTex) return _envTex;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  _envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  return _envTex;
+}
+function applyEnvBoost(v) {
+  _envBoost = Math.max(0, +v || 0);
+  if (!scene || !renderer) return;
+  if (_envBoost > 0) {
+    scene.environment = ensureEnvTex();
+    scene.environmentIntensity = _envBoost;
+  } else {
+    scene.environment = null;
+  }
+  const s = document.getElementById('lp-env'), t = document.getElementById('lp-env-val');
+  if (s) s.value = _envBoost;
+  if (t) t.textContent = _envBoost > 0 ? _envBoost.toFixed(2) : 'off';
+}
+
 // Esporta l'INTERA configurazione della scena in un solo file (engine/contenuto split).
 // Da committare in viewer/scene-config.json → diventa ciò che vedono tutti online.
 // Cattura lo stato attuale dell'illuminazione
@@ -4829,6 +4862,7 @@ function captureLighting() {
     sunInt: +dirLight.intensity.toFixed(3), sunCol: '#' + dirLight.color.getHexString(),
     sunPos: dirLight.position.toArray().map(v => +v.toFixed(2)),
     exposure: +renderer.toneMappingExposure.toFixed(3),
+    env: +_envBoost.toFixed(2),
     fogDens: scene.fog ? +scene.fog.density.toFixed(4) : null,
   };
 }
@@ -4842,6 +4876,7 @@ function applyLighting(L) {
   if (L.sunCol) dirLight.color.set(L.sunCol);
   if (Array.isArray(L.sunPos)) dirLight.position.fromArray(L.sunPos);
   if (L.exposure != null) renderer.toneMappingExposure = L.exposure;
+  applyEnvBoost(L.env || 0);
   scene.fog = (L.fogDens != null) ? new THREE.FogExp2(scene.background.clone(), L.fogDens) : null;
   const v = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
   const t = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
