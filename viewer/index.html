@@ -1624,7 +1624,16 @@ function checkTeleports() {
     if (dx * dx + dz * dz > TP_TRIGGER_R * TP_TRIGGER_R) continue;
     if (Math.abs(pw.y - (p.y + PLAYER_HEIGHT)) > 2.2) continue; // non da piani sopra
     const t = tp.targetGroup.position;
-    teleportPlayerTo(t.x, t.y, t.z);
+    // Atterra sul pavimento VERO: raycast in giù da poco sopra la destinazione
+    // (collider inclusi) — altrimenti si finisce dentro gli oggetti
+    let gy = t.y;
+    if (collidableMeshes.length) {
+      colRaycaster.near = 0; colRaycaster.far = 12;
+      colRaycaster.set(new THREE.Vector3(t.x, t.y + 2, t.z), _downVec);
+      const fh = colRaycaster.intersectObjects(collidableMeshes, false);
+      if (fh.length) gy = fh[0].point.y;
+    }
+    teleportPlayerTo(t.x, gy, t.z);
     teleportCooldownUntil = performance.now() + 1200;
     showNotification(`🌀 Teleport ${tp.id}`);
     break;
@@ -5968,8 +5977,12 @@ function uploadModelFile(e) {
   xhr.upload.onprogress = ev => { if (ev.lengthComputable) setUploadProgress(ev.loaded / ev.total); };
   xhr.onload = () => {
     if (xhr.status >= 200 && xhr.status < 300) {
-      setUploadProgress(1); setUploadLabel('Quasi pronto…');
-      setTimeout(() => location.reload(), 600);
+      setUploadProgress(1); setUploadLabel('Aggiungo alla scena…');
+      let saved = null; try { saved = JSON.parse(xhr.responseText).file; } catch {}
+      // niente reload: il modello entra direttamente nella scena
+      loadOneProjectModel(saved || file.name.replace(/[^a-zA-Z0-9._ -]/g, '_'))
+        .then(() => { hideUploadOverlay(); showNotification('✅ ' + file.name + ' aggiunto alla scena'); })
+        .catch(() => setTimeout(() => location.reload(), 300));   // fallback: ricarica
     } else if (xhr.status === 401) { hideUploadOverlay(); showNotification('❌ Non autorizzato — accedi dalla dashboard'); }
     else { hideUploadOverlay(); let msg = 'Upload fallito'; try { msg = JSON.parse(xhr.responseText).error || msg; } catch {} showNotification('❌ ' + msg); }
   };
@@ -5977,12 +5990,38 @@ function uploadModelFile(e) {
   xhr.send(fd);
 }
 
+// Carica UN modello del progetto appena uploadato, senza ricaricare la pagina
+async function loadOneProjectModel(file) {
+  const url = `${ASSET_BASE}/gltfModels/${file}`;
+  const gltf = await new Promise((res, rej) =>
+    new GLTFLoader().load(encodeURI(url) + '?v=' + Date.now(), res, undefined, rej));
+  gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const fileName = file.replace(/\.(glb|gltf)$/i, '');
+  gltf.scene.name = fileName;
+  fixTransparentMaterials(gltf.scene);
+  applySavedToObject(gltf.scene, fileName);
+  const anims = gltf.animations || [];
+  let action = null;
+  if (anims.length) {
+    const mixer = new THREE.AnimationMixer(gltf.scene);
+    action = mixer.clipAction(anims[0]);
+    action.reset(); action.setLoop(THREE.LoopRepeat); action.play();
+    animationMixers.push({ mixer, clips: anims });
+  }
+  gltfCharacters.push({ name: fileName, root: gltf.scene, action });
+  scene.add(gltf.scene);
+  addCharactersToPanel();   // rigenera la lista (include il nuovo)
+}
+
 // Aggiunge i personaggi al pannello "Modelli" con 🎯 goto e ▶/⏹ pausa
 function addCharactersToPanel() {
   const list = document.getElementById('models-list');
   if (!list || !gltfCharacters.length) return;
+  // rigenerabile: via le voci precedenti (upload senza reload)
+  list.querySelectorAll('.char-panel-row').forEach(el => el.remove());
 
   const header = document.createElement('div');
+  header.className = 'char-panel-row';
   header.style.cssText = 'font-size:.72rem;color:#4a9eff;margin:12px 0 6px;'
     + 'text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
   header.textContent = usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
@@ -5990,7 +6029,7 @@ function addCharactersToPanel() {
 
   for (const ch of gltfCharacters) {
     const item = document.createElement('div');
-    item.className = 'model-item';
+    item.className = 'model-item char-panel-row';
     // blu = animato (ha una clip), verde = statico
     item.innerHTML =
       `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
