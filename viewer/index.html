@@ -292,6 +292,13 @@
     .uol-row button.locked { background: rgba(255,184,74,.18); border-color: rgba(255,184,74,.5); color: #ffce8a; }
     .uol-row button.uol-del:hover { border-color: #ff6a6a; color: #ff8a8a; }
     .uol-empty { font-size: .76rem; color: #8ea0b8; padding: 8px 6px; }
+    /* Pannello Luce dentro la sidebar (tab Luce) + tab Opzioni */
+    #lighting-panel.in-sidebar { position: static !important; display: block !important;
+      width: auto !important; max-height: none !important; background: transparent !important;
+      border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+    .set-row { display: flex; align-items: center; gap: 9px; font-size: .82rem; color: #dde5f0;
+      padding: 8px 2px; cursor: pointer; user-select: none; }
+    .set-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #4a9eff; cursor: pointer; }
 
     /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
     @media (max-width: 600px) {
@@ -828,6 +835,14 @@
   <div class="menu-tabs">
     <button class="menu-tab active" data-tab="models">📦 Modelli</button>
     <button class="menu-tab"        data-tab="spatial">🌀 Spatial</button>
+    <button class="menu-tab"        data-tab="light">☀️ Luce</button>
+    <button class="menu-tab"        data-tab="settings">⚙️ Opzioni</button>
+  </div>
+  <div id="tab-light" class="menu-tab-content"><!-- adotta #lighting-panel al boot --></div>
+  <div id="tab-settings" class="menu-tab-content">
+    <h3>Impostazioni scena</h3>
+    <label class="set-row"><input type="checkbox" id="set-grid" checked> Griglia a terra</label>
+    <div class="sf-hint">Visibile solo dove la scena ha il pavimento di default. Salvata col progetto (vale anche in play).</div>
   </div>
   <div id="tab-models" class="menu-tab-content active">
     <button id="btn-upload-model" class="export-cfg-btn" style="display:none">📂 Carica contenuti (.glb)</button>
@@ -1084,6 +1099,7 @@ const fpsCameraState = { pos: new THREE.Vector3(), yaw: 0, pitch: 0 };
 const loadedModels = [];
 const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee'];
 let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
+let _sceneGrid = null;        // griglia a terra (toggle nella tab Opzioni)
 
 // ─── Gizmo posizionamento (TransformControls) ───────────────────────────────
 let transformControls = null;
@@ -1575,8 +1591,8 @@ function expandSectionFor(el) {
 
 function switchMenuTab(name) {
   document.querySelectorAll('.menu-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  document.getElementById('tab-models').classList.toggle('active', name === 'models');
-  document.getElementById('tab-spatial').classList.toggle('active', name === 'spatial');
+  document.querySelectorAll('.menu-tab-content').forEach(c =>
+    c.classList.toggle('active', c.id === 'tab-' + name));
   const panel = document.getElementById('models-panel');
   if (panel.style.display !== 'block') {
     panel.style.display = 'block';
@@ -4664,14 +4680,21 @@ async function init() {
     if (currentSpatialIA) triggerSpatialIA(currentSpatialIA);
   });
 
-  // ── Pulsante Illuminazione ────────────────────────────────────────────────
-  document.getElementById('btn-lighting').addEventListener('click', () => {
-    const panel = document.getElementById('lighting-panel');
-    const isVisible = panel.style.display === 'block';
-    panel.style.display = isVisible ? 'none' : 'block';
-    document.getElementById('btn-lighting').classList.toggle('active', !isVisible);
-  });
+  // ── Illuminazione: il pannello vive nella sidebar (tab Luce) ─────────────
+  const _lp = document.getElementById('lighting-panel');
+  document.getElementById('tab-light').appendChild(_lp);
+  _lp.classList.add('in-sidebar');
+  _lp.style.display = 'block';
+  // il bottone ☀️ in toolbar apre la sidebar sulla tab Luce
+  document.getElementById('btn-lighting').addEventListener('click', () => switchMenuTab('light'));
   setupLightingPanel();
+
+  // ── Tab Opzioni: griglia a terra (persistita in scene-config.settings) ───
+  const _gridCb = document.getElementById('set-grid');
+  _gridCb.checked = !((SCENE_CONFIG.settings || {}).grid === false);
+  _gridCb.addEventListener('change', () => {
+    if (_sceneGrid) _sceneGrid.visible = _gridCb.checked;
+  });
 
   // ── Audio di sottofondo ───────────────────────────────────────────────────
   setupAudio();
@@ -5929,7 +5952,7 @@ function buildSceneConfigObject() {
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
-    userObjects:   serializeUserObjects(false),
+    settings:      { grid: !_sceneGrid || _sceneGrid.visible },
   };
 }
 function exportSceneConfig() {
@@ -6448,6 +6471,8 @@ function createPlaceholderEnvironment() {
 
   const grid = new THREE.GridHelper(120, 120, 0x6a7480, 0x444b54);
   grid.position.y = 0.01;
+  grid.visible = !((SCENE_CONFIG.settings || {}).grid === false);   // toggle in tab Opzioni
+  _sceneGrid = grid;
   scene.add(grid);
 
   if (PROJECT_SLUG) showNotification('🆕 Scena vuota — usa gli strumenti per costruirla');
