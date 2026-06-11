@@ -99,6 +99,7 @@
       color: #ddd; border-radius: 4px; padding: 2px 7px; cursor: pointer; font-size: .72rem;
       flex-shrink: 0; transition: background .15s; }
     .ring-btn:hover { background: rgba(255,255,255,.2); }
+    .ring-btn svg { width: 12px; height: 12px; vertical-align: -1px; }
 
     /* Esporta scene-config */
     .export-cfg-btn { width: 100%; background: rgba(74,255,138,.18); border: 1px solid rgba(74,255,138,.45);
@@ -255,6 +256,33 @@
     #uo-pill button:hover { background: rgba(74,158,255,.25); }
     #uo-pill button.active { background: #4a9eff; border-color: #4a9eff; color: #fff; }
     #uo-pill button.del:hover { background: rgba(255,90,90,.3); }
+    /* Lista dei propri oggetti (play): elimina / blocca */
+    #uo-list-btn { position: fixed; right: 18px; bottom: 158px; width: 42px; height: 42px; border-radius: 50%;
+      background: rgba(16,20,28,.92); border: 1px solid rgba(255,255,255,.16); color: #cfe0f5; cursor: pointer;
+      z-index: 60; display: none; align-items: center; justify-content: center; transition: all .15s; }
+    body.play-mode #uo-list-btn { display: flex; }
+    #uo-list-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+    #uo-list-btn svg { width: 18px; height: 18px; }
+    #uo-list { position: fixed; right: 70px; bottom: 158px; z-index: 60; display: none;
+      background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
+      border-radius: 13px; padding: 9px; width: 250px; max-height: 46vh; overflow-y: auto;
+      box-shadow: 0 14px 50px rgba(0,0,0,.55); }
+    #uo-list.open { display: block; }
+    #uo-list h4 { font-size: .72rem; color: #8ea0b8; text-transform: uppercase; letter-spacing: .05em;
+      margin: 2px 4px 8px; font-weight: 700; }
+    .uol-row { display: flex; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 8px;
+      color: #e8edf5; font-size: .8rem; }
+    .uol-row:hover { background: rgba(255,255,255,.05); }
+    .uol-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uol-type { font-size: .62rem; color: #8ea0b8; flex-shrink: 0; }
+    .uol-row button { width: 27px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.05); color: #cfd9e8; cursor: pointer; display: inline-flex;
+      align-items: center; justify-content: center; flex-shrink: 0; }
+    .uol-row button svg { width: 13px; height: 13px; }
+    .uol-row button:hover { border-color: #4a9eff; color: #4a9eff; }
+    .uol-row button.locked { background: rgba(255,184,74,.18); border-color: rgba(255,184,74,.5); color: #ffce8a; }
+    .uol-row button.uol-del:hover { border-color: #ff6a6a; color: #ff8a8a; }
+    .uol-empty { font-size: .76rem; color: #8ea0b8; padding: 8px 6px; }
 
     /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
     @media (max-width: 600px) {
@@ -697,6 +725,10 @@
   <div class="am-sep"></div>
   <div class="am-row" data-add="portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>Portale / Bolla<span class="am-badge">URL</span></div>
 </div>
+<button id="uo-list-btn" title="I miei oggetti">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+</button>
+<div id="uo-list"><h4>I miei oggetti</h4><div id="uo-list-body"></div></div>
 <input type="file" id="uo-in-model" accept=".glb,.gltf" style="display:none">
 <input type="file" id="uo-in-image" accept="image/jpeg,image/png,image/webp" style="display:none">
 <input type="file" id="uo-in-bg360" accept="image/jpeg,image/png" style="display:none">
@@ -3516,7 +3548,7 @@ async function uoIdbDel(key) { try { const db = await uoIdb(); db.transaction('f
 
 function serializeUserObjects(ownOnly) {
   return userObjects.filter(o => (ownOnly ? o.own : !o.own) && o.type !== '_dead')
-    .map(o => ({ id: o.id, type: o.type, name: o.name, src: o.src, extra: o.extra || {},
+    .map(o => ({ id: o.id, type: o.type, name: o.name, src: o.src, locked: !!o.locked, extra: o.extra || {},
       pos: o.group ? o.group.position.toArray() : [0, 0, 0],
       rot: o.group ? [o.group.rotation.x, o.group.rotation.y, o.group.rotation.z] : [0, 0, 0],
       scale: o.group ? o.group.scale.toArray() : [1, 1, 1] }));
@@ -3524,7 +3556,37 @@ function serializeUserObjects(ownOnly) {
 function saveUserObjects() {
   if (EDIT_MODE) localStorage.setItem(UO_KEY, JSON.stringify(serializeUserObjects(false)));
   else localStorage.setItem(UO_VISITOR_KEY, JSON.stringify(serializeUserObjects(true)));
+  if (EDIT_MODE) renderUserObjectList(); else renderUoPlayList();
+}
+// Lista "I miei oggetti" in play: blocca/sblocca ed elimina
+const UO_LOCK_SVG = locked => locked
+  ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+  : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+const UO_TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+function toggleUoLock(o) {
+  o.locked = !o.locked;
+  if (o.locked) {
+    if (gizmoTarget === o.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    if (_uoSelected === o) hideUoPill();
+  }
+  saveUserObjects();
   if (EDIT_MODE) renderUserObjectList();
+}
+function renderUoPlayList() {
+  const body = document.getElementById('uo-list-body'); if (!body) return;
+  body.innerHTML = '';
+  const mine = userObjects.filter(o => o.own);
+  if (!mine.length) { body.innerHTML = '<div class="uol-empty">Nessun oggetto tuo. Aggiungine col ＋ qui sotto.</div>'; return; }
+  for (const o of mine) {
+    const row = document.createElement('div'); row.className = 'uol-row';
+    row.innerHTML = `<span class="uol-name"></span><span class="uol-type">${UO_TYPE_LABEL[o.type] || o.type}</span>`
+      + `<button class="uol-lock${o.locked ? ' locked' : ''}" title="${o.locked ? 'Sblocca' : 'Blocca (non si potrà più muovere)'}">${UO_LOCK_SVG(o.locked)}</button>`
+      + `<button class="uol-del" title="Elimina">${UO_TRASH_SVG}</button>`;
+    row.querySelector('.uol-name').textContent = o.name;
+    row.querySelector('.uol-lock').onclick = () => { toggleUoLock(o); renderUoPlayList(); };
+    row.querySelector('.uol-del').onclick = () => { removeUserObject(o); renderUoPlayList(); };
+    body.appendChild(row);
+  }
 }
 async function initUserObjects() {
   let published = null;
@@ -3559,7 +3621,7 @@ function uoSpawnPose() {
 // ── Builder per tipo ──
 async function addUserObject(data, opts = {}) {
   const o = { id: data.id || ('uo' + Date.now() + '_' + (_uoSeq++)), type: data.type, name: data.name || data.type,
-    src: data.src || null, extra: data.extra || {}, own: !!opts.own, group: null, meshes: [] };
+    src: data.src || null, extra: data.extra || {}, own: !!opts.own, locked: !!data.locked, group: null, meshes: [] };
   if (o.type === 'bg360') {
     const url = await resolveUoSrc(o.src); if (!url) return null;
     // un solo sfondo: rimuovi l'eventuale precedente
@@ -3635,18 +3697,23 @@ function buildUoPortal(o) {
     fragmentShader: `uniform vec3 uColor; uniform float uTime;
       varying vec3 vN; varying vec3 vV; varying vec3 vP;
       void main() {
-        float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
-        float swirl = 0.5 + 0.5 * sin(vP.y * 9.0 + uTime * 2.2 + sin(vP.x * 7.0 + uTime));
-        float pulse = 0.82 + 0.18 * sin(uTime * 2.6);
-        vec3 col = mix(uColor * 0.45, uColor * 1.55, fres) + vec3(1.0) * fres * 0.45 * pulse;
-        col += uColor * swirl * 0.12;
-        float a = clamp(0.16 + fres * 0.95 * pulse + swirl * 0.05, 0.0, 0.95);
+        float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.0);
+        // "fluido" dentro la bolla: due onde che scorrono in direzioni diverse
+        float f1 = sin(vP.x * 6.0 + uTime * 1.4) * sin(vP.y * 7.0 - uTime * 0.9) * sin(vP.z * 5.0 + uTime * 1.1);
+        float f2 = sin((vP.x + vP.y) * 9.0 - uTime * 1.8) * 0.5;
+        float fluid = smoothstep(-0.25, 0.55, f1 + f2 * 0.4);
+        float pulse = 0.85 + 0.15 * sin(uTime * 2.2);
+        vec3 deep = uColor * 0.25;                    // "blob" scuro che nuota
+        vec3 body = mix(deep, uColor * 1.25, fluid);  // corpo fluido
+        vec3 col = body + (uColor * 0.7 + vec3(0.55)) * fres * pulse;
+        float a = clamp(0.55 + fluid * 0.2 + fres * 0.4, 0.0, 0.97);
         gl_FragColor = vec4(col, a);
       }`,
   });
   o._portalMat = mat;
   const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 48, 32), mat);
   sphere.position.y = 1.2;
+  o._portalSphere = sphere;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.018, 10, 64),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
   ring.position.y = 1.2; ring.rotation.x = Math.PI / 2;
@@ -3906,8 +3973,11 @@ function interactUserObject(o, hit, fromVR) {
     if (EDIT_MODE) return false;
     openUoGoModal(o); return true;
   }
-  // immagini/modelli: in play, se è un oggetto MIO → pill di gestione
-  if (!EDIT_MODE && o.own) { showUoPill(o); return true; }
+  // immagini/modelli: in play, se è un oggetto MIO (e non bloccato) → pill di gestione
+  if (!EDIT_MODE && o.own) {
+    if (o.locked) { showNotification('Oggetto bloccato — sbloccalo dalla lista'); return true; }
+    showUoPill(o); return true;
+  }
   return false;
 }
 // ── YouTube NELLA scena: iframe proiettato in 3D (CSS3DRenderer) ─────────────
@@ -4009,7 +4079,11 @@ function drawUoYtCtrl(o) {
 const _uoTmpP = new THREE.Vector3(), _uoTmpQ = new THREE.Quaternion(), _uoTmpS = new THREE.Vector3();
 function animateUserObjects(t) {
   for (const o of userObjects) {
-    if (o._portalMat) { o._portalMat.uniforms.uTime.value = t; if (o._portalRing) o._portalRing.rotation.z = t * 0.4; }
+    if (o._portalMat) {
+      o._portalMat.uniforms.uTime.value = t;
+      if (o._portalRing) o._portalRing.rotation.z = t * 0.4;
+      if (o._portalSphere) { o._portalSphere.rotation.y = t * 0.55; o._portalSphere.rotation.x = Math.sin(t * 0.5) * 0.18; }
+    }
     if (o._yt) {
       o._yt.screen.updateWorldMatrix(true, false);
       o._yt.screen.matrixWorld.decompose(_uoTmpP, _uoTmpQ, _uoTmpS);
@@ -4078,6 +4152,7 @@ function renderUserObjectList() {
     row.innerHTML = `<div class="ia-head"><span style="font-size:.72rem;color:#9fb4d4">${UO_TYPE_LABEL[o.type] || o.type}</span>`
       + `<input class="ia-text-in uo-name" style="margin:0;flex:1" value="">`
       + (o.group ? `<button class="ring-btn uo-goto" title="Vai all'oggetto">🎯</button><button class="ring-btn uo-sel" title="Seleziona (gizmo)">✥</button>` : '')
+      + `<button class="ring-btn uo-lock" style="${o.locked ? 'background:rgba(255,184,74,.25);color:#ffce8a' : ''}" title="${o.locked ? 'Sblocca' : 'Blocca'}">${UO_LOCK_SVG(o.locked)}</button>`
       + `<button class="ring-btn uo-del" title="Elimina">🗑</button></div>`;
     row.querySelector('.uo-name').value = o.name;
     row.querySelector('.uo-name').addEventListener('input', e => { o.name = e.target.value; saveUserObjectsDebounced(); });
@@ -4085,6 +4160,7 @@ function renderUserObjectList() {
       row.querySelector('.uo-goto').onclick = () => { const p = o.group.position; teleportPlayerTo(p.x + 1.5, Math.max(0, p.y - 1), p.z + 1.5); };
       row.querySelector('.uo-sel').onclick = () => selectUserObject(o);
     }
+    row.querySelector('.uo-lock').onclick = () => toggleUoLock(o);
     row.querySelector('.uo-del').onclick = () => removeUserObject(o);
     list.appendChild(row);
   }
@@ -4093,6 +4169,7 @@ let _uoSaveT = null;
 function saveUserObjectsDebounced() { clearTimeout(_uoSaveT); _uoSaveT = setTimeout(saveUserObjects, 400); }
 function selectUserObject(o) {
   if (!o.group) return;
+  if (o.locked) { showNotification('Oggetto bloccato — sbloccalo dalla lista Oggetti'); return; }
   captureUndo(o.group);
   transformControls.attach(o.group); gizmoTarget = o.group;
   showCoordEditor(o.group);
@@ -4143,6 +4220,12 @@ function selectUserObject(o) {
     document.getElementById('uo-go-modal').classList.remove('open'); _uoGoTarget = null;
   };
   document.querySelector('#video-overlay .vo-close').onclick = closeVideoOverlay;
+  // lista "I miei oggetti" (solo play)
+  document.getElementById('uo-list-btn').addEventListener('click', () => {
+    const p = document.getElementById('uo-list');
+    p.classList.toggle('open');
+    if (p.classList.contains('open')) renderUoPlayList();
+  });
   // pill: gestione del proprio oggetto in play (gizmo + modalità)
   document.getElementById('uo-pill-t').onclick = () => setUoPillMode('translate');
   document.getElementById('uo-pill-r').onclick = () => setUoPillMode('rotate');
