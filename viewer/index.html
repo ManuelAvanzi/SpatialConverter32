@@ -253,6 +253,7 @@
     #uo-pill button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06);
       color: #e8edf5; border-radius: 999px; padding: 6px 13px; cursor: pointer; font-size: .78rem; font-weight: 600; }
     #uo-pill button:hover { background: rgba(74,158,255,.25); }
+    #uo-pill button.active { background: #4a9eff; border-color: #4a9eff; color: #fff; }
     #uo-pill button.del:hover { background: rgba(255,90,90,.3); }
 
     /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
@@ -728,8 +729,10 @@
 
 <div id="video-overlay"><button class="vo-close" title="Chiudi">✕</button></div>
 <div id="uo-pill">
-  <button id="uo-pill-move">Riposiziona</button>
-  <button id="uo-pill-rot">Ruota 45°</button>
+  <button id="uo-pill-t" class="active">Sposta</button>
+  <button id="uo-pill-r">Ruota</button>
+  <button id="uo-pill-s">Scala</button>
+  <button id="uo-pill-move">Davanti a me</button>
   <button class="del" id="uo-pill-del">Elimina</button>
 </div>
 
@@ -998,6 +1001,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
 // ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
 // In play: niente strumenti di editing, niente scrittura su localStorage,
@@ -3588,6 +3592,8 @@ async function addUserObject(data, opts = {}) {
   o.meshes = []; group.traverse(m => { if (m.isMesh) { o.meshes.push(m); } });
   if (opts.fresh) saveUserObjects();
   if (EDIT_MODE) renderUserObjectList();
+  // appena aggiunto → gizmo subito pronto (editor: selezione piena; play: pill)
+  if (opts.fresh) { if (EDIT_MODE) selectUserObject(o); else showUoPill(o); }
   return o;
 }
 async function buildUoImage(o) {
@@ -3615,12 +3621,36 @@ async function buildUoModel(o, fresh) {
 }
 function buildUoPortal(o) {
   const color = new THREE.Color(o.extra.color || '#4fc3f7');
-  const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 32, 24),
-    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.42, roughness: 0.15, metalness: 0.2 }));
+  // Bolla "viva": shader fresnel (bordo luminoso + cuore che pulsa)
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, side: THREE.DoubleSide, depthWrite: false,
+    uniforms: { uColor: { value: color }, uTime: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying vec3 vP;
+      void main() {
+        vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vV = normalize(-mv.xyz); vP = position;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uTime;
+      varying vec3 vN; varying vec3 vV; varying vec3 vP;
+      void main() {
+        float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+        float swirl = 0.5 + 0.5 * sin(vP.y * 9.0 + uTime * 2.2 + sin(vP.x * 7.0 + uTime));
+        float pulse = 0.82 + 0.18 * sin(uTime * 2.6);
+        vec3 col = mix(uColor * 0.45, uColor * 1.55, fres) + vec3(1.0) * fres * 0.45 * pulse;
+        col += uColor * swirl * 0.12;
+        float a = clamp(0.16 + fres * 0.95 * pulse + swirl * 0.05, 0.0, 0.95);
+        gl_FragColor = vec4(col, a);
+      }`,
+  });
+  o._portalMat = mat;
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 48, 32), mat);
   sphere.position.y = 1.2;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.018, 10, 48),
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.018, 10, 64),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
   ring.position.y = 1.2; ring.rotation.x = Math.PI / 2;
+  o._portalRing = ring;
   // etichetta col nome sopra la bolla
   const c = document.createElement('canvas'); const ctx = c.getContext('2d');
   ctx.font = 'bold 42px Segoe UI, sans-serif';
@@ -3774,6 +3804,7 @@ function removeUserObject(o, silent) {
     if (gizmoTarget === o.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
     scene.remove(o.group);
   }
+  if (o._yt) stopUoYoutube(o);
   if (o._video) { o._video.pause(); o._video.src = ''; }
   if (o.src && o.src.startsWith('idb:') && o.own) uoIdbDel(o.src.slice(4));
   if (_uoSelected === o) { _uoSelected = null; document.getElementById('uo-pill').classList.remove('open'); }
@@ -3863,9 +3894,12 @@ function interactUserObject(o, hit, fromVR) {
     return true;
   }
   if (kind === 'youtube') {
-    if (EDIT_MODE && !fromVR) return false;
-    if (fromVR) { showNotification('🎬 Il video YouTube si apre fuori dal visore'); return true; }
-    openVideoOverlay(o.extra.videoId); return true;
+    if (fromVR) { showNotification('🎬 I video YouTube non si vedono nel visore (limite YouTube)'); return true; }
+    if (o._yt) return true;          // già in riproduzione: comandi dalla barra
+    startUoYoutube(o); return true;  // parte NELLA scena (CSS3D), anche in editor
+  }
+  if (kind === 'ytctrl' && hit.uv) {
+    uoYtCommand(o, Math.floor(hit.uv.x * 5)); return true;
   }
   if (o.type === 'portal') {
     if (fromVR) { showNotification('🔗 ' + (o.extra.url || '') + ' — apri dal desktop'); return true; }
@@ -3876,6 +3910,118 @@ function interactUserObject(o, hit, fromVR) {
   if (!EDIT_MODE && o.own) { showUoPill(o); return true; }
   return false;
 }
+// ── YouTube NELLA scena: iframe proiettato in 3D (CSS3DRenderer) ─────────────
+// Il player vero è un iframe allineato al pannello; i comandi (pausa, ±10s,
+// audio, stop) passano dalla barra 3D sotto lo schermo via postMessage.
+let _cssRenderer = null, _cssScene = null;
+const _uoYtActive = [];
+function ensureCss3d() {
+  if (_cssRenderer) return;
+  _cssScene = new THREE.Scene();
+  _cssRenderer = new CSS3DRenderer();
+  const el = _cssRenderer.domElement;
+  el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;';
+  document.body.appendChild(el);
+  _cssRenderer.setSize(window.innerWidth, window.innerHeight);
+  window.addEventListener('resize', () => _cssRenderer.setSize(window.innerWidth, window.innerHeight));
+  // tempo corrente del player (per i ±10s)
+  window.addEventListener('message', e => {
+    try {
+      const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      if (d && d.event === 'infoDelivery' && d.info && d.info.currentTime != null) {
+        for (const o of _uoYtActive) if (o._yt && o._yt.iframe.contentWindow === e.source) o._yt.time = d.info.currentTime;
+      }
+    } catch {}
+  });
+}
+function startUoYoutube(o) {
+  ensureCss3d();
+  const screen = o.group.children.find(m => m.userData.uoHit === 'youtube');
+  if (!screen || o._yt) return;
+  const W = 800, H = 450;
+  const iframe = document.createElement('iframe');
+  iframe.width = W; iframe.height = H;
+  iframe.style.cssText = 'border:0;border-radius:10px;pointer-events:none;background:#000;';
+  iframe.allow = 'autoplay; encrypted-media';
+  iframe.src = 'https://www.youtube-nocookie.com/embed/' + o.extra.videoId
+    + '?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+  const obj = new CSS3DObject(iframe);
+  _cssScene.add(obj);
+  o._yt = { iframe, obj, screen, paused: false, muted: false, time: 0, pxScale: 2.4 / W };
+  screen.material.color = new THREE.Color(0x000000);   // il pannello fa da fondale
+  // barra controlli 3D sotto lo schermo (5 zone: -10 · pausa · +10 · audio · stop)
+  const cc = document.createElement('canvas'); cc.width = 1280; cc.height = 132;
+  o._ytCanvas = cc;
+  const ctex = new THREE.CanvasTexture(cc); ctex.colorSpace = THREE.SRGBColorSpace;
+  const bar = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.25),
+    new THREE.MeshBasicMaterial({ map: ctex, transparent: true, side: THREE.DoubleSide }));
+  bar.position.copy(screen.position); bar.position.y -= 0.82;
+  bar.userData.uoHit = 'ytctrl';
+  o._ytTex = ctex; o._ytBar = bar;
+  o.group.add(bar); o.meshes.push(bar);
+  drawUoYtCtrl(o);
+  _uoYtActive.push(o);
+}
+function stopUoYoutube(o) {
+  if (!o._yt) return;
+  _cssScene.remove(o._yt.obj); o._yt.iframe.remove();
+  const i = _uoYtActive.indexOf(o); if (i !== -1) _uoYtActive.splice(i, 1);
+  if (o._ytBar) { o.group.remove(o._ytBar); const mi = o.meshes.indexOf(o._ytBar); if (mi !== -1) o.meshes.splice(mi, 1); }
+  if (o._yt.screen) o._yt.screen.material.color = new THREE.Color(0xffffff);
+  o._yt = null;
+}
+function uoYtCmd(o, func, args) {
+  try { o._yt.iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), '*'); } catch {}
+}
+function uoYtCommand(o, zone) {
+  if (!o._yt) return;
+  if (zone === 0) uoYtCmd(o, 'seekTo', [Math.max(0, (o._yt.time || 0) - 10), true]);
+  else if (zone === 1) { o._yt.paused = !o._yt.paused; uoYtCmd(o, o._yt.paused ? 'pauseVideo' : 'playVideo'); }
+  else if (zone === 2) uoYtCmd(o, 'seekTo', [(o._yt.time || 0) + 10, true]);
+  else if (zone === 3) { o._yt.muted = !o._yt.muted; uoYtCmd(o, o._yt.muted ? 'mute' : 'unMute'); }
+  else { stopUoYoutube(o); return; }
+  drawUoYtCtrl(o);
+}
+function drawUoYtCtrl(o) {
+  const c = o._ytCanvas, ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = 'rgba(12,16,24,0.85)'; _roundRect(ctx, 0, 0, c.width, c.height, 40); ctx.fill();
+  const cy = 66, seg = c.width / 5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2;
+  for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(seg * i, 24); ctx.lineTo(seg * i, c.height - 24); ctx.stroke(); }
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 28px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.beginPath(); ctx.moveTo(seg * 0.5 + 24, cy - 20); ctx.lineTo(seg * 0.5 - 8, cy); ctx.lineTo(seg * 0.5 + 24, cy + 20); ctx.closePath(); ctx.fill();
+  ctx.fillText('10', seg * 0.5 - 32, cy);
+  if (!o._yt || o._yt.paused) { ctx.beginPath(); ctx.moveTo(seg * 1.5 - 14, cy - 24); ctx.lineTo(seg * 1.5 - 14, cy + 24); ctx.lineTo(seg * 1.5 + 26, cy); ctx.closePath(); ctx.fill(); }
+  else { ctx.fillRect(seg * 1.5 - 20, cy - 22, 13, 44); ctx.fillRect(seg * 1.5 + 7, cy - 22, 13, 44); }
+  ctx.beginPath(); ctx.moveTo(seg * 2.5 - 24, cy - 20); ctx.lineTo(seg * 2.5 + 8, cy); ctx.lineTo(seg * 2.5 - 24, cy + 20); ctx.closePath(); ctx.fill();
+  ctx.fillText('10', seg * 2.5 + 32, cy);
+  ctx.beginPath(); ctx.moveTo(seg * 3.5 - 24, cy - 9); ctx.lineTo(seg * 3.5 - 11, cy - 9); ctx.lineTo(seg * 3.5 + 3, cy - 21); ctx.lineTo(seg * 3.5 + 3, cy + 21); ctx.lineTo(seg * 3.5 - 11, cy + 9); ctx.lineTo(seg * 3.5 - 24, cy + 9); ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = '#fff';
+  if (o._yt && o._yt.muted) { ctx.beginPath(); ctx.moveTo(seg * 3.5 + 12, cy - 14); ctx.lineTo(seg * 3.5 + 36, cy + 14); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(seg * 3.5 + 9, cy, 16, -0.9, 0.9); ctx.stroke(); }
+  ctx.lineWidth = 6; ctx.beginPath();
+  ctx.moveTo(seg * 4.5 - 16, cy - 16); ctx.lineTo(seg * 4.5 + 16, cy + 16);
+  ctx.moveTo(seg * 4.5 + 16, cy - 16); ctx.lineTo(seg * 4.5 - 16, cy + 16); ctx.stroke();
+  if (o._ytTex) o._ytTex.needsUpdate = true;
+}
+// Per-frame: bolle animate + iframe YouTube incollati ai pannelli
+const _uoTmpP = new THREE.Vector3(), _uoTmpQ = new THREE.Quaternion(), _uoTmpS = new THREE.Vector3();
+function animateUserObjects(t) {
+  for (const o of userObjects) {
+    if (o._portalMat) { o._portalMat.uniforms.uTime.value = t; if (o._portalRing) o._portalRing.rotation.z = t * 0.4; }
+    if (o._yt) {
+      o._yt.screen.updateWorldMatrix(true, false);
+      o._yt.screen.matrixWorld.decompose(_uoTmpP, _uoTmpQ, _uoTmpS);
+      o._yt.obj.position.copy(_uoTmpP);
+      o._yt.obj.quaternion.copy(_uoTmpQ);
+      const s = o._yt.pxScale;
+      o._yt.obj.scale.set(s * _uoTmpS.x, s * _uoTmpS.y, s);
+    }
+  }
+  if (_cssRenderer && _uoYtActive.length) _cssRenderer.render(_cssScene, viewCam());
+}
+
 // ── Overlay YouTube + modale portale ──
 function openVideoOverlay(videoId) {
   if (!videoId) return;
@@ -3897,8 +4043,26 @@ function openUoGoModal(o) {
   document.getElementById('uo-go-url').textContent = _uoGoTarget;
   document.getElementById('uo-go-modal').classList.add('open');
 }
-// ── Pill oggetto proprio (play) ──
-function showUoPill(o) { _uoSelected = o; document.getElementById('uo-pill').classList.add('open'); }
+// ── Pill oggetto proprio (play): gizmo vero + scelta modalità ──
+function showUoPill(o) {
+  _uoSelected = o;
+  document.getElementById('uo-pill').classList.add('open');
+  if (o.group && transformControls) {
+    captureUndo(o.group);
+    transformControls.attach(o.group); gizmoTarget = o.group;
+    setUoPillMode('translate');
+  }
+}
+function setUoPillMode(mode) {
+  if (transformControls) transformControls.setMode(mode);
+  const map = { translate: 'uo-pill-t', rotate: 'uo-pill-r', scale: 'uo-pill-s' };
+  for (const id of Object.values(map)) document.getElementById(id).classList.toggle('active', id === map[mode]);
+}
+function hideUoPill() {
+  if (_uoSelected && gizmoTarget === (_uoSelected.group || null)) { transformControls.detach(); gizmoTarget = null; }
+  _uoSelected = null;
+  document.getElementById('uo-pill').classList.remove('open');
+}
 // ── Lista oggetti in editor (tab Spatial ▸ Oggetti) ──
 const UO_TYPE_LABEL = { model: 'Modello 3D', image: 'Immagine', bg360: 'Sfondo 360°', youtube: 'YouTube', mp4: 'Video MP4', pdf: 'PDF', portal: 'Bolla' };
 function renderUserObjectList() {
@@ -3979,7 +4143,10 @@ function selectUserObject(o) {
     document.getElementById('uo-go-modal').classList.remove('open'); _uoGoTarget = null;
   };
   document.querySelector('#video-overlay .vo-close').onclick = closeVideoOverlay;
-  // pill: gestione del proprio oggetto in play
+  // pill: gestione del proprio oggetto in play (gizmo + modalità)
+  document.getElementById('uo-pill-t').onclick = () => setUoPillMode('translate');
+  document.getElementById('uo-pill-r').onclick = () => setUoPillMode('rotate');
+  document.getElementById('uo-pill-s').onclick = () => setUoPillMode('scale');
   document.getElementById('uo-pill-move').onclick = () => {
     if (!_uoSelected || !_uoSelected.group) return;
     const p = uoSpawnPose();
@@ -3987,11 +4154,7 @@ function selectUserObject(o) {
     _uoSelected.group.rotation.set(p.rot[0], p.rot[1], p.rot[2]);
     saveUserObjects();
   };
-  document.getElementById('uo-pill-rot').onclick = () => {
-    if (!_uoSelected || !_uoSelected.group) return;
-    _uoSelected.group.rotation.y += Math.PI / 4; saveUserObjects();
-  };
-  document.getElementById('uo-pill-del').onclick = () => { if (_uoSelected) removeUserObject(_uoSelected); };
+  document.getElementById('uo-pill-del').onclick = () => { if (_uoSelected) { removeUserObject(_uoSelected); hideUoPill(); } };
 })();
 
 // ─── Zone-azione (SpatialTriggerEvent → onEnterEvent, importate da Unity) ───
@@ -4140,7 +4303,7 @@ async function init() {
       // Oggetti utente: PDF/video/bolla/pill
       const up = pickUserObject(e.clientX, e.clientY);
       if (up && interactUserObject(up.o, up.hit, false)) { isDragging = false; return; }
-      if (!up && _uoSelected) { _uoSelected = null; document.getElementById('uo-pill').classList.remove('open'); }
+      if (!up && _uoSelected && !gizmoDragging) hideUoPill();
     }
     // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
     if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
@@ -6183,6 +6346,9 @@ function animate(timestamp, frame) {
 
   // Anima gli hotspot interactable (bob)
   animateInteractables(t);
+
+  // Oggetti utente: bolle (shader) + iframe YouTube agganciati ai pannelli
+  animateUserObjects(t);
 
   updateThirdPerson(delta);
   renderer.render(scene, viewCam());
