@@ -201,6 +201,60 @@
       background: rgba(180,120,255,.18); border: 1px solid rgba(180,120,255,.4); color: #e3d2ff; font-size: .72rem; font-weight: 700; }
     .lv-quiz:hover { background: rgba(180,120,255,.4); }
     .lv-go-hint { font-size: .62rem; color: #8ea0b8; margin-top: 6px; }
+    /* ── Menu + oggetti utente (stile Spatial) ── */
+    #add-fab { position: fixed; right: 18px; bottom: 96px; width: 52px; height: 52px; border-radius: 50%;
+      background: linear-gradient(135deg, #4a9eff, #2f7fe0); border: none; color: #fff; cursor: pointer;
+      z-index: 60; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 22px rgba(0,0,0,.45); transition: transform .15s, filter .15s; }
+    #add-fab:hover { transform: scale(1.07); filter: brightness(1.1); }
+    #add-fab svg { width: 24px; height: 24px; transition: transform .2s; }
+    #add-fab.open svg { transform: rotate(45deg); }
+    #add-menu { position: fixed; right: 18px; bottom: 158px; z-index: 60; display: none;
+      background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
+      border-radius: 14px; padding: 7px; min-width: 215px; box-shadow: 0 14px 50px rgba(0,0,0,.55); }
+    #add-menu.open { display: block; }
+    .am-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px;
+      color: #e8edf5; cursor: pointer; font-size: .85rem; font-weight: 600; }
+    .am-row:hover { background: rgba(74,158,255,.16); }
+    .am-row svg { width: 17px; height: 17px; color: #7fb8ff; flex-shrink: 0; }
+    .am-row .am-badge { margin-left: auto; font-size: .62rem; font-weight: 700; color: #8ea0b8;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 2px 7px; }
+    .am-sep { height: 1px; background: rgba(255,255,255,.09); margin: 5px 8px; }
+    /* Modali leggere (YouTube / Portale / conferma) */
+    .uo-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center; z-index: 120; }
+    .uo-modal.open { display: flex; }
+    .uo-box { background: rgba(18,22,30,.97); border: 1px solid rgba(255,255,255,.14); border-radius: 14px;
+      padding: 18px; width: 360px; max-width: 92vw; color: #e8edf5; }
+    .uo-box h3 { font-size: .98rem; margin-bottom: 12px; }
+    .uo-box label { display: block; font-size: .72rem; color: #8ea0b8; margin: 9px 0 4px; }
+    .uo-box input[type=text], .uo-box input[type=url] { width: 100%; background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.16); color: #fff; border-radius: 8px; padding: 8px 10px; font-size: .85rem; }
+    .uo-box input[type=color] { width: 46px; height: 28px; border: 1px solid rgba(255,255,255,.2);
+      border-radius: 6px; background: rgba(255,255,255,.06); cursor: pointer; }
+    .uo-actions { display: flex; gap: 8px; margin-top: 14px; }
+    .uo-actions button { flex: 1; padding: 9px; border-radius: 8px; cursor: pointer; font-size: .84rem;
+      font-weight: 600; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: #dde5f0; }
+    .uo-actions button.pri { background: #4a9eff; border-color: #4a9eff; color: #fff; }
+    .uo-actions button.pri:hover { background: #3b8ef0; }
+    /* Overlay video YouTube */
+    #video-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 150;
+      display: none; align-items: center; justify-content: center; }
+    #video-overlay.open { display: flex; }
+    #video-overlay iframe { width: min(1100px, 94vw); aspect-ratio: 16/9; border: none; border-radius: 12px; }
+    #video-overlay .vo-close { position: absolute; top: 16px; right: 18px; width: 42px; height: 42px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08);
+      color: #fff; font-size: 1.1rem; cursor: pointer; }
+    /* Pill oggetto proprio (play) */
+    #uo-pill { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); z-index: 60;
+      display: none; gap: 8px; background: rgba(16,20,28,.94); border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px; padding: 7px 9px; }
+    #uo-pill.open { display: flex; }
+    #uo-pill button { border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06);
+      color: #e8edf5; border-radius: 999px; padding: 6px 13px; cursor: pointer; font-size: .78rem; font-weight: 600; }
+    #uo-pill button:hover { background: rgba(74,158,255,.25); }
+    #uo-pill button.del:hover { background: rgba(255,90,90,.3); }
+
     /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
     @media (max-width: 600px) {
       #levels-panel { padding: 14px 12px; }
@@ -627,6 +681,58 @@
   <div id="progress-label">Inizializzazione...</div>
 </div>
 
+<!-- Menu + oggetti utente (editor e play) -->
+<button id="add-fab" title="Aggiungi oggetto">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg>
+</button>
+<div id="add-menu">
+  <div class="am-row" data-add="model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>Modello 3D<span class="am-badge">GLB / GLTF</span></div>
+  <div class="am-row" data-add="image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Immagine<span class="am-badge">JPG / PNG</span></div>
+  <div class="am-row" data-add="bg360"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/></svg>Sfondo 360°<span class="am-badge">equirett.</span></div>
+  <div class="am-sep"></div>
+  <div class="am-row" data-add="youtube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><polygon points="10 9 15 12 10 15 10 9"/></svg>Video YouTube<span class="am-badge">embed</span></div>
+  <div class="am-row" data-add="mp4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>Video MP4<span class="am-badge">3D / VR</span></div>
+  <div class="am-row" data-add="pdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF<span class="am-badge">sfogliabile</span></div>
+  <div class="am-sep"></div>
+  <div class="am-row" data-add="portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>Portale / Bolla<span class="am-badge">URL</span></div>
+</div>
+<input type="file" id="uo-in-model" accept=".glb,.gltf" style="display:none">
+<input type="file" id="uo-in-image" accept="image/jpeg,image/png,image/webp" style="display:none">
+<input type="file" id="uo-in-bg360" accept="image/jpeg,image/png" style="display:none">
+<input type="file" id="uo-in-pdf" accept="application/pdf,.pdf" style="display:none">
+<input type="file" id="uo-in-mp4" accept="video/mp4" style="display:none">
+
+<div class="uo-modal" id="uo-yt-modal"><div class="uo-box">
+  <h3>Video YouTube</h3>
+  <label>Link del video</label>
+  <input type="url" id="uo-yt-url" placeholder="https://www.youtube.com/watch?v=…">
+  <div class="uo-actions"><button class="pri" id="uo-yt-ok">Aggiungi</button><button id="uo-yt-cancel">Annulla</button></div>
+</div></div>
+
+<div class="uo-modal" id="uo-portal-modal"><div class="uo-box">
+  <h3>Portale / Bolla</h3>
+  <label>Nome (mostrato sopra la bolla)</label>
+  <input type="text" id="uo-portal-name" placeholder="es. Sito del corso">
+  <label>Link (si apre in una nuova scheda)</label>
+  <input type="url" id="uo-portal-url" placeholder="https://…">
+  <label>Colore</label>
+  <input type="color" id="uo-portal-color" value="#4fc3f7">
+  <div class="uo-actions"><button class="pri" id="uo-portal-ok">Crea bolla</button><button id="uo-portal-cancel">Annulla</button></div>
+</div></div>
+
+<div class="uo-modal" id="uo-go-modal"><div class="uo-box">
+  <h3 id="uo-go-name">Aprire il link?</h3>
+  <div id="uo-go-url" style="font-size:.78rem;color:#8ea0b8;word-break:break-all;margin-bottom:4px"></div>
+  <div class="uo-actions"><button class="pri" id="uo-go-ok">Apri</button><button id="uo-go-cancel">Annulla</button></div>
+</div></div>
+
+<div id="video-overlay"><button class="vo-close" title="Chiudi">✕</button></div>
+<div id="uo-pill">
+  <button id="uo-pill-move">Riposiziona</button>
+  <button id="uo-pill-rot">Ruota 45°</button>
+  <button class="del" id="uo-pill-del">Elimina</button>
+</div>
+
 <!-- UI -->
 <div id="crosshair"></div>
 <div id="interact-panel" title="Interagisci">
@@ -697,6 +803,13 @@
         <div class="av-row"><label>Corpo</label><input type="color" id="av-color-body" value="#d8d3c8"></div>
         <div class="av-row"><label>Dettagli</label><input type="color" id="av-color-joints" value="#8a93a5"></div>
         <div class="sf-hint">Colori dell'avatar in terza persona — salvati col progetto.</div>
+      </div>
+    </div>
+    <div class="sec collapsed" data-sec="userobj">
+      <h3 class="sec-head">Oggetti <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
+      <div class="sec-body">
+        <div class="sf-hint">Aggiunti col pulsante ＋ in basso a destra. Salvati col progetto.</div>
+        <div id="userobj-list"></div>
       </div>
     </div>
     <div class="sec collapsed" data-sec="teleport">
@@ -2708,6 +2821,7 @@ function animateInteractables(t) {
 // Salva la posizione del target del gizmo (route per tipo)
 function persistGizmoTarget(obj) {
   if (!obj) return;
+  if (obj.userData.isUserObject)       { saveUserObjects();    return; }
   if (obj.userData.isTeleportPart)     { saveTeleports();      return; }
   if (obj.userData.isEntrancePart)     { saveEntrances();      return; }
   if (obj.userData.isInteractablePart) { saveInteractables();  return; }
@@ -3375,6 +3489,511 @@ function restoreUiVrPanel() {
   }
 }
 
+// ─── Oggetti utente: menu + stile Spatial (editor E play) ───────────────────
+// Tipi: model, image, bg360, youtube, mp4, pdf, portal. In editor finiscono in
+// scene-config (pubblicati per tutti col 💾); in play restano LOCALI al visitatore
+// (metadati in localStorage, file come blob in IndexedDB).
+const UO_KEY = 'sc32-user-objects' + _KP;          // working copy della redazione
+const UO_VISITOR_KEY = 'sc32-visitor-objects' + _KP; // oggetti locali del visitatore
+const userObjects = [];   // {id,type,name,src,pos,rot,scale,extra,own,group,meshes}
+let _uoSeq = 0, _uoPrevBg = null, _uoSelected = null;
+
+// IndexedDB minimale per i file dei visitatori (i blob non stanno in localStorage)
+function uoIdb() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open('sc-user-files', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('files');
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+  });
+}
+async function uoIdbPut(key, blob) { const db = await uoIdb(); return new Promise((res, rej) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(blob, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+async function uoIdbGet(key) { const db = await uoIdb(); return new Promise((res, rej) => { const rq = db.transaction('files').objectStore('files').get(key); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); }); }
+async function uoIdbDel(key) { try { const db = await uoIdb(); db.transaction('files', 'readwrite').objectStore('files').delete(key); } catch {} }
+
+function serializeUserObjects(ownOnly) {
+  return userObjects.filter(o => (ownOnly ? o.own : !o.own) && o.type !== '_dead')
+    .map(o => ({ id: o.id, type: o.type, name: o.name, src: o.src, extra: o.extra || {},
+      pos: o.group ? o.group.position.toArray() : [0, 0, 0],
+      rot: o.group ? [o.group.rotation.x, o.group.rotation.y, o.group.rotation.z] : [0, 0, 0],
+      scale: o.group ? o.group.scale.toArray() : [1, 1, 1] }));
+}
+function saveUserObjects() {
+  if (EDIT_MODE) localStorage.setItem(UO_KEY, JSON.stringify(serializeUserObjects(false)));
+  else localStorage.setItem(UO_VISITOR_KEY, JSON.stringify(serializeUserObjects(true)));
+  if (EDIT_MODE) renderUserObjectList();
+}
+async function initUserObjects() {
+  let published = null;
+  if (EDIT_MODE) { try { published = JSON.parse(localStorage.getItem(UO_KEY)); } catch {} }
+  if (!published) published = SCENE_CONFIG.userObjects || [];
+  for (const d of published) await addUserObject(d, { own: false, fresh: false });
+  if (!EDIT_MODE) {
+    let mine = []; try { mine = JSON.parse(localStorage.getItem(UO_VISITOR_KEY)) || []; } catch {}
+    for (const d of mine) await addUserObject(d, { own: true, fresh: false });
+  }
+  if (EDIT_MODE) renderUserObjectList();
+}
+async function resolveUoSrc(src) {
+  if (!src) return null;
+  if (src.startsWith('idb:')) {
+    const blob = await uoIdbGet(src.slice(4));
+    return blob ? URL.createObjectURL(blob) : null;
+  }
+  return src;
+}
+// Punto di spawn: 2 m davanti alla camera, rivolto verso il giocatore
+function uoSpawnPose() {
+  const head = camera.getWorldPosition(new THREE.Vector3());
+  const dir = camera.getWorldDirection(new THREE.Vector3()); dir.y = 0;
+  if (dir.lengthSq() < 1e-4) dir.set(0, 0, -1); dir.normalize();
+  const p = head.clone().addScaledVector(dir, 2);
+  // il gruppo sta "ai piedi": le mesh hanno già il loro offset in altezza
+  p.y = Math.max(0.05, head.y - 1.65);
+  return { pos: p.toArray(), rot: [0, Math.atan2(head.x - p.x, head.z - p.z), 0], scale: [1, 1, 1] };
+}
+
+// ── Builder per tipo ──
+async function addUserObject(data, opts = {}) {
+  const o = { id: data.id || ('uo' + Date.now() + '_' + (_uoSeq++)), type: data.type, name: data.name || data.type,
+    src: data.src || null, extra: data.extra || {}, own: !!opts.own, group: null, meshes: [] };
+  if (o.type === 'bg360') {
+    const url = await resolveUoSrc(o.src); if (!url) return null;
+    // un solo sfondo: rimuovi l'eventuale precedente
+    const prev = userObjects.find(x => x.type === 'bg360'); if (prev) removeUserObject(prev, true);
+    if (_uoPrevBg === null) _uoPrevBg = scene.background;
+    const tex = await new Promise((res, rej) => new THREE.TextureLoader().load(url, res, undefined, rej)).catch(() => null);
+    if (!tex) return null;
+    tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace;
+    scene.background = tex; o._tex = tex;
+    userObjects.push(o); if (!opts.fresh) {} else saveUserObjects();
+    if (EDIT_MODE) renderUserObjectList();
+    return o;
+  }
+  const group = new THREE.Group();
+  group.userData.isUserObject = true; group.userData.uo = o;
+  o.group = group;
+  group.position.fromArray(data.pos || [0, 1, 0]);
+  if (data.rot) group.rotation.set(data.rot[0], data.rot[1], data.rot[2]);
+  if (data.scale) group.scale.fromArray(data.scale);
+  scene.add(group);
+  userObjects.push(o);
+  try {
+    if (o.type === 'image') await buildUoImage(o);
+    else if (o.type === 'model') await buildUoModel(o, opts.fresh);
+    else if (o.type === 'pdf') await buildUoPdf(o);
+    else if (o.type === 'youtube') buildUoYoutube(o);
+    else if (o.type === 'mp4') await buildUoMp4(o);
+    else if (o.type === 'portal') buildUoPortal(o);
+  } catch (e) { console.warn('userObject build fallita', o.type, e); }
+  o.meshes = []; group.traverse(m => { if (m.isMesh) { o.meshes.push(m); } });
+  if (opts.fresh) saveUserObjects();
+  if (EDIT_MODE) renderUserObjectList();
+  return o;
+}
+async function buildUoImage(o) {
+  const url = await resolveUoSrc(o.src); if (!url) return;
+  const tex = await new Promise((res, rej) => new THREE.TextureLoader().load(url, res, undefined, rej));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const aspect = tex.image.width / tex.image.height, H = 1.3;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(H * aspect, H),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }));
+  mesh.position.y = H / 2 + 0.1;
+  o.group.add(mesh);
+}
+async function buildUoModel(o, fresh) {
+  const url = await resolveUoSrc(o.src); if (!url) return;
+  const g = await new Promise((res, rej) => new GLTFLoader().load(url, res, undefined, rej));
+  const root = g.scene;
+  if (fresh) {  // normalizza i modelli giganti a ~2 m
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3()), maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 3) root.scale.multiplyScalar(2 / maxDim);
+    const box2 = new THREE.Box3().setFromObject(root);
+    root.position.y -= box2.min.y;   // appoggia a terra
+  }
+  o.group.add(root);
+}
+function buildUoPortal(o) {
+  const color = new THREE.Color(o.extra.color || '#4fc3f7');
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.45, 32, 24),
+    new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 0.42, roughness: 0.15, metalness: 0.2 }));
+  sphere.position.y = 1.2;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.018, 10, 48),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+  ring.position.y = 1.2; ring.rotation.x = Math.PI / 2;
+  // etichetta col nome sopra la bolla
+  const c = document.createElement('canvas'); const ctx = c.getContext('2d');
+  ctx.font = 'bold 42px Segoe UI, sans-serif';
+  const tw = Math.ceil(ctx.measureText(o.name).width);
+  c.width = tw + 56; c.height = 78;
+  ctx.fillStyle = 'rgba(10,14,20,0.82)'; _roundRect(ctx, 0, 0, c.width, c.height, 30); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 42px Segoe UI, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.name, c.width / 2, c.height / 2 + 2);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  label.scale.set((c.width / c.height) * 0.28, 0.28, 1);
+  label.position.y = 1.95;
+  o.group.add(sphere, ring, label);
+}
+function buildUoYoutube(o) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 576;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 576);
+  grad.addColorStop(0, '#1a2230'); grad.addColorStop(1, '#0c1018');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 1024, 576);
+  ctx.fillStyle = '#ff0033'; ctx.beginPath(); ctx.arc(512, 268, 86, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(484, 218); ctx.lineTo(484, 318); ctx.lineTo(572, 268); ctx.closePath(); ctx.fill();
+  ctx.font = 'bold 34px Segoe UI, sans-serif'; ctx.textAlign = 'center';
+  let nm = o.name; while (ctx.measureText(nm).width > 940 && nm.length > 4) nm = nm.slice(0, -2);
+  ctx.fillText(nm, 512, 470);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = '26px Segoe UI, sans-serif';
+  ctx.fillText('clicca per guardare', 512, 516);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  mesh.position.y = 1.5; mesh.userData.uoHit = 'youtube';
+  o.group.add(mesh);
+}
+async function buildUoMp4(o) {
+  const url = await resolveUoSrc(o.src); if (!url) return;
+  const v = document.createElement('video');
+  v.src = url; v.playsInline = true; v.preload = 'metadata'; v.crossOrigin = 'anonymous';
+  o._video = v;
+  const tex = new THREE.VideoTexture(v); tex.colorSpace = THREE.SRGBColorSpace;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.35),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }));
+  screen.position.y = 1.5; screen.userData.uoHit = 'mp4screen';
+  // barra controlli sotto lo schermo: 4 zone uv (‹10s · play/pausa · 10s› · audio)
+  const cc = document.createElement('canvas'); cc.width = 1024; cc.height = 132;
+  o._ctrlCanvas = cc;
+  const ctex = new THREE.CanvasTexture(cc); ctex.colorSpace = THREE.SRGBColorSpace;
+  const ctrl = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.31),
+    new THREE.MeshBasicMaterial({ map: ctex, transparent: true, side: THREE.DoubleSide }));
+  ctrl.position.y = 0.62; ctrl.userData.uoHit = 'mp4ctrl';
+  o._ctrlTex = ctex;
+  drawUoMp4Ctrl(o);
+  v.addEventListener('play', () => drawUoMp4Ctrl(o));
+  v.addEventListener('pause', () => drawUoMp4Ctrl(o));
+  o.group.add(screen, ctrl);
+}
+function drawUoMp4Ctrl(o) {
+  const c = o._ctrlCanvas, ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = 'rgba(12,16,24,0.85)'; _roundRect(ctx, 0, 0, c.width, c.height, 40); ctx.fill();
+  const cy = 66, playing = o._video && !o._video.paused, muted = o._video && o._video.muted;
+  const seg = c.width / 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2;
+  for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(seg * i, 24); ctx.lineTo(seg * i, c.height - 24); ctx.stroke(); }
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff';
+  // ‹‹ 10
+  ctx.beginPath(); ctx.moveTo(seg * 0.5 + 26, cy - 22); ctx.lineTo(seg * 0.5 - 8, cy); ctx.lineTo(seg * 0.5 + 26, cy + 22); ctx.closePath(); ctx.fill();
+  ctx.font = 'bold 28px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('10', seg * 0.5 - 34, cy);
+  // play / pausa
+  if (playing) { ctx.fillRect(seg * 1.5 - 22, cy - 24, 14, 48); ctx.fillRect(seg * 1.5 + 8, cy - 24, 14, 48); }
+  else { ctx.beginPath(); ctx.moveTo(seg * 1.5 - 16, cy - 26); ctx.lineTo(seg * 1.5 - 16, cy + 26); ctx.lineTo(seg * 1.5 + 28, cy); ctx.closePath(); ctx.fill(); }
+  // 10 ››
+  ctx.beginPath(); ctx.moveTo(seg * 2.5 - 26, cy - 22); ctx.lineTo(seg * 2.5 + 8, cy); ctx.lineTo(seg * 2.5 - 26, cy + 22); ctx.closePath(); ctx.fill();
+  ctx.fillText('10', seg * 2.5 + 34, cy);
+  // altoparlante
+  ctx.beginPath(); ctx.moveTo(seg * 3.5 - 26, cy - 10); ctx.lineTo(seg * 3.5 - 12, cy - 10); ctx.lineTo(seg * 3.5 + 4, cy - 24); ctx.lineTo(seg * 3.5 + 4, cy + 24); ctx.lineTo(seg * 3.5 - 12, cy + 10); ctx.lineTo(seg * 3.5 - 26, cy + 10); ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 5; ctx.lineCap = 'round';
+  if (muted) { ctx.beginPath(); ctx.moveTo(seg * 3.5 + 14, cy - 16); ctx.lineTo(seg * 3.5 + 40, cy + 16); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(seg * 3.5 + 10, cy, 18, -0.9, 0.9); ctx.stroke(); }
+  if (o._ctrlTex) o._ctrlTex.needsUpdate = true;
+}
+// PDF: pdf.js (lazy) → pagina su canvas → texture; barra nav con frecce via zone uv
+let _pdfjsReady = null;
+function ensurePdfJs() {
+  if (_pdfjsReady) return _pdfjsReady;
+  _pdfjsReady = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = () => rej(new Error('pdf.js non caricato'));
+    document.head.appendChild(s);
+  });
+  return _pdfjsReady;
+}
+const UO_PDF_NAV = 84;   // altezza barra di navigazione sul canvas
+async function buildUoPdf(o) {
+  const url = await resolveUoSrc(o.src); if (!url) return;
+  const lib = await ensurePdfJs();
+  const doc = await lib.getDocument(url).promise;
+  o._pdf = { doc, page: Math.max(1, Math.min(doc.numPages, o.extra.page || 1)), total: doc.numPages };
+  const c = document.createElement('canvas'); o._pdfCanvas = c;
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  o._pdfTex = tex;
+  await renderUoPdfPage(o);
+  const aspect = c.width / c.height, W = 1.6;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, W / aspect),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }));
+  mesh.position.y = (W / aspect) / 2 + 0.25; mesh.userData.uoHit = 'pdf';
+  o._navRatio = UO_PDF_NAV / c.height;
+  o.group.add(mesh);
+}
+async function renderUoPdfPage(o) {
+  const { doc, page, total } = o._pdf;
+  const pg = await doc.getPage(page);
+  const vp1 = pg.getViewport({ scale: 1 });
+  const scale = 820 / vp1.width;
+  const vp = pg.getViewport({ scale });
+  const pc = document.createElement('canvas'); pc.width = vp.width; pc.height = vp.height;
+  await pg.render({ canvasContext: pc.getContext('2d'), viewport: vp }).promise;
+  const c = o._pdfCanvas;
+  c.width = pc.width; c.height = pc.height + UO_PDF_NAV;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(pc, 0, 0);
+  ctx.fillStyle = 'rgba(12,16,24,0.92)'; ctx.fillRect(0, pc.height, c.width, UO_PDF_NAV);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const ny = pc.height + UO_PDF_NAV / 2;
+  ctx.fillStyle = page > 1 ? '#fff' : 'rgba(255,255,255,0.25)';
+  ctx.font = 'bold 44px Segoe UI'; ctx.fillText('‹', c.width * 0.12, ny);
+  ctx.fillStyle = page < total ? '#fff' : 'rgba(255,255,255,0.25)';
+  ctx.fillText('›', c.width * 0.88, ny);
+  ctx.fillStyle = '#cdd6e6'; ctx.font = '26px Segoe UI';
+  ctx.fillText(page + ' / ' + total, c.width / 2, ny);
+  if (o._pdfTex) { o._pdfTex.needsUpdate = true; }
+}
+async function changeUoPdfPage(o, delta) {
+  if (!o._pdf) return;
+  const np = Math.max(1, Math.min(o._pdf.total, o._pdf.page + delta));
+  if (np === o._pdf.page) return;
+  o._pdf.page = np; o.extra.page = np;
+  await renderUoPdfPage(o);
+  saveUserObjects();
+}
+
+// ── Rimozione ──
+function removeUserObject(o, silent) {
+  const i = userObjects.indexOf(o); if (i === -1) return;
+  userObjects.splice(i, 1);
+  if (o.type === 'bg360') { scene.background = _uoPrevBg; if (o._tex) o._tex.dispose(); }
+  if (o.group) {
+    if (gizmoTarget === o.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    scene.remove(o.group);
+  }
+  if (o._video) { o._video.pause(); o._video.src = ''; }
+  if (o.src && o.src.startsWith('idb:') && o.own) uoIdbDel(o.src.slice(4));
+  if (_uoSelected === o) { _uoSelected = null; document.getElementById('uo-pill').classList.remove('open'); }
+  if (!silent) saveUserObjects();
+  if (EDIT_MODE) renderUserObjectList();
+}
+
+// ── Upload (redazione) o IndexedDB (visitatore / fallback) ──
+async function storeUserFile(file) {
+  if (EDIT_MODE && PROJECT_SLUG) {
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await fetch('/api/projects/' + encodeURIComponent(PROJECT_SLUG) + '/asset', { method: 'POST', body: fd });
+      if (r.ok) { const j = await r.json(); if (j.url) return j.url; }
+    } catch {}
+    showNotification('⚠️ Upload non riuscito: oggetto salvato solo in locale');
+  }
+  const key = 'f' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+  await uoIdbPut(key, file);
+  return 'idb:' + key;
+}
+async function handleUserFile(type, file) {
+  if (!file) return;
+  showNotification('⏳ Carico ' + file.name + '…');
+  const src = await storeUserFile(file);
+  const name = file.name.replace(/\.[a-z0-9]+$/i, '');
+  const d = Object.assign({ type, name, src }, type === 'bg360' ? {} : uoSpawnPose());
+  const o = await addUserObject(d, { own: !EDIT_MODE, fresh: true });
+  if (o) showNotification('✅ ' + name + ' aggiunto' + (EDIT_MODE ? ' (💾 per pubblicare)' : ''));
+  else showNotification('❌ Non sono riuscito a caricare ' + file.name);
+}
+
+// ── Picking (mouse e controller VR) ──
+function uoPickMeshes() {
+  const out = [];
+  for (const o of userObjects) { if (o.group && o.group.visible) for (const m of o.meshes) out.push(m); }
+  return out;
+}
+function pickUserObject(clientX, clientY) {
+  const meshes = uoPickMeshes(); if (!meshes.length) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, viewCam());
+  const hits = _qRay.intersectObjects(meshes, false);
+  if (!hits.length) return null;
+  let n = hits[0].object, o = null;
+  while (n && !o) { if (n.userData && n.userData.uo) o = n.userData.uo; n = n.parent; }
+  return o ? { o, hit: hits[0] } : null;
+}
+function pickUserObjectFromController(ctrl) {
+  const meshes = uoPickMeshes(); if (!meshes.length) return null;
+  const origin = new THREE.Vector3().setFromMatrixPosition(ctrl.matrixWorld);
+  const dir = ctrl.getWorldDirection(new THREE.Vector3()).negate();
+  _qRay.set(origin, dir); _qRay.near = 0; _qRay.far = 12;
+  const hits = _qRay.intersectObjects(meshes, false);
+  _qRay.far = Infinity;
+  if (!hits.length) return null;
+  let n = hits[0].object, o = null;
+  while (n && !o) { if (n.userData && n.userData.uo) o = n.userData.uo; n = n.parent; }
+  return o ? { o, hit: hits[0] } : null;
+}
+// Interazione su un oggetto colpito; ritorna true se ha consumato il click
+function interactUserObject(o, hit, fromVR) {
+  const kind = hit.object.userData.uoHit;
+  if (kind === 'pdf' && hit.uv) {
+    if (hit.uv.y < (o._navRatio || 0.1)) {
+      if (hit.uv.x < 0.25) { changeUoPdfPage(o, -1); return true; }
+      if (hit.uv.x > 0.75) { changeUoPdfPage(o, +1); return true; }
+      return true;
+    }
+    if (!EDIT_MODE) return true;   // corpo pagina: in play non fa nulla, in editor seleziona
+    return false;
+  }
+  if (kind === 'mp4ctrl' && hit.uv) {
+    const v = o._video; if (!v) return true;
+    const q = Math.floor(hit.uv.x * 4);
+    if (q === 0) v.currentTime = Math.max(0, v.currentTime - 10);
+    else if (q === 1) { if (v.paused) v.play(); else v.pause(); }
+    else if (q === 2) v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10);
+    else { v.muted = !v.muted; drawUoMp4Ctrl(o); }
+    return true;
+  }
+  if (kind === 'mp4screen') {
+    if (EDIT_MODE && !fromVR) return false;
+    const v = o._video; if (v) { if (v.paused) v.play(); else v.pause(); }
+    return true;
+  }
+  if (kind === 'youtube') {
+    if (EDIT_MODE && !fromVR) return false;
+    if (fromVR) { showNotification('🎬 Il video YouTube si apre fuori dal visore'); return true; }
+    openVideoOverlay(o.extra.videoId); return true;
+  }
+  if (o.type === 'portal') {
+    if (fromVR) { showNotification('🔗 ' + (o.extra.url || '') + ' — apri dal desktop'); return true; }
+    if (EDIT_MODE) return false;
+    openUoGoModal(o); return true;
+  }
+  // immagini/modelli: in play, se è un oggetto MIO → pill di gestione
+  if (!EDIT_MODE && o.own) { showUoPill(o); return true; }
+  return false;
+}
+// ── Overlay YouTube + modale portale ──
+function openVideoOverlay(videoId) {
+  if (!videoId) return;
+  const ov = document.getElementById('video-overlay');
+  let f = ov.querySelector('iframe');
+  if (!f) { f = document.createElement('iframe'); f.allow = 'autoplay; encrypted-media; fullscreen'; ov.appendChild(f); }
+  f.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&rel=0&modestbranding=1';
+  ov.classList.add('open');
+}
+function closeVideoOverlay() {
+  const ov = document.getElementById('video-overlay');
+  const f = ov.querySelector('iframe'); if (f) f.src = '';
+  ov.classList.remove('open');
+}
+let _uoGoTarget = null;
+function openUoGoModal(o) {
+  _uoGoTarget = o.extra.url || '';
+  document.getElementById('uo-go-name').textContent = 'Aprire "' + (o.name || 'link') + '"?';
+  document.getElementById('uo-go-url').textContent = _uoGoTarget;
+  document.getElementById('uo-go-modal').classList.add('open');
+}
+// ── Pill oggetto proprio (play) ──
+function showUoPill(o) { _uoSelected = o; document.getElementById('uo-pill').classList.add('open'); }
+// ── Lista oggetti in editor (tab Spatial ▸ Oggetti) ──
+const UO_TYPE_LABEL = { model: 'Modello 3D', image: 'Immagine', bg360: 'Sfondo 360°', youtube: 'YouTube', mp4: 'Video MP4', pdf: 'PDF', portal: 'Bolla' };
+function renderUserObjectList() {
+  const list = document.getElementById('userobj-list'); if (!list) return;
+  list.innerHTML = '';
+  const items = userObjects.filter(o => !o.own);
+  const head = document.querySelector('#tab-spatial .sec[data-sec="userobj"] .sec-count');
+  if (head) head.textContent = items.length || '';
+  if (!items.length) { list.innerHTML = '<div class="sf-hint">Nessun oggetto. Usa il ＋ in basso a destra.</div>'; return; }
+  for (const o of items) {
+    const row = document.createElement('div');
+    row.className = 'ia-card'; row.dataset.uoid = o.id;
+    row.innerHTML = `<div class="ia-head"><span style="font-size:.72rem;color:#9fb4d4">${UO_TYPE_LABEL[o.type] || o.type}</span>`
+      + `<input class="ia-text-in uo-name" style="margin:0;flex:1" value="">`
+      + (o.group ? `<button class="ring-btn uo-goto" title="Vai all'oggetto">🎯</button><button class="ring-btn uo-sel" title="Seleziona (gizmo)">✥</button>` : '')
+      + `<button class="ring-btn uo-del" title="Elimina">🗑</button></div>`;
+    row.querySelector('.uo-name').value = o.name;
+    row.querySelector('.uo-name').addEventListener('input', e => { o.name = e.target.value; saveUserObjectsDebounced(); });
+    if (o.group) {
+      row.querySelector('.uo-goto').onclick = () => { const p = o.group.position; teleportPlayerTo(p.x + 1.5, Math.max(0, p.y - 1), p.z + 1.5); };
+      row.querySelector('.uo-sel').onclick = () => selectUserObject(o);
+    }
+    row.querySelector('.uo-del').onclick = () => removeUserObject(o);
+    list.appendChild(row);
+  }
+}
+let _uoSaveT = null;
+function saveUserObjectsDebounced() { clearTimeout(_uoSaveT); _uoSaveT = setTimeout(saveUserObjects, 400); }
+function selectUserObject(o) {
+  if (!o.group) return;
+  captureUndo(o.group);
+  transformControls.attach(o.group); gizmoTarget = o.group;
+  showCoordEditor(o.group);
+  const row = document.querySelector(`#userobj-list [data-uoid="${o.id}"]`);
+  if (row && typeof expandSectionFor === 'function') expandSectionFor(row);
+}
+
+// ── Wiring UI (FAB, menu, input, modali) ──
+(function setupUserObjectsUI() {
+  const fab = document.getElementById('add-fab'), menu = document.getElementById('add-menu');
+  if (!fab) return;
+  fab.addEventListener('click', () => { fab.classList.toggle('open'); menu.classList.toggle('open'); });
+  document.querySelectorAll('#add-menu .am-row').forEach(rowEl => rowEl.addEventListener('click', () => {
+    const t = rowEl.dataset.add;
+    fab.classList.remove('open'); menu.classList.remove('open');
+    if (t === 'youtube') { document.getElementById('uo-yt-url').value = ''; document.getElementById('uo-yt-modal').classList.add('open'); }
+    else if (t === 'portal') { document.getElementById('uo-portal-modal').classList.add('open'); }
+    else document.getElementById('uo-in-' + t).click();
+  }));
+  for (const t of ['model', 'image', 'bg360', 'pdf', 'mp4']) {
+    document.getElementById('uo-in-' + t).addEventListener('change', e => {
+      handleUserFile(t, e.target.files[0]); e.target.value = '';
+    });
+  }
+  document.getElementById('uo-yt-cancel').onclick = () => document.getElementById('uo-yt-modal').classList.remove('open');
+  document.getElementById('uo-yt-ok').onclick = async () => {
+    const url = document.getElementById('uo-yt-url').value.trim();
+    const m = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([\w-]{6,})/);
+    if (!m) { showNotification('Link YouTube non riconosciuto'); return; }
+    document.getElementById('uo-yt-modal').classList.remove('open');
+    await addUserObject(Object.assign({ type: 'youtube', name: 'Video YouTube', extra: { videoId: m[1] } }, uoSpawnPose()), { own: !EDIT_MODE, fresh: true });
+    showNotification('✅ Video aggiunto');
+  };
+  document.getElementById('uo-portal-cancel').onclick = () => document.getElementById('uo-portal-modal').classList.remove('open');
+  document.getElementById('uo-portal-ok').onclick = async () => {
+    const name = document.getElementById('uo-portal-name').value.trim() || 'Portale';
+    let url = document.getElementById('uo-portal-url').value.trim();
+    if (!url) { showNotification('Inserisci un link'); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    const color = document.getElementById('uo-portal-color').value;
+    document.getElementById('uo-portal-modal').classList.remove('open');
+    await addUserObject(Object.assign({ type: 'portal', name, extra: { url, color } }, uoSpawnPose()), { own: !EDIT_MODE, fresh: true });
+    showNotification('✅ Bolla creata');
+  };
+  document.getElementById('uo-go-cancel').onclick = () => { document.getElementById('uo-go-modal').classList.remove('open'); _uoGoTarget = null; };
+  document.getElementById('uo-go-ok').onclick = () => {
+    if (_uoGoTarget) window.open(_uoGoTarget, '_blank', 'noopener');
+    document.getElementById('uo-go-modal').classList.remove('open'); _uoGoTarget = null;
+  };
+  document.querySelector('#video-overlay .vo-close').onclick = closeVideoOverlay;
+  // pill: gestione del proprio oggetto in play
+  document.getElementById('uo-pill-move').onclick = () => {
+    if (!_uoSelected || !_uoSelected.group) return;
+    const p = uoSpawnPose();
+    _uoSelected.group.position.fromArray(p.pos);
+    _uoSelected.group.rotation.set(p.rot[0], p.rot[1], p.rot[2]);
+    saveUserObjects();
+  };
+  document.getElementById('uo-pill-rot').onclick = () => {
+    if (!_uoSelected || !_uoSelected.group) return;
+    _uoSelected.group.rotation.y += Math.PI / 4; saveUserObjects();
+  };
+  document.getElementById('uo-pill-del').onclick = () => { if (_uoSelected) removeUserObject(_uoSelected); };
+})();
+
 // ─── Zone-azione (SpatialTriggerEvent → onEnterEvent, importate da Unity) ───
 const AZ_STORE_KEY = 'sc32-actionzones' + _KP;
 const actionZones = [];   // {uid, name, pos, radius, active, on, actions, entered}
@@ -3518,11 +4137,21 @@ async function init() {
       if (qtr && qtr.taskId) { completeTask(qtr.questId, qtr.taskId); isDragging = false; return; }
       const ia = pickInteractableSprite(e.clientX, e.clientY);   // clic sull'icona ⊙ → interagisci
       if (ia) { triggerSpatialIA(ia); isDragging = false; return; }
+      // Oggetti utente: PDF/video/bolla/pill
+      const up = pickUserObject(e.clientX, e.clientY);
+      if (up && interactUserObject(up.o, up.hit, false)) { isDragging = false; return; }
+      if (!up && _uoSelected) { _uoSelected = null; document.getElementById('uo-pill').classList.remove('open'); }
     }
     // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
     if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
       const picked = pickSpatialFeature(e.clientX, e.clientY);
       if (picked) { selectSpatialFeature(picked); isDragging = false; return; }
+      // Oggetti utente: frecce PDF / controlli video funzionano anche in editor; altrimenti seleziona
+      const up = pickUserObject(e.clientX, e.clientY);
+      if (up) {
+        if (!interactUserObject(up.o, up.hit, false)) selectUserObject(up.o);
+        isDragging = false; return;
+      }
     }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
@@ -3994,6 +4623,9 @@ async function loadScene() {
 
   // Applica l'illuminazione salvata (dopo che il pannello Luce esiste)
   applyLighting(SCENE_CONFIG.lighting);
+
+  // Oggetti del menu + (pubblicati dalla redazione + locali del visitatore)
+  initUserObjects().catch(e => console.warn('initUserObjects', e));
 
   // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
   applySpawn();
@@ -4908,6 +5540,7 @@ function buildSceneConfigObject() {
     avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
+    userObjects:   serializeUserObjects(false),
   };
 }
 function exportSceneConfig() {
@@ -5235,6 +5868,9 @@ function onVRInteract(e) {
     // e se colpito fuori dai bottoni assorbe il click (non passa al mondo dietro)
     const ui = pickUiVrZone(ctrl);
     if (ui) { if (ui.zone) ui.zone.cb(); return; }
+    // Oggetti utente: frecce PDF, controlli video MP4, bolle — puntabili col raggio
+    const up = pickUserObjectFromController(ctrl);
+    if (up && interactUserObject(up.o, up.hit, true)) return;
     // Poi: il raggio colpisce una ⚡ zona-trigger? → completa la task
     const qtr = pickQuestTriggerFromController(ctrl);
     if (qtr) { completeTask(qtr.questId, qtr.taskId); return; }

@@ -154,6 +154,27 @@ app.post('/api/projects/:slug/upload', requireAuth, upload.single('model'), asyn
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Asset degli oggetti utente del menu + (immagini, PDF, MP4, 360°, GLB) — solo redazione
+const ASSET_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json' };
+app.post('/api/projects/:slug/asset', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const proj = await store.getProject(slug);
+    if (!proj) return res.status(404).json({ error: 'Progetto non trovato' });
+    if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+    const safe = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const ext = (safe.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    const ct = ASSET_EXT[ext];
+    if (!ct) return res.status(400).json({ error: 'Formato non supportato' });
+    const prefix = proj.assetPrefix || slug;
+    const key = `${prefix}/objects/${Date.now()}_${safe}`;
+    await store.putAsset(key, req.file.buffer, ct);
+    const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+    res.json({ ok: true, url: `${base}/${key}` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/projects/:slug/cover', requireAuth, upload.single('cover'), async (req, res) => {
   try {
     const slug = req.params.slug;
