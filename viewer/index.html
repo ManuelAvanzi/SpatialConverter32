@@ -5886,12 +5886,24 @@ function applyLighting(L) {
   if (L.fogDens != null) t('lp-fog-dens-val', Number(L.fogDens).toFixed(3));
 }
 
+// Posizioni ATTUALI di tutti i modelli in scena (stesso formato dei ✓ delle card)
+function captureLivePositions() {
+  const out = {};
+  try {
+    for (const c of (gltfCharacters || [])) {
+      if (c.root && c.name) out[c.name] = c.root.position.toArray().map(v => +v.toFixed(3));
+    }
+  } catch {}
+  return out;
+}
 function buildSceneConfigObject() {
   const safe = s => { try { return JSON.parse(s); } catch { return null; } };
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
-    positions:     { ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions() },
+    // posizioni: config pubblicata ← ✓ salvati ← posizioni ATTUALI di tutti i modelli
+    // (il Salva in alto cattura tutto, anche senza premere i ✓ delle card)
+    positions:     { ...(SCENE_CONFIG.positions || {}), ...loadSavedPositions(), ...captureLivePositions() },
     audio:         safe(localStorage.getItem(AUDIO_KEY)) || SCENE_CONFIG.audio || { volume: 0.2, muted: false },
     teleports:     loadSavedTeleports(),
     entrances:     loadSavedEntrances(),
@@ -5904,6 +5916,7 @@ function buildSceneConfigObject() {
     avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
+    userObjects:   serializeUserObjects(false),
     userObjects:   serializeUserObjects(false),
   };
 }
