@@ -3575,7 +3575,8 @@ function serializeUserObjects(ownOnly) {
 function saveUserObjects() {
   if (EDIT_MODE) localStorage.setItem(UO_KEY, JSON.stringify(serializeUserObjects(false)));
   else localStorage.setItem(UO_VISITOR_KEY, JSON.stringify(serializeUserObjects(true)));
-  if (EDIT_MODE) renderUserObjectList(); else renderUoPlayList();
+  if (EDIT_MODE) renderUserObjectList();
+  renderUoPlayList();
 }
 // Lista "I miei oggetti" in play: blocca/sblocca ed elimina
 const UO_LOCK_SVG = locked => locked
@@ -3594,12 +3595,13 @@ function toggleUoLock(o) {
 function renderUoPlayList() {
   const body = document.getElementById('uo-list-body'); if (!body) return;
   body.innerHTML = '';
-  const mine = userObjects.filter(o => o.own);
-  // il bottone lista appare solo quando c'è almeno un oggetto tuo
+  // play: i TUOI oggetti; editor: quelli del progetto (caricati col ＋)
+  const mine = userObjects.filter(o => EDIT_MODE ? !o.own : o.own);
+  // il bottone lista appare solo quando c'è almeno un oggetto del ＋
   const btn = document.getElementById('uo-list-btn');
-  if (btn) btn.style.display = (!EDIT_MODE && mine.length) ? 'flex' : 'none';
+  if (btn) btn.style.display = mine.length ? 'flex' : 'none';
   if (!mine.length) document.getElementById('uo-list').classList.remove('open');
-  if (!mine.length) { body.innerHTML = '<div class="uol-empty">Nessun oggetto tuo. Aggiungine col ＋ qui sotto.</div>'; return; }
+  if (!mine.length) { body.innerHTML = '<div class="uol-empty">Nessun oggetto. Aggiungine col ＋.</div>'; return; }
   for (const o of mine) {
     const row = document.createElement('div'); row.className = 'uol-row';
     row.innerHTML = `<span class="uol-name"></span><span class="uol-type">${UO_TYPE_LABEL[o.type] || o.type}</span>`
@@ -3619,8 +3621,8 @@ async function initUserObjects() {
   if (!EDIT_MODE) {
     let mine = []; try { mine = JSON.parse(localStorage.getItem(UO_VISITOR_KEY)) || []; } catch {}
     for (const d of mine) await addUserObject(d, { own: true, fresh: false });
-    renderUoPlayList();
   }
+  renderUoPlayList();
   if (EDIT_MODE) renderUserObjectList();
 }
 async function resolveUoSrc(src) {
@@ -5412,7 +5414,7 @@ async function loadGltfCharacters() {
       if (usesStatic32()) chars = gltf.scene.children.slice();
       else {
         const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/\.(glb|gltf)$/i, '');
-        gltf.scene.name = gltf.scene.name || fileName;
+        gltf.scene.name = fileName;   // il nome interno del GLB ("Scene") non dice nulla
         fixTransparentMaterials(gltf.scene);
         chars = [gltf.scene];
       }
@@ -5982,14 +5984,15 @@ function addCharactersToPanel() {
   const header = document.createElement('div');
   header.style.cssText = 'font-size:.72rem;color:#4a9eff;margin:12px 0 6px;'
     + 'text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
-  header.textContent = `🧍 Personaggi (${gltfCharacters.length})`;
+  header.textContent = usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
   list.appendChild(header);
 
   for (const ch of gltfCharacters) {
     const item = document.createElement('div');
     item.className = 'model-item';
+    // blu = animato (ha una clip), verde = statico
     item.innerHTML =
-      `<div class="model-dot" style="background:#4a9eff"></div>`
+      `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
       + `<span class="model-name">${ch.name}</span>`
       + `<button class="goto-btn"     title="Vai al personaggio">🎯</button>`
       + `<button class="gizmo-btn"    title="Sposta/Ruota/Scala col gizmo">✥</button>`
