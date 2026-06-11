@@ -204,6 +204,14 @@
     .lv-go-hint { font-size: .62rem; color: #8ea0b8; margin-top: 6px; }
     /* ── Menu + oggetti utente (stile Spatial) ── */
     body.play-mode #cam-hud { display: none; }   /* coordinate: solo in editor */
+    /* Salto su touch: tondo in basso a destra, simmetrico al joystick */
+    #jump-btn { position: fixed; right: 26px; bottom: 38px; width: 62px; height: 62px; border-radius: 50%;
+      background: rgba(16,20,28,.55); border: 1.5px solid rgba(255,255,255,.35); color: #fff;
+      display: none; align-items: center; justify-content: center; z-index: 30;
+      -webkit-tap-highlight-color: transparent; touch-action: none; }
+    #jump-btn:active { background: rgba(74,158,255,.5); }
+    #jump-btn svg { width: 26px; height: 26px; }
+    body.has-touch #jump-btn { display: flex; }
     #add-fab { position: fixed; right: 16px; top: 14px; width: 52px; height: 52px; border-radius: 50%;
       background: linear-gradient(135deg, #4a9eff, #2f7fe0); border: none; color: #fff; cursor: pointer;
       z-index: 60; display: flex; align-items: center; justify-content: center;
@@ -729,6 +737,9 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
 </button>
 <div id="uo-list"><h4>I miei oggetti</h4><div id="uo-list-body"></div></div>
+<button id="jump-btn" title="Salta">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+</button>
 <input type="file" id="uo-in-model" accept=".glb,.gltf" style="display:none">
 <input type="file" id="uo-in-image" accept="image/jpeg,image/png,image/webp" style="display:none">
 <input type="file" id="uo-in-bg360" accept="image/jpeg,image/png" style="display:none">
@@ -3091,6 +3102,13 @@ function setupJoystick() {
   const end = e => { for (const t of e.changedTouches) if (t.identifier === id) reset(); };
   joy.addEventListener('touchend', end);
   joy.addEventListener('touchcancel', end);
+  // Bottone salto (touch): stesso salto/doppio salto di Space
+  const jb = document.getElementById('jump-btn');
+  if (jb) jb.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (cameraMode !== 'fps' || renderer.xr.isPresenting) return;
+    if (jumpCount < MAX_JUMPS) { velocityY = JUMP_FORCE; isOnGround = false; jumpCount++; }
+  }, { passive: false });
 }
 // Teleport ad arco parabolico (squeeze)
 let _vrArcLine = null, _vrReticle = null, _vrTeleporting = false, _vrTeleCtrl = null, _vrLandingPt = null;
@@ -4448,16 +4466,22 @@ async function init() {
     isDragging = false;
   });
 
-  // Touch per mobile/visore
+  // Touch per mobile/visore — multitouch: il dito sul joystick non disturba
+  // il dito che ruota la visuale (tracking per identifier, non touches[0])
+  let _lookTouchId = null;
   canvas.addEventListener('touchstart', e => {
-    const t = e.touches[0];
+    if (_lookTouchId !== null) return;             // già un dito che guarda
+    const t = e.changedTouches[0];                 // il dito NUOVO su questo canvas
+    _lookTouchId = t.identifier;
     isDragging = true; dragMoved = false;
     dragPrev = { x: t.clientX, y: t.clientY };
   }, { passive: true });
 
   canvas.addEventListener('touchmove', e => {
-    if (!isDragging) return;
-    const t = e.touches[0];
+    if (!isDragging || _lookTouchId === null) return;
+    let t = null;
+    for (const c of e.changedTouches) if (c.identifier === _lookTouchId) t = c;
+    if (!t) return;
     const dx = t.clientX - dragPrev.x;
     const dy = t.clientY - dragPrev.y;
     dragMoved = true;
@@ -4469,10 +4493,20 @@ async function init() {
     camera.rotation.x = cameraPitch;
   }, { passive: true });
 
-  canvas.addEventListener('touchend', () => {
-    if (!dragMoved) onInteract();
-    isDragging = false;
-  });
+  const _lookTouchEnd = e => {
+    let mine = false;
+    for (const c of e.changedTouches) if (c.identifier === _lookTouchId) mine = true;
+    if (!mine) return;                 // è finito un altro dito (es. joystick)
+    if (!dragMoved) {
+      // tap pulito: prova prima gli oggetti utente (PDF/video/portal), poi interact
+      const t = e.changedTouches[0];
+      const up = pickUserObject(t.clientX, t.clientY);
+      if (!(up && interactUserObject(up.o, up.hit, false))) onInteract();
+    }
+    isDragging = false; _lookTouchId = null;
+  };
+  canvas.addEventListener('touchend', _lookTouchEnd);
+  canvas.addEventListener('touchcancel', _lookTouchEnd);
 
   // Movimento tastiera
   document.addEventListener('keydown', e => {
