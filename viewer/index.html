@@ -740,7 +740,7 @@
 <button id="jump-btn" title="Salta">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
 </button>
-<input type="file" id="uo-in-model" accept=".glb,.gltf" style="display:none">
+<input type="file" id="uo-in-model" accept=".glb" style="display:none">
 <input type="file" id="uo-in-image" accept="image/jpeg,image/png,image/webp" style="display:none">
 <input type="file" id="uo-in-bg360" accept="image/jpeg,image/png" style="display:none">
 <input type="file" id="uo-in-pdf" accept="application/pdf,.pdf" style="display:none">
@@ -830,7 +830,7 @@
   </div>
   <div id="tab-models" class="menu-tab-content active">
     <button id="btn-upload-model" class="export-cfg-btn" style="display:none">📂 Carica contenuti (.glb)</button>
-    <input type="file" id="upload-input" accept=".glb,.gltf" style="display:none" />
+    <input type="file" id="upload-input" accept=".glb" style="display:none" />
     <h3>Modelli caricati</h3>
     <div id="models-list"></div>
   </div>
@@ -3920,6 +3920,11 @@ async function storeUserFile(file) {
 }
 async function handleUserFile(type, file) {
   if (!file) return;
+  // Solo GLB: il .gltf multi-file da solo arriva senza texture/geometrie
+  if (type === 'model' && !/\.glb$/i.test(file.name)) {
+    showNotification('⚠️ Usa un file .GLB unico — il .gltf multi-file non funziona caricato da solo');
+    return;
+  }
   showNotification('⏳ Carico ' + file.name + '…');
   const src = await storeUserFile(file);
   const name = file.name.replace(/\.[a-z0-9]+$/i, '');

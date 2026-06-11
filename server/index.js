@@ -141,7 +141,7 @@ app.post('/api/projects/:slug/upload', requireAuth, upload.single('model'), asyn
     if (!proj) return res.status(404).json({ error: 'Progetto non trovato' });
     if (!req.file) return res.status(400).json({ error: 'Nessun file' });
     const safe = req.file.originalname.replace(/[^a-zA-Z0-9._ -]/g, '_');
-    if (!/\.(glb|gltf)$/i.test(safe)) return res.status(400).json({ error: 'Formato non supportato (usa .glb)' });
+    if (!/\.glb$/i.test(safe)) return res.status(400).json({ error: 'Solo .GLB unico: il .gltf multi-file caricato da solo dà una scena rotta' });
     const prefix = proj.assetPrefix || slug;   // usa il prefisso reale (non rompe il 32)
     const ct = /\.glb$/i.test(safe) ? 'model/gltf-binary' : 'model/gltf+json';
     await store.putAsset(`${prefix}/gltfModels/${safe}`, req.file.buffer, ct);
@@ -156,7 +156,7 @@ app.post('/api/projects/:slug/upload', requireAuth, upload.single('model'), asyn
 
 // Asset degli oggetti utente del menu + (immagini, PDF, MP4, 360°, GLB) — solo redazione
 const ASSET_EXT = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
-  '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json' };
+  '.pdf': 'application/pdf', '.mp4': 'video/mp4', '.glb': 'model/gltf-binary' };
 app.post('/api/projects/:slug/asset', requireAuth, upload.single('file'), async (req, res) => {
   try {
     const slug = req.params.slug;
