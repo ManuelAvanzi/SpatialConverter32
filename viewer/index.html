@@ -366,7 +366,6 @@
 
     /* Modalità PLAY: nascondi tutti gli strumenti da editor */
     body.play-mode #btn-models,
-    body.play-mode #btn-lighting,
     body.play-mode #btn-entrance,
     body.play-mode #models-panel,
     body.play-mode #lighting-panel,
@@ -529,14 +528,7 @@
     body.has-touch.overhead #move-joy { display: none; }
 
     /* HUD coordinate camera */
-    #cam-hud {
-      position: fixed; bottom: 20px; right: 20px;
-      background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
-      border: 1px solid rgba(255,255,255,.1); border-radius: 8px;
-      padding: 6px 12px; color: rgba(255,255,255,.75);
-      font-size: .72rem; font-family: monospace; z-index: 20;
-      pointer-events: none; line-height: 1.6;
-    }
+    #cam-hud { display: none; }   /* HUD coordinate disattivato (non serviva) */
 
     /* Editor coordinate manuale */
     #coord-editor {
@@ -853,6 +845,7 @@
   <div id="tab-light" class="menu-tab-content"><!-- adotta #lighting-panel al boot --></div>
   <div id="tab-settings" class="menu-tab-content">
     <h3>Impostazioni scena</h3>
+    <label class="set-row"><input type="checkbox" id="set-floor" checked> Pavimento</label>
     <label class="set-row"><input type="checkbox" id="set-grid" checked> Griglia a terra</label>
     <div class="set-row"><span style="flex:1">Metratura griglia</span>
       <select id="set-grid-size" class="ia-anim" style="flex:0 0 90px">
@@ -927,7 +920,6 @@
   <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)">🎥 Terza persona</button>
   <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none">🗂 Simulazioni</button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
-  <button class="tool-btn" id="btn-lighting"  title="Illuminazione scena">☀️ Luce</button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo">🔊 Audio</button>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione">💾 Salva</button>
@@ -1120,6 +1112,7 @@ const loadedModels = [];
 const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee'];
 let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
 let _sceneGrid = null;        // griglia a terra (toggle nella tab Opzioni)
+let _sceneFloor = null;       // pavimento della scena vuota (toggle nella tab Opzioni)
 let _gridCellSize = 1;        // metratura della cella (1/2/5/10 m)
 let _vitFrames = 0;           // contatore frame per il pannello Scene Vitals
 
@@ -4726,11 +4719,12 @@ async function init() {
   document.getElementById('tab-light').appendChild(_lp);
   _lp.classList.add('in-sidebar');
   _lp.style.display = 'block';
-  // il bottone ☀️ in toolbar apre la sidebar sulla tab Luce
-  document.getElementById('btn-lighting').addEventListener('click', () => switchMenuTab('light'));
   setupLightingPanel();
 
-  // ── Tab Opzioni: griglia, metratura, wireframe, vitals ───────────────────
+  // ── Tab Opzioni: pavimento, griglia, metratura, wireframe, vitals ────────
+  const _floorCb = document.getElementById('set-floor');
+  _floorCb.checked = !((SCENE_CONFIG.settings || {}).floor === false);
+  _floorCb.addEventListener('change', () => { if (_sceneFloor) _sceneFloor.visible = _floorCb.checked; });
   const _gridCb = document.getElementById('set-grid');
   _gridCb.checked = !((SCENE_CONFIG.settings || {}).grid === false);
   _gridCb.addEventListener('change', () => {
@@ -6032,7 +6026,7 @@ function buildSceneConfigObject() {
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
-    settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize },
+    settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible },
   };
 }
 function exportSceneConfig() {
@@ -6540,13 +6534,15 @@ function animateMarkers(t) {
 
 // ─── Placeholder se nessun GLB ────────────────────────────────────────────
 function createPlaceholderEnvironment() {
-  // Pavimento + griglia (scena vuota pulita)
+  // Pavimento + griglia (scena vuota pulita); entrambi toggleabili dalle Opzioni
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(120, 120),
     new THREE.MeshLambertMaterial({ color: 0x9099a3 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
+  floor.visible = !((SCENE_CONFIG.settings || {}).floor === false);
+  _sceneFloor = floor;
   scene.add(floor);
 
   rebuildSceneGrid((SCENE_CONFIG.settings || {}).gridSize || 1);
@@ -6690,12 +6686,6 @@ function animate(timestamp, frame) {
   if (EDIT_MODE) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato
   if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
-  // Aggiorna HUD coordinate camera
-  const hud = document.getElementById('cam-hud');
-  if (hud) {
-    const p = camera.position;
-    hud.textContent = `X ${p.x.toFixed(1)}  Y ${p.y.toFixed(1)}  Z ${p.z.toFixed(1)}`;
-  }
 
   // Anima markers
   animateMarkers(t);
