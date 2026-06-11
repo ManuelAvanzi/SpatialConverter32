@@ -203,14 +203,15 @@
     .lv-quiz:hover { background: rgba(180,120,255,.4); }
     .lv-go-hint { font-size: .62rem; color: #8ea0b8; margin-top: 6px; }
     /* ── Menu + oggetti utente (stile Spatial) ── */
-    #add-fab { position: fixed; right: 18px; bottom: 96px; width: 52px; height: 52px; border-radius: 50%;
+    body.play-mode #cam-hud { display: none; }   /* coordinate: solo in editor */
+    #add-fab { position: fixed; right: 16px; top: 14px; width: 52px; height: 52px; border-radius: 50%;
       background: linear-gradient(135deg, #4a9eff, #2f7fe0); border: none; color: #fff; cursor: pointer;
       z-index: 60; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 6px 22px rgba(0,0,0,.45); transition: transform .15s, filter .15s; }
     #add-fab:hover { transform: scale(1.07); filter: brightness(1.1); }
     #add-fab svg { width: 24px; height: 24px; transition: transform .2s; }
     #add-fab.open svg { transform: rotate(45deg); }
-    #add-menu { position: fixed; right: 18px; bottom: 158px; z-index: 60; display: none;
+    #add-menu { position: fixed; right: 16px; top: 74px; z-index: 60; display: none;
       background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
       border-radius: 14px; padding: 7px; min-width: 215px; box-shadow: 0 14px 50px rgba(0,0,0,.55); }
     #add-menu.open { display: block; }
@@ -257,13 +258,12 @@
     #uo-pill button.active { background: #4a9eff; border-color: #4a9eff; color: #fff; }
     #uo-pill button.del:hover { background: rgba(255,90,90,.3); }
     /* Lista dei propri oggetti (play): elimina / blocca */
-    #uo-list-btn { position: fixed; right: 18px; bottom: 158px; width: 42px; height: 42px; border-radius: 50%;
+    #uo-list-btn { position: fixed; right: 76px; top: 19px; width: 42px; height: 42px; border-radius: 50%;
       background: rgba(16,20,28,.92); border: 1px solid rgba(255,255,255,.16); color: #cfe0f5; cursor: pointer;
       z-index: 60; display: none; align-items: center; justify-content: center; transition: all .15s; }
-    body.play-mode #uo-list-btn { display: flex; }
     #uo-list-btn:hover { border-color: #4a9eff; color: #4a9eff; }
     #uo-list-btn svg { width: 18px; height: 18px; }
-    #uo-list { position: fixed; right: 70px; bottom: 158px; z-index: 60; display: none;
+    #uo-list { position: fixed; right: 76px; top: 70px; z-index: 60; display: none;
       background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
       border-radius: 13px; padding: 9px; width: 250px; max-height: 46vh; overflow-y: auto;
       box-shadow: 0 14px 50px rgba(0,0,0,.55); }
@@ -2985,7 +2985,6 @@ function toggleThirdPerson() {
   if (avatar.root) avatar.root.visible = thirdPerson;
   const b = document.getElementById('btn-camera');
   if (b) { b.classList.toggle('active', thirdPerson); b.textContent = thirdPerson ? '👁 Prima persona' : '🎥 Terza persona'; }
-  showNotification(thirdPerson ? '🎥 Terza persona — V per tornare' : '👁 Prima persona');
 }
 
 function updateThirdPerson(dt) {
@@ -3576,6 +3575,10 @@ function renderUoPlayList() {
   const body = document.getElementById('uo-list-body'); if (!body) return;
   body.innerHTML = '';
   const mine = userObjects.filter(o => o.own);
+  // il bottone lista appare solo quando c'è almeno un oggetto tuo
+  const btn = document.getElementById('uo-list-btn');
+  if (btn) btn.style.display = (!EDIT_MODE && mine.length) ? 'flex' : 'none';
+  if (!mine.length) document.getElementById('uo-list').classList.remove('open');
   if (!mine.length) { body.innerHTML = '<div class="uol-empty">Nessun oggetto tuo. Aggiungine col ＋ qui sotto.</div>'; return; }
   for (const o of mine) {
     const row = document.createElement('div'); row.className = 'uol-row';
@@ -3596,6 +3599,7 @@ async function initUserObjects() {
   if (!EDIT_MODE) {
     let mine = []; try { mine = JSON.parse(localStorage.getItem(UO_VISITOR_KEY)) || []; } catch {}
     for (const d of mine) await addUserObject(d, { own: true, fresh: false });
+    renderUoPlayList();
   }
   if (EDIT_MODE) renderUserObjectList();
 }
@@ -4619,6 +4623,9 @@ async function setupVR() {
   if (!('xr' in navigator)) return;
   const supported = await navigator.xr?.isSessionSupported?.('immersive-vr').catch(() => false);
   if (!supported) return;
+  // Il bottone appare SOLO nel browser di un visore (su PC/smartphone "supported"
+  // può essere true per runtime/Cardboard, ma il bottone lì è inutile)
+  if (!/OculusBrowser|Quest|Pico|Wolvic|VR/i.test(navigator.userAgent)) return;
 
   const vrBtn = document.getElementById('vr-btn');
   // VR solo in play mode (non in editor)
