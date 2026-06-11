@@ -3692,10 +3692,28 @@ async function buildUoImage(o) {
   mesh.position.y = H / 2 + 0.1;
   o.group.add(mesh);
 }
+// Vetri: molti GLB esportati arrivano con materiali "glass" opachi (neri).
+// Riconosce transmission o nomi tipo glass/vetro/transparent e attiva l'alpha.
+function fixTransparentMaterials(root) {
+  root.traverse(node => {
+    if (!node.isMesh || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    for (const m of mats) {
+      const tag = ((m.name || '') + ' ' + (node.name || '')).toLowerCase();
+      const isGlass = (m.transmission && m.transmission > 0) || /glass|vetr|crystal|transparent/.test(tag);
+      if (!isGlass) continue;
+      m.transparent = true;
+      if (m.opacity >= 1) m.opacity = 0.28;
+      m.depthWrite = false;
+      m.needsUpdate = true;
+    }
+  });
+}
 async function buildUoModel(o, fresh) {
   const url = await resolveUoSrc(o.src); if (!url) return;
   const g = await new Promise((res, rej) => new GLTFLoader().load(url, res, undefined, rej));
   const root = g.scene;
+  fixTransparentMaterials(root);
   if (fresh) {  // normalizza i modelli giganti a ~2 m
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3()), maxDim = Math.max(size.x, size.y, size.z);
@@ -5395,6 +5413,7 @@ async function loadGltfCharacters() {
       else {
         const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/\.(glb|gltf)$/i, '');
         gltf.scene.name = gltf.scene.name || fileName;
+        fixTransparentMaterials(gltf.scene);
         chars = [gltf.scene];
       }
       const anims = gltf.animations || [];
