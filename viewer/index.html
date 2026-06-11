@@ -299,6 +299,15 @@
     .set-row { display: flex; align-items: center; gap: 9px; font-size: .82rem; color: #dde5f0;
       padding: 8px 2px; cursor: pointer; user-select: none; }
     .set-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #4a9eff; cursor: pointer; }
+    /* Scene Vitals (editor) */
+    #scene-vitals { position: fixed; right: 12px; bottom: 88px; z-index: 30; display: none;
+      background: rgba(12,16,24,.88); border: 1px solid rgba(255,255,255,.12); border-radius: 11px;
+      padding: 9px 12px; min-width: 195px; font-size: .72rem; color: #cdd6e6;
+      font-family: Consolas, monospace; pointer-events: none; }
+    #scene-vitals .sv-title { font-weight: 700; color: #8ea0b8; text-transform: uppercase;
+      letter-spacing: .05em; font-size: .64rem; margin-bottom: 5px; }
+    #scene-vitals .sv-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.55; }
+    body.play-mode #scene-vitals { display: none !important; }
 
     /* Telefoni: pannelli a tutta larghezza, griglia a 2 colonne, tap target pieni */
     @media (max-width: 600px) {
@@ -810,6 +819,9 @@
   <div id="uq-feed"></div>
 </div>
 
+<!-- Scene Vitals (solo editor) -->
+<div id="scene-vitals"></div>
+
 <!-- Quest checklist (play + anteprima editor) -->
 <div id="quest-checklist"></div>
 <div id="quest-celebrate"><div class="qc-text"></div></div>
@@ -842,7 +854,15 @@
   <div id="tab-settings" class="menu-tab-content">
     <h3>Impostazioni scena</h3>
     <label class="set-row"><input type="checkbox" id="set-grid" checked> Griglia a terra</label>
-    <div class="sf-hint">Visibile solo dove la scena ha il pavimento di default. Salvata col progetto (vale anche in play).</div>
+    <div class="set-row"><span style="flex:1">Metratura griglia</span>
+      <select id="set-grid-size" class="ia-anim" style="flex:0 0 90px">
+        <option value="1">1 m</option><option value="2">2 m</option>
+        <option value="5">5 m</option><option value="10">10 m</option>
+      </select></div>
+    <div class="sf-hint">Griglia e metratura sono salvate col progetto (valgono anche in play).</div>
+    <label class="set-row"><input type="checkbox" id="set-wireframe"> Wireframe dei modelli</label>
+    <label class="set-row"><input type="checkbox" id="set-vitals" checked> Pannello Scene Vitals</label>
+    <div class="sf-hint">Wireframe e Vitals sono strumenti di lavoro: non vengono salvati.</div>
   </div>
   <div id="tab-models" class="menu-tab-content active">
     <button id="btn-upload-model" class="export-cfg-btn" style="display:none">📂 Carica contenuti (.glb)</button>
@@ -1100,6 +1120,27 @@ const loadedModels = [];
 const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee'];
 let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
 let _sceneGrid = null;        // griglia a terra (toggle nella tab Opzioni)
+let _gridCellSize = 1;        // metratura della cella (1/2/5/10 m)
+let _vitFrames = 0;           // contatore frame per il pannello Scene Vitals
+
+// (Ri)crea la griglia a terra con la metratura scelta
+function rebuildSceneGrid(cell) {
+  _gridCellSize = cell || 1;
+  const wasVisible = _sceneGrid ? _sceneGrid.visible : true;
+  if (_sceneGrid) { scene.remove(_sceneGrid); _sceneGrid.geometry.dispose(); }
+  _sceneGrid = new THREE.GridHelper(120, Math.max(1, Math.round(120 / _gridCellSize)), 0x6a7480, 0x444b54);
+  _sceneGrid.position.y = 0.01;
+  _sceneGrid.visible = wasVisible;
+  scene.add(_sceneGrid);
+}
+// Wireframe diagnostico su tutta la scena (non persistito)
+function setSceneWireframe(on) {
+  scene.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) if ('wireframe' in m) m.wireframe = on;
+  });
+}
 
 // ─── Gizmo posizionamento (TransformControls) ───────────────────────────────
 let transformControls = null;
@@ -4689,12 +4730,51 @@ async function init() {
   document.getElementById('btn-lighting').addEventListener('click', () => switchMenuTab('light'));
   setupLightingPanel();
 
-  // ── Tab Opzioni: griglia a terra (persistita in scene-config.settings) ───
+  // ── Tab Opzioni: griglia, metratura, wireframe, vitals ───────────────────
   const _gridCb = document.getElementById('set-grid');
   _gridCb.checked = !((SCENE_CONFIG.settings || {}).grid === false);
   _gridCb.addEventListener('change', () => {
     if (_sceneGrid) _sceneGrid.visible = _gridCb.checked;
   });
+  const _gridSizeSel = document.getElementById('set-grid-size');
+  _gridSizeSel.value = String((SCENE_CONFIG.settings || {}).gridSize || 1);
+  _gridSizeSel.addEventListener('change', () => {
+    if (_sceneGrid) { rebuildSceneGrid(+_gridSizeSel.value); _sceneGrid.visible = _gridCb.checked; }
+    else _gridCellSize = +_gridSizeSel.value;
+  });
+  document.getElementById('set-wireframe').addEventListener('change',
+    e => setSceneWireframe(e.target.checked));
+
+  // ── Scene Vitals (solo editor): FPS, draw call, triangoli, vertici, memoria ──
+  if (EDIT_MODE) {
+    const vit = document.getElementById('scene-vitals');
+    const vitCb = document.getElementById('set-vitals');
+    vit.style.display = 'block';
+    vitCb.addEventListener('change', () => { vit.style.display = vitCb.checked ? 'block' : 'none'; });
+    let lastT = performance.now(), sceneVerts = 0, tick = 0;
+    const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'K' : String(n);
+    const sev = (v, warn, bad) => v >= bad ? '#ff7a6a' : v >= warn ? '#ffce8a' : '#9fe8b6';
+    setInterval(() => {
+      if (vit.style.display === 'none') { _vitFrames = 0; lastT = performance.now(); return; }
+      const now = performance.now();
+      const fps = Math.round(_vitFrames / ((now - lastT) / 1000)) || 0;
+      _vitFrames = 0; lastT = now;
+      if (tick++ % 4 === 0) {   // i vertici si ricontano ogni ~3s (traverse costoso)
+        sceneVerts = 0;
+        scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.attributes.position) sceneVerts += o.geometry.attributes.position.count; });
+      }
+      const inf = renderer.info;
+      const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : '—';
+      vit.innerHTML =
+          `<div class="sv-title">Scene Vitals</div>`
+        + `<div class="sv-row"><span>FPS</span><b style="color:${fps < 30 ? '#ff7a6a' : fps < 50 ? '#ffce8a' : '#9fe8b6'}">${fps}</b></div>`
+        + `<div class="sv-row"><span>Draw call</span><b style="color:${sev(inf.render.calls, 300, 800)}">${inf.render.calls}</b></div>`
+        + `<div class="sv-row"><span>Triangoli (frame)</span><b style="color:${sev(inf.render.triangles, 1e6, 4e6)}">${fmt(inf.render.triangles)}</b></div>`
+        + `<div class="sv-row"><span>Vertici scena</span><b style="color:${sev(sceneVerts, 1e6, 5e6)}">${fmt(sceneVerts)}</b></div>`
+        + `<div class="sv-row"><span>Geometrie · Texture</span><b>${inf.memory.geometries} · ${inf.memory.textures}</b></div>`
+        + `<div class="sv-row"><span>Memoria JS</span><b>${heap}</b></div>`;
+    }, 800);
+  }
 
   // ── Audio di sottofondo ───────────────────────────────────────────────────
   setupAudio();
@@ -5952,7 +6032,7 @@ function buildSceneConfigObject() {
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
-    settings:      { grid: !_sceneGrid || _sceneGrid.visible },
+    settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize },
   };
 }
 function exportSceneConfig() {
@@ -6469,11 +6549,8 @@ function createPlaceholderEnvironment() {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const grid = new THREE.GridHelper(120, 120, 0x6a7480, 0x444b54);
-  grid.position.y = 0.01;
-  grid.visible = !((SCENE_CONFIG.settings || {}).grid === false);   // toggle in tab Opzioni
-  _sceneGrid = grid;
-  scene.add(grid);
+  rebuildSceneGrid((SCENE_CONFIG.settings || {}).gridSize || 1);
+  _sceneGrid.visible = !((SCENE_CONFIG.settings || {}).grid === false);   // toggle in tab Opzioni
 
   if (PROJECT_SLUG) showNotification('🆕 Scena vuota — usa gli strumenti per costruirla');
   else showNotification('Modalità demo — nessun GLB caricato');
@@ -6634,6 +6711,7 @@ function animate(timestamp, frame) {
 
   updateThirdPerson(delta);
   renderer.render(scene, viewCam());
+  _vitFrames++;   // contatore per il pannello Scene Vitals
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────
