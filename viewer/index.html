@@ -5850,7 +5850,10 @@ function applyEnvBoost(v) {
 function captureLighting() {
   if (!scene || !ambientLight || !dirLight || !renderer) return SCENE_CONFIG.lighting || null;
   return {
-    bg: '#' + scene.background.getHexString(),
+    // con uno sfondo 360 attivo background è una texture: salva il colore originale
+    bg: (scene.background && scene.background.isColor) ? '#' + scene.background.getHexString()
+        : ((_uoPrevBg && _uoPrevBg.isColor) ? '#' + _uoPrevBg.getHexString()
+        : (SCENE_CONFIG.lighting && SCENE_CONFIG.lighting.bg) || '#87ceeb'),
     ambInt: +ambientLight.intensity.toFixed(3), ambCol: '#' + ambientLight.color.getHexString(),
     sunInt: +dirLight.intensity.toFixed(3), sunCol: '#' + dirLight.color.getHexString(),
     sunPos: dirLight.position.toArray().map(v => +v.toFixed(2)),
