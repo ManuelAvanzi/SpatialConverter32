@@ -24,7 +24,10 @@ Mini-piattaforma per convertire ambienti **Spatial.io + Unity** in laboratori we
   posa di salto procedurale, follow-cam anti-muro. Colori avatar scelti in editor.
 - **VR (WebXR)**: locomozione con stick, teleport ad arco (grip), salto (A), snap-turn,
   prompt 3D e checklist quest agganciata al controller sinistro.
-- **Mobile**: joystick touch.
+- **Mobile**: joystick touch + bottone salto; due dita indipendenti
+  (muoversi e ruotare la visuale insieme).
+- **Resa**: slider "Riflessi (IBL)" nel pannello Luce (environment map regolabile,
+  salvata col progetto) per dare profondità ai materiali esportati da Unity.
 - **Vista aerea**: OrbitControls per l'editing dall'alto.
 
 ### Spatial features (editor, drag & drop o ＋)
@@ -48,6 +51,21 @@ Script editor C# (in `Assets/Editor/` del progetto Unity, copie versionate in `u
 Il JSON esportato si importa dall'editor web (**🎮 Importa da Unity…**) con merge per `uid`:
 ri-esportare aggiorna le posizioni senza duplicare e senza perdere le modifiche manuali.
 Conversione assi Unity→Three: **X=-X, Y=Y, Z=+Z**.
+
+### Menu ＋ (oggetti in scena, stile Spatial)
+Pulsante **＋** in alto a destra, attivo in editor **e** in play. Tipi:
+**Modello 3D** (.glb unico — il .gltf multi-file è bloccato con avviso) ·
+**Immagine** · **Sfondo 360°** · **Video YouTube** (player nella scena via CSS3D,
+barra comandi 3D) · **Video MP4** (schermo 3D vero, funziona in VR) ·
+**PDF sfogliabile** (pdf.js, frecce pagina) · **Portal** (bolla fluida shader,
+click → conferma → apre il link; in VR conferma su pannello 3D).
+- **Redazione (editor)**: i file vanno su R2 (`<prefix>/objects/`), gli oggetti
+  entrano nella scene-config col 💾 → li vedono tutti.
+- **Visitatori (play)**: oggetti **locali al browser** (localStorage + IndexedDB),
+  sopravvivono al reload, invisibili agli altri. Gizmo Sposta/Ruota/Scala sui propri.
+- **Lista** (bottone ≡ accanto al ＋, appare con ≥1 oggetto): elimina e **blocca**
+  (un oggetto bloccato non è più spostabile finché non lo sblocchi dalla lista).
+- PDF, video e portal sono **puntabili col grilletto** anche nel visore.
 
 ## Struttura del repo
 
