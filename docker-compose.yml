@@ -1,0 +1,34 @@
+# Avvio del server in container sull'EC2.
+# Nginx gira sull'HOST (non qui) davanti al container, gestisce HTTPS/Certbot
+# e fa reverse-proxy verso 127.0.0.1:3003.
+services:
+  app:
+    build: .
+    image: spatialconverter:latest
+    container_name: spatialconverter
+    restart: unless-stopped
+
+    # init: gestisce SIGTERM e reaping degli zombie (Node non è un buon PID 1).
+    # Senza, `docker stop` può impiegare ~10s prima del kill forzato.
+    init: true
+
+    # Esposto SOLO su localhost: raggiungibile da Nginx (host), non da internet.
+    # Internet → Nginx :443 → 127.0.0.1:3003 → container.
+    ports:
+      - "127.0.0.1:3003:3003"
+
+    # Variabili d'ambiente da un file .env sull'EC2 (NON committato).
+    # Vedi .env.example per le chiavi (S3/AWS, ASSET_BASE, EDITOR_PASSWORD, JWT_SECRET).
+    env_file:
+      - .env
+
+    environment:
+      - PORT=3003
+      - NODE_ENV=production
+
+    # Tetto RAM: il server bufferizza gli upload in memoria (multer, fino a 200MB/file).
+    # Limita il container per non far cadere l'istanza sotto upload concorrenti.
+    deploy:
+      resources:
+        limits:
+          memory: 1g

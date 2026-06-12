@@ -1,0 +1,34 @@
+# Non copiare nell'immagine: dipendenze (reinstallate da npm ci), VCS,
+# file Docker/infra, e gli asset pesanti che vivono su S3 (non nel container).
+node_modules
+npm-debug.log
+
+.git
+.gitignore
+.claude
+
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Env: le variabili si passano a runtime (docker-compose env_file), non nell'immagine
+.env
+.env.*
+!.env.example
+
+# Asset pesanti: modelli di scena/personaggi stanno su S3, non nell'immagine.
+content/
+viewer/models/
+*.fbx
+*.unitypackage
+# GLB pesanti esclusi, MA l'avatar 3a persona serve al viewer → va tenuto.
+*.glb
+!viewer/avatar/Xbot.glb
+
+# Pipeline conversione offline (Blender/Unity): non serve nel container del server
+tools/legacy/
+unity/
+
+# Documentazione/infra
+*.md
+.vscode
