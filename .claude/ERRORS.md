@@ -23,6 +23,9 @@
 - ❌ Azioni: nodi nascosti restano nel collider (muri invisibili) → ✅ escludere i nodi nascosti dal collider
 - ❌ `.dockerignore` con `*.glb` esclude anche `viewer/avatar/Xbot.glb` (avatar 3a persona servito dal viewer) → scena rotta → ✅ eccezione `!viewer/avatar/Xbot.glb`
 - ❌ Container Docker come root (default `node:alpine`) → ✅ `USER node`
+- ❌ Deploy con `docker system prune -a`: cancella TUTTE le immagini (anche `node:20-alpine`) → ogni deploy riscarica/rebuilda da zero → ✅ `docker image prune -f` (solo layer orfani)
+- ❌ Bucket S3 privato + presigned senza CORS → browser blocca gli asset (No Access-Control-Allow-Origin) → ✅ configurare CORS sul bucket (origin del dominio, GET/HEAD)
+- ❌ `certbot --nginx` può creare il cert ma non editare la config nginx (resta `listen 80`, niente HTTPS) → ✅ scrivere a mano il server block 443 + redirect
 
 ---
 

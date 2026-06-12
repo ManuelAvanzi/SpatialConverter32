@@ -1,0 +1,21 @@
+name: Deploy to EC2
+
+# Auto-deploy a ogni push su main. Si connette in SSH all'EC2 e lancia deploy.sh.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # permette anche il trigger manuale dalla tab Actions
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH all'EC2 ed esegui il deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/SpatialConverter32
+            ./deploy.sh

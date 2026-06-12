@@ -44,6 +44,8 @@ SpatialConverter32/
 ├── Dockerfile           Immagine server (node:20-alpine, npm ci, :3003)
 ├── docker-compose.yml   Run su EC2: port 127.0.0.1:3003, env_file .env, restart
 ├── .dockerignore        Esclude node_modules/.git/GLB pesanti/pipeline offline
+├── deploy.sh            Deploy EC2: git pull + docker compose up --build + prune
+├── .github/workflows/deploy.yml  Auto-deploy su push main/master (SSH all'EC2)
 ├── INFRASTRUTTURA.md    Fonte autorevole infra multi-progetto (Railway + R2)
 └── DEPLOY.md            Procedura primo flusso "32"
 ```
