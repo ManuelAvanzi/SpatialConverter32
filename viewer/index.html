@@ -1121,6 +1121,8 @@ let _sceneGrid = null;        // griglia a terra (toggle nella tab Opzioni)
 let _sceneFloor = null;       // pavimento della scena vuota (toggle nella tab Opzioni)
 let _emptyScene = false;      // true se è una scena vuota (pavimento placeholder) → fisica con caduta nel vuoto
 let _clickTeleport = false;   // click sul terreno = teletrasporto (stile Spatial), toggle nelle Opzioni
+let _fallStartT = 0;          // istante d'inizio caduta nel vuoto (per il respawn a tempo)
+const VOID_FALL_RESPAWN_MS = 7000;   // dopo 7s di caduta → respawn
 let _gridCellSize = 1;        // metratura della cella (1/2/5/10 m)
 let _vitFrames = 0;           // contatore frame per il pannello Scene Vitals
 
@@ -1909,7 +1911,10 @@ function applySpawn() {
     playerGroundY = p.y + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
     return;
   }
-  applyEntrancePoint();   // fallback al vecchio entrance singolo (localStorage)
+  if (loadSavedEntrance()) { applyEntrancePoint(); }   // vecchio entrance singolo (localStorage)
+  else { camera.position.set(0, PLAYER_HEIGHT, 0); cameraYaw = 0; cameraPitch = 0;   // origine
+    camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0; }
+  playerGroundY = PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
 }
 
 // ─── Interactable: visual + prossimità + trigger animazione ──────────────────
@@ -6731,8 +6736,9 @@ function animate(timestamp, frame) {
       velocityY = Math.max(velocityY + GRAVITY * delta, -25);
       camera.position.y += velocityY * delta;
 
-      // Caduto nel vuoto → respawn all'entrance dopo un po'
-      if (camera.position.y < (playerSpawnY() - 40)) { applySpawn(); }
+      // Caduto nel vuoto → respawn dopo 7s (timer); azzerato quando si tocca terra
+      if (_fallStartT === 0) _fallStartT = performance.now();
+      if (performance.now() - _fallStartT > VOID_FALL_RESPAWN_MS) { applySpawn(); _fallStartT = 0; }
 
       // Controlla atterraggio: piano di default OPPURE mesh sotto i piedi
       let landed  = camera.position.y <= playerGroundY;
@@ -6756,7 +6762,7 @@ function animate(timestamp, frame) {
       if (landed) {
         camera.position.y = landedY;
         playerGroundY     = landedY;
-        velocityY = 0; isOnGround = true; jumpCount = 0;
+        velocityY = 0; isOnGround = true; jumpCount = 0; _fallStartT = 0;
       }
     }
   }
