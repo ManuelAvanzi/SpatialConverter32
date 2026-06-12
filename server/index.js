@@ -19,9 +19,24 @@ app.get('/api/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json({
     assetBase: process.env.ASSET_BASE || '',
-    r2Base: (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, ''),
+    r2Base: (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, ''),  // legacy R2; vuoto su S3
     projectsEnabled: store.available(),
   });
+});
+
+// ─── Serving asset privati: redirect 302 a presigned URL S3 ──────────────────
+// Il viewer chiede /api/asset/<key> → rispondiamo con redirect all'URL firmato.
+// Il bucket resta privato; l'EC2 NON fa da proxy dei byte (firma e reindirizza).
+// In fase 2 qui si aggancerà il check JWT per legare l'accesso al login.
+app.get('/api/asset/*', async (req, res) => {
+  try {
+    const key = req.params[0];
+    if (!key) return res.status(400).send('key mancante');
+    const url = await store.getSignedAssetUrl(key);
+    if (!url) return res.status(503).send('Storage non configurato');
+    res.set('Cache-Control', 'no-store');   // l'URL firmato scade: non cacheare il redirect
+    res.redirect(302, url);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
 // ─── Auth redazione ──────────────────────────────────────────────────────────
@@ -170,8 +185,8 @@ app.post('/api/projects/:slug/asset', requireAuth, upload.single('file'), async 
     const prefix = proj.assetPrefix || slug;
     const key = `${prefix}/objects/${Date.now()}_${safe}`;
     await store.putAsset(key, req.file.buffer, ct);
-    const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
-    res.json({ ok: true, url: `${base}/${key}` });
+    // URL che passa dalla rotta di serving firmata (bucket privato): /api/asset/<key>
+    res.json({ ok: true, url: `/api/asset/${key}` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -185,8 +200,8 @@ app.post('/api/projects/:slug/cover', requireAuth, upload.single('cover'), async
     const ext = (m ? m[0] : '.png').toLowerCase().replace('.jpeg', '.jpg');
     const key = `${slug}/cover${ext}`;
     await store.putAsset(key, req.file.buffer, req.file.mimetype || 'image/png');
-    const base = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
-    const url = `${base}/${key}?v=${Date.now()}`;
+    // URL via rotta firmata (bucket privato); ?v= per cache-busting lato browser.
+    const url = `/api/asset/${key}?v=${Date.now()}`;
     await store.saveProject(slug, { cover: url });
     res.json({ ok: true, cover: url });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -217,5 +232,5 @@ const PORT = process.env.PORT || 3003;
 app.listen(PORT, () => {
   console.log(`SpatialConverter in ascolto su http://localhost:${PORT}`);
   console.log(`ASSET_BASE = ${process.env.ASSET_BASE || '(vuoto → viewer/models locale)'}`);
-  console.log(`Progetti (R2) = ${store.available() ? 'attivi' : 'NON configurati (mancano le env R2)'}`);
+  console.log(`Progetti (S3) = ${store.available() ? 'attivi' : 'NON configurati (mancano le credenziali S3)'}`);
 });

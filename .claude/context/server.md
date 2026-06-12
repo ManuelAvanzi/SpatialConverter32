@@ -48,6 +48,14 @@ Record progetto: `{slug, name, status(draft|published), assetPrefix, tags[], cov
 
 ---
 
+## Migrazione S3 (2026-06-12, STEP 4A fatto)
+- `store.js`: client ora **S3** (region `eu-south-1`, **endpoint opzionale** — vuoto su AWS, valorizzato per R2). Env `AWS_*`/`S3_*` con fallback `R2_*`. `r2()`→`s3()`.
+- Nuova `store.getSignedAssetUrl(key, ttl)` (presigner, TTL default 12h via `SIGNED_URL_TTL`).
+- Nuova rotta `GET /api/asset/*` → **redirect 302 a presigned URL** (bucket privato, EC2 non fa da proxy dei byte; qui aggancerà il JWT in fase 2).
+- `/asset` e `/cover` ora ritornano `/api/asset/<key>` invece dell'URL R2 pubblico.
+- `package.json`: + `@aws-sdk/s3-request-presigner`. Verificato: sintassi OK, export OK.
+- ⚠️ STEP 4B mancante: il **viewer** deve chiedere URL firmati per i GLB (env `ASSET_BASE` vuoto su S3 privato). STEP 5: migrazione dati R2→S3.
+
 ## Decisions made
 - 2026-06: niente DB — progetti come JSON su R2 (zero provisioning, persistente). Listing = N GET su R2 (ok per pochi progetti).
 - 2026-06: auth a password unica redazione (non multi-utente). `JWT_SECRET` stabile se impostato, altrimenti random per-avvio (logout a ogni redeploy).

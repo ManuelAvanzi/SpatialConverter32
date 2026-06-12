@@ -9,20 +9,24 @@ const fs = require('fs');
 const path = require('path');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
-const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env;
-const BUCKET = process.env.R2_BUCKET || 'immersivelab-assets';
+// Credenziali: AWS_* (S3) con fallback R2_* per retro-compatibilità.
+const ACCESS_KEY = process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
+const SECRET_KEY = process.env.AWS_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
+const REGION = process.env.AWS_REGION || process.env.S3_REGION || 'eu-south-1';
+const ENDPOINT = process.env.S3_ENDPOINT || process.env.R2_ENDPOINT || '';   // vuoto su AWS
+const BUCKET = process.env.S3_BUCKET || process.env.R2_BUCKET || 'immersivelab-assets';
 const PREFIX = (process.env.R2_PREFIX || 'spatial32').replace(/\/+$/, '');
 
-if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-  console.error('❌ Mancano le credenziali R2 nelle env (R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY).');
+if (!ACCESS_KEY || !SECRET_KEY) {
+  console.error('❌ Mancano le credenziali S3 nelle env (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).');
   console.error('   Copia .env.example in .env e compila i valori, poi riprova.');
   process.exit(1);
 }
 
 const r2 = new S3Client({
-  region: 'auto',
-  endpoint: R2_ENDPOINT,
-  credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+  region: REGION,
+  ...(ENDPOINT ? { endpoint: ENDPOINT } : {}),   // solo per R2/S3-like; su AWS si omette
+  credentials: { accessKeyId: ACCESS_KEY, secretAccessKey: SECRET_KEY },
 });
 
 const VIEWER = path.join(__dirname, '..', 'viewer');
@@ -72,10 +76,9 @@ async function main() {
     bytes += body.length;
     console.log(`  ✓ ${it.key}  (${(body.length / 1024 / 1024).toFixed(2)} MB)`);
   }
-  const base = (process.env.R2_PUBLIC_URL || 'https://<public-url>').replace(/\/+$/, '');
   console.log(`\n✅ Fatto: ${items.length} file, ${(bytes / 1024 / 1024).toFixed(1)} MB totali.`);
-  console.log(`\n👉 Imposta su Railway la variabile:`);
-  console.log(`   ASSET_BASE = ${base}/${PREFIX}`);
+  console.log(`\n👉 Bucket S3 privato: gli asset sono serviti dal server via /api/asset/<key>.`);
+  console.log(`   Non serve impostare ASSET_BASE (lascialo vuoto).`);
 }
 
 main().catch(e => { console.error('❌ Errore upload:', e.message); process.exit(1); });

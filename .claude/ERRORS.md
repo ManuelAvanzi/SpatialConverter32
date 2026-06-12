@@ -21,6 +21,8 @@
 - ❌ `SpatialQuestExporter` CS0103: helper `F()` mancante → ✅ aggiunto
 - ❌ Interactable export con asse Z invertito → posizioni sbagliate → ✅ Z non va invertita
 - ❌ Azioni: nodi nascosti restano nel collider (muri invisibili) → ✅ escludere i nodi nascosti dal collider
+- ❌ `.dockerignore` con `*.glb` esclude anche `viewer/avatar/Xbot.glb` (avatar 3a persona servito dal viewer) → scena rotta → ✅ eccezione `!viewer/avatar/Xbot.glb`
+- ❌ Container Docker come root (default `node:alpine`) → ✅ `USER node`
 
 ---
 

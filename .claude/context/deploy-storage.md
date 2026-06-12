@@ -58,7 +58,9 @@
 - Target: **EC2 ARM (Graviton) + S3** al posto di Railway + R2. Il codice usa già `@aws-sdk/client-s3` → su S3 cambiano solo le env (endpoint opzionale, `region`, chiavi).
 - **S3 privato** (Block Public Access ON): i GLB NON sono pubblici. Serviti via **presigned URL** firmati dal server (TTL generoso 6-12h per i GLB pesanti), perché la fase 2 aggancerà l'auth JWT al rilascio degli URL.
 - Scope presigned: **tutti** gli asset GLB (environment + personaggi + oggetti utente), non solo quelli utente.
-- Auth EC2→S3: **access key in `.env`** (non IAM role).
+- Auth EC2→S3: **access key in `.env`** (non IAM role). Env `AWS_REGION=eu-south-1` (Milano), `S3_BUCKET=immersivelab-assets`, `AWS_ACCESS_KEY_ID/SECRET`.
+- AWS setup fatto: bucket privato `immersivelab-assets` (Block Public Access ON, versioning ON), policy IAM `immersivelab-assets-rw` (ListBucket + Get/Put/Delete object), utente `immersivelab-app` + access key.
+- **CloudFront rimandato**: l'account mostra solo il nuovo flusso "a piani" ($0/$15/...), niente distribuzione classica da console → si farà via CLI/API in produzione. Per ora **presigned via redirect 302**.
 - Modifica più delicata: il viewer (monolite) deve chiedere l'URL firmato al server prima di `GLTFLoader.load()`, in più punti (environment, `models.json`, oggetti utente).
 - HTTPS obbligatorio su EC2 (Nginx + Let's Encrypt): senza, WebXR/VR non parte.
 
@@ -69,6 +71,9 @@
 - Env a runtime via `env_file: .env` (non nell'immagine). `mem_limit: 1g` perché multer bufferizza upload in RAM (fino a 200MB/file).
 - `package-lock.json` presente → `npm ci`. Build + run container verificati: `/api/config` → 200, server in ascolto.
 - Scelta Docker (non bare-metal): allinea con futuro ECS/Fargate; overhead performance ~0 su Linux.
+- Hardening (2026-06-12): `USER node` (non root), `HEALTHCHECK` su `/api/config`, `init: true`, `NODE_ENV=production`, `npm ci --no-audit --no-fund`, limite RAM via `deploy.resources.limits`.
+- ⚠️ `.dockerignore`: `*.glb` esclude TUTTO, ma `viewer/avatar/Xbot.glb` (avatar 3a persona) serve al viewer → eccezione `!viewer/avatar/Xbot.glb` obbligatoria.
+- Verificato in container: utente=`node`, avatar presente, `viewer/models/` escluso, `/api/config`→200, healthcheck=`healthy`.
 
 ## Investigations done
 - 2026-06-08: letti integralmente i 3 script (<80 righe) + .env.example + DEPLOY.md. Flusso e sequenze qui sopra; non serve ri-leggere. Vedi anche `[[server]]` per `store.js`.
