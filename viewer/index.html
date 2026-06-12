@@ -855,6 +855,8 @@
         <option value="5">5 m</option><option value="10">10 m</option>
       </select></div>
     <div class="sf-hint">Griglia e metratura sono salvate col progetto (valgono anche in play).</div>
+    <label class="set-row"><input type="checkbox" id="set-clicktp"> Click sul terreno = teletrasporto</label>
+    <div class="sf-hint">Come in Spatial: clicca un punto con un collider per spostartici. Salvato col progetto.</div>
     <label class="set-row"><input type="checkbox" id="set-wireframe"> Wireframe dei modelli</label>
     <label class="set-row"><input type="checkbox" id="set-vitals" checked> Pannello Scene Vitals</label>
     <div class="sf-hint">Wireframe e Vitals sono strumenti di lavoro: non vengono salvati.</div>
@@ -1115,6 +1117,8 @@ const MODEL_COLORS = ['#4a9eff','#4aff8a','#ff9f4a','#ff4a8a','#c04aff','#4affee
 let sceneBoundingBox = null;  // aggiornato dopo ogni caricamento modello
 let _sceneGrid = null;        // griglia a terra (toggle nella tab Opzioni)
 let _sceneFloor = null;       // pavimento della scena vuota (toggle nella tab Opzioni)
+let _emptyScene = false;      // true se è una scena vuota (pavimento placeholder) → fisica con caduta nel vuoto
+let _clickTeleport = false;   // click sul terreno = teletrasporto (stile Spatial), toggle nelle Opzioni
 let _gridCellSize = 1;        // metratura della cella (1/2/5/10 m)
 let _vitFrames = 0;           // contatore frame per il pannello Scene Vitals
 
@@ -1874,6 +1878,21 @@ function addEntranceAtMe() {
 }
 
 // Spawn iniziale: entrance point piazzato (random se più d'uno), altrimenti fallback singolo
+// Quota di riferimento dello spawn (per capire quando si è "caduti nel vuoto")
+function playerSpawnY() {
+  if (entrances.length) return entrances[0].group.position.y + PLAYER_HEIGHT;
+  return PLAYER_HEIGHT;
+}
+// Gli entrance fanno da "isole" solide: se il giocatore è sopra il loro disco
+// può stare in piedi (così dopo il respawn non ricade nel vuoto). Ritorna la
+// quota occhi su cui appoggiarsi, oppure null se è fuori da ogni entrance.
+function entranceGroundY(x, z) {
+  for (const e of entrances) {
+    const p = e.group.position, dx = x - p.x, dz = z - p.z;
+    if (dx * dx + dz * dz <= (e.radius + 0.5) * (e.radius + 0.5)) return p.y + PLAYER_HEIGHT;
+  }
+  return null;
+}
 function applySpawn() {
   if (entrances.length) {
     const e = entrances[Math.floor(Math.random() * entrances.length)];
@@ -4538,6 +4557,8 @@ async function init() {
       const up = pickUserObject(e.clientX, e.clientY);
       if (up && interactUserObject(up.o, up.hit, false)) { isDragging = false; return; }
       if (!up && _uoSelected && !gizmoDragging) hideUoPill();
+      // Click sul terreno = teletrasporto (se abilitato e il punto ha un collider)
+      if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
     }
     // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
     if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
@@ -4590,7 +4611,9 @@ async function init() {
       // tap pulito: prova prima gli oggetti utente (PDF/video/portal), poi interact
       const t = e.changedTouches[0];
       const up = pickUserObject(t.clientX, t.clientY);
-      if (!(up && interactUserObject(up.o, up.hit, false))) onInteract();
+      if (up && interactUserObject(up.o, up.hit, false)) { /* gestito */ }
+      else if (!EDIT_MODE && _clickTeleport && cameraMode === 'fps' && clickTeleportAt(t.clientX, t.clientY)) { /* teletrasportato */ }
+      else onInteract();
     }
     isDragging = false; _lookTouchId = null;
   };
@@ -4726,7 +4749,19 @@ async function init() {
   // ── Tab Opzioni: pavimento, griglia, metratura, wireframe, vitals ────────
   const _floorCb = document.getElementById('set-floor');
   _floorCb.checked = !((SCENE_CONFIG.settings || {}).floor === false);
-  _floorCb.addEventListener('change', () => { if (_sceneFloor) _sceneFloor.visible = _floorCb.checked; });
+  _floorCb.addEventListener('change', () => {
+    if (!_sceneFloor) return;
+    _sceneFloor.visible = _floorCb.checked;
+    // togliere il pavimento = togliere la superficie calpestabile (si cade nel vuoto)
+    const i = collidableMeshes.indexOf(_sceneFloor);
+    if (_floorCb.checked && i === -1) collidableMeshes.push(_sceneFloor);
+    else if (!_floorCb.checked && i !== -1) collidableMeshes.splice(i, 1);
+  });
+  // Click sul terreno = teletrasporto (stile Spatial)
+  const _ctpCb = document.getElementById('set-clicktp');
+  _clickTeleport = !!((SCENE_CONFIG.settings || {}).clickTeleport);
+  _ctpCb.checked = _clickTeleport;
+  _ctpCb.addEventListener('change', () => { _clickTeleport = _ctpCb.checked; });
   const _gridCb = document.getElementById('set-grid');
   _gridCb.checked = !((SCENE_CONFIG.settings || {}).grid === false);
   _gridCb.addEventListener('change', () => {
@@ -4999,6 +5034,22 @@ function vrLocomotion(dt) {
 }
 
 // Sposta il giocatore a una posizione (gestisce VR via rig + FPS via camera)
+// Click-to-teleport (stile Spatial): raycast dal punto cliccato contro i collider.
+// Se colpisce, sposta il giocatore lì. Ritorna true se ha teletrasportato.
+function clickTeleportAt(clientX, clientY) {
+  if (!collidableMeshes.length) return false;
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, viewCam());
+  const hits = _qRay.intersectObjects(collidableMeshes, false);
+  if (!hits.length) return false;
+  const p = hits[0].point;
+  teleportPlayerTo(p.x, p.y, p.z);
+  _tpPrevHead.copy(camera.position);
+  showNotification('📍 Spostato');
+  return true;
+}
 function teleportPlayerTo(x, groundY, z) {
   if (renderer.xr.isPresenting && playerRig) {
     camera.getWorldPosition(_vrHead);
@@ -6033,7 +6084,7 @@ function buildSceneConfigObject() {
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
-    settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible },
+    settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible, clickTeleport: _clickTeleport },
   };
 }
 function exportSceneConfig() {
@@ -6564,7 +6615,10 @@ function createPlaceholderEnvironment() {
   floor.receiveShadow = true;
   floor.visible = !((SCENE_CONFIG.settings || {}).floor === false);
   _sceneFloor = floor;
+  _emptyScene = true;                       // scena vuota → si può cadere nel vuoto
   scene.add(floor);
+  // il pavimento è anche la superficie calpestabile: collidabile quando visibile
+  if (floor.visible) collidableMeshes.push(floor);
 
   rebuildSceneGrid((SCENE_CONFIG.settings || {}).gridSize || 1);
   _sceneGrid.visible = !((SCENE_CONFIG.settings || {}).grid === false);   // toggle in tab Opzioni
@@ -6654,17 +6708,30 @@ function animate(timestamp, frame) {
           // altre mesh più in basso il raycast durante la caduta le rileverà.
           playerGroundY = PLAYER_HEIGHT;
         }
+      } else if (_emptyScene) {
+        // scena vuota senza pavimento: si sta in piedi solo sopra un entrance, sennò si cade
+        const eg = entranceGroundY(camera.position.x, camera.position.z);
+        if (eg != null) { playerGroundY = eg; camera.position.y = eg; }
+        else { isOnGround = false; velocityY = 0; playerGroundY = -Infinity; }
       } else {
-        playerGroundY = camera.position.y;   // suolo piatto senza collider
+        playerGroundY = camera.position.y;   // suolo piatto senza collider (progetti con GLB-ambiente)
       }
     } else {
       // Applica gravità — con terminal velocity per evitare tunneling
       velocityY = Math.max(velocityY + GRAVITY * delta, -25);
       camera.position.y += velocityY * delta;
 
+      // Caduto nel vuoto → respawn all'entrance dopo un po'
+      if (camera.position.y < (playerSpawnY() - 40)) { applySpawn(); }
+
       // Controlla atterraggio: piano di default OPPURE mesh sotto i piedi
       let landed  = camera.position.y <= playerGroundY;
       let landedY = playerGroundY;
+      // nelle scene vuote: atterra sul disco di un entrance
+      if (_emptyScene && velocityY < 0) {
+        const eg = entranceGroundY(camera.position.x, camera.position.z);
+        if (eg != null && camera.position.y <= eg) { landed = true; landedY = eg; }
+      }
       if (collidableMeshes.length > 0 && velocityY < 0) {
         // far dinamico: almeno 2 m, o abbastanza per coprire la velocità corrente
         colRaycaster.near = 0;
