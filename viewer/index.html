@@ -450,21 +450,22 @@
       display: flex; flex-direction: row; gap: 8px; z-index: 30;
     }
     .tool-btn {
-      background: rgba(0,0,0,.65); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.15); color: #fff;
-      padding: 9px 14px; border-radius: 8px; cursor: pointer;
-      font-size: .82rem; display: flex; align-items: center; gap: 8px;
-      transition: background .2s; white-space: nowrap;
+      background: rgba(14,18,26,.72); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.12); color: #e8edf5;
+      padding: 9px 14px; border-radius: 999px; cursor: pointer;
+      font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 7px;
+      transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(0,0,0,.25);
     }
-    .tool-btn:hover { background: rgba(74,158,255,.35); }
-    .tool-btn.active { background: rgba(74,158,255,.5); border-color: #4a9eff; }
+    .tool-btn svg { width: 16px; height: 16px; opacity: .85; }
+    .tool-btn:hover { background: rgba(74,158,255,.22); border-color: rgba(74,158,255,.5); color: #fff; }
+    .tool-btn.active { background: rgba(74,158,255,.9); border-color: #4a9eff; color: #fff; }
+    .tool-btn.active svg { opacity: 1; }
     .tool-btn.save { background: rgba(74,255,138,.22); border-color: rgba(74,255,138,.45); color: #c7ffdb; }
     .tool-btn.save:hover { background: rgba(74,255,138,.38); }
     .tool-btn.exit { background: rgba(255,90,90,.22); border-color: rgba(255,90,90,.45); color: #ffd2d2; }
     .tool-btn.exit:hover { background: rgba(255,90,90,.40); }
 
-    /* ── Refresh moderno ───────────────────────────────────────────────────── */
-    #toolbar .tool-btn { border-radius: 999px; padding: 8px 15px; font-weight: 500; }
 
     /* Overlay progresso upload */
     #upload-overlay {
@@ -921,14 +922,14 @@
 
 <!-- Toolbar -->
 <div id="toolbar">
-  <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto">🗺️ Vista aerea</button>
-  <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)">🎥 Terza persona</button>
-  <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none">🗂 Simulazioni</button>
-  <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features">☰ Menu</button>
-  <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)">📍 Entrata</button>
-  <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo">🔊 Audio</button>
-  <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione">💾 Salva</button>
-  <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione">🚪 Esci</button>
+  <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg><span>Vista aerea</span></button>
+  <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Terza persona</span></button>
+  <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Simulazioni</span></button>
+  <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span>Menu</span></button>
+  <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Entrata</span></button>
+  <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
+  <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span></button>
+  <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
 </div>
 
 <!-- Audio di sottofondo (loop) -->
@@ -3079,7 +3080,12 @@ function toggleThirdPerson() {
   }
   if (avatar.root) avatar.root.visible = thirdPerson;
   const b = document.getElementById('btn-camera');
-  if (b) { b.classList.toggle('active', thirdPerson); b.textContent = thirdPerson ? '👁 Prima persona' : '🎥 Terza persona'; }
+  if (b) {
+    b.classList.toggle('active', thirdPerson);
+    const eyeIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const personIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    b.innerHTML = (thirdPerson ? eyeIco : personIco) + `<span>${thirdPerson ? 'Prima persona' : 'Terza persona'}</span>`;
+  }
 }
 
 function updateThirdPerson(dt) {
@@ -4571,6 +4577,8 @@ async function init() {
         if (!interactUserObject(up.o, up.hit, false)) selectUserObject(up.o);
         isDragging = false; return;
       }
+      // Click sul terreno = teletrasporto (anche in editor, dopo i pick)
+      if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
     }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
@@ -5048,7 +5056,6 @@ function clickTeleportAt(clientX, clientY) {
   const p = hits[0].point;
   teleportPlayerTo(p.x, p.y, p.z);
   _tpPrevHead.copy(camera.position);
-  showNotification('📍 Spostato');
   return true;
 }
 function teleportPlayerTo(x, groundY, z) {
@@ -5916,11 +5923,13 @@ function setupAudio() {
   const muteBtn   = document.getElementById('ap-mute');
   const toolBtn   = document.getElementById('btn-audio');
 
+  const _volOn  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+  const _volOff = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
   function refresh() {
     volSlider.value = Math.round(vol * 100);
     volVal.textContent = Math.round(vol * 100) + '%';
     muteBtn.textContent = muted ? '🔇' : '🔊';
-    toolBtn.textContent = (muted ? '🔇' : '🔊') + ' Audio';
+    toolBtn.innerHTML = (muted ? _volOff : _volOn) + '<span>Audio</span>';
   }
   function save() { localStorage.setItem(AUDIO_KEY, JSON.stringify({ volume: vol, muted })); }
   refresh();
@@ -6329,7 +6338,7 @@ function toggleOverhead() {
     cameraMode = 'overhead';
     document.body.classList.add('overhead');
     btn.classList.add('active');
-    btn.textContent = '🎮 Vista FPS';
+    btn.querySelector('span').textContent = 'Vista FPS';
     document.getElementById('crosshair').style.display = 'none';
   } else {
     if (orbitControls) { orbitControls.dispose(); orbitControls = null; }
@@ -6344,7 +6353,7 @@ function toggleOverhead() {
     cameraMode = 'fps';
     document.body.classList.remove('overhead');
     btn.classList.remove('active');
-    btn.textContent = '🗺️ Vista aerea';
+    btn.querySelector('span').textContent = 'Vista aerea';
     document.getElementById('crosshair').style.display = '';
   }
 }
@@ -6705,9 +6714,9 @@ function animate(timestamp, frame) {
           // Nessun pavimento sotto (bordo scala, precipizio) → CADE
           isOnGround    = false;
           velocityY     = 0;
-          // playerGroundY di fallback = suolo piatto (y=1.7); se ci sono
-          // altre mesh più in basso il raycast durante la caduta le rileverà.
-          playerGroundY = PLAYER_HEIGHT;
+          // scena vuota: si cade nel vuoto (no suolo piatto di sicurezza); negli
+          // altri progetti resta il fallback a y=1.7 per non rompere la navigazione.
+          playerGroundY = _emptyScene ? -Infinity : PLAYER_HEIGHT;
         }
       } else if (_emptyScene) {
         // scena vuota senza pavimento: si sta in piedi solo sopra un entrance, sennò si cade
