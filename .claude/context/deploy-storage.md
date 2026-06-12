@@ -64,7 +64,10 @@
 - **LIVE su EC2 (2026-06-12)**: gira su `portale.metareality.it`. Container Docker su `127.0.0.1:3003`, Nginx (host) reverse-proxy + HTTPS (Let's Encrypt, scad. 2026-09-10). `Progetti (S3) = attivi`.
 - ⚠️ Nginx: `certbot --nginx` ha creato il cert ma NON ha editato la config (rimasta `listen 80`) → blocco HTTPS scritto a mano (redirect 80→443 + ssl + proxy_pass). `client_max_body_size 250M` per upload GLB.
 - ⚠️ **CORS S3 obbligatorio**: i presigned URL falliscono nel browser senza CORS sul bucket → aggiungere CORS (AllowedOrigins `https://portale.metareality.it`, GET/HEAD) in Permissions del bucket.
-- **Deploy**: `deploy.sh` (git pull --ff-only + `docker compose up -d --build` + `docker image prune -f`) + `.github/workflows/deploy.yml` (SSH all'EC2 su push main/master, secrets EC2_HOST/USER/SSH_KEY). EC2→GitHub via **deploy key read-only**.
+- **Deploy**: `deploy.sh` (git pull --ff-only + `docker compose up -d --build` + `docker image prune -f`) + `.github/workflows/deploy.yml` (SSH all'EC2 su push main/master, secrets EC2_HOST/USER/SSH_KEY). EC2→GitHub via **deploy key read-only**. GitHub→EC2 via chiave `gha_key` (privata nel secret `EC2_SSH_KEY`). Secret: `EC2_HOST`=16.22.70.48, `EC2_USER`=ec2-user.
+- ⚠️ Action `appleboy/ssh-action`: `missing server host` = secret `EC2_HOST` vuoto/mancante.
+- ⚠️ Workflow trigger `branches: [main]` ma il repo è su **master** → l'auto-deploy su push NON scatta; serve `[main, master]` o solo `workflow_dispatch` manuale.
+- IP `16.22.70.48` è **Elastic** (fisso) → il secret `EC2_HOST` non cambia mai.
 - `R2_PREFIX` è nome **legacy** = prefisso/cartella nel bucket per il lab "32" (`spatial32/`), NON ha a che fare con R2. Da rinominare `ASSET_PREFIX` in pulizia finale (insieme a `upload-to-r2.js`→`upload-to-s3.js`).
 - Modifica più delicata: il viewer (monolite) deve chiedere l'URL firmato al server prima di `GLTFLoader.load()`, in più punti (environment, `models.json`, oggetti utente).
 - HTTPS obbligatorio su EC2 (Nginx + Let's Encrypt): senza, WebXR/VR non parte.

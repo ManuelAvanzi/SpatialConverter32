@@ -1,10 +1,9 @@
 name: Deploy to EC2
 
-# Auto-deploy a ogni push su main. Si connette in SSH all'EC2 e lancia deploy.sh.
 on:
   push:
     branches: [main, master]
-  workflow_dispatch:   # permette anche il trigger manuale dalla tab Actions
+  workflow_dispatch:
 
 jobs:
   deploy:
