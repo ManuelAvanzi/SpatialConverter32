@@ -1,5 +1,9 @@
 # Deploy — SpatialConverter32 (Railway + Cloudflare R2)
 
+> ⚠️ **Documento storico** (flusso del solo progetto "32", con scene-config nel repo).
+> Per la procedura completa e aggiornata della piattaforma multi-progetto
+> (progetti su R2, variabili Railway, storage) vedi **[INFRASTRUTTURA.md](INFRASTRUTTURA.md)**.
+
 Architettura: **engine** (questo codice, su Railway) + **contenuto** del progetto
 (modelli su R2 + `viewer/scene-config.json` nel repo).
 
