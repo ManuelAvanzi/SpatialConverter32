@@ -4033,6 +4033,18 @@ async function storeUserFile(file) {
   await uoIdbPut(key, file);
   return 'idb:' + key;
 }
+// Soglie oltre le quali avvisare che il file è pesante (in MB)
+const FILE_WARN_MB = { model: 40, glb: 40, image: 8, bg360: 8, pdf: 20, mp4: 60 };
+// Ritorna true se si può procedere (sotto soglia o l'utente conferma)
+function confirmHeavyFile(type, file) {
+  const limit = FILE_WARN_MB[type] || 25;
+  const mb = file.size / 1048576;
+  if (mb <= limit) return true;
+  return confirm(
+    `"${file.name}" pesa ${mb.toFixed(0)} MB (consigliato sotto ${limit} MB).\n\n` +
+    `File pesanti rallentano molto il caricamento per chi visita la scena. ` +
+    `Meglio comprimerlo prima (texture/geometria).\n\nCaricarlo comunque?`);
+}
 async function handleUserFile(type, file) {
   if (!file) return;
   // Solo GLB: il .gltf multi-file da solo arriva senza texture/geometrie
@@ -4040,6 +4052,7 @@ async function handleUserFile(type, file) {
     showNotification('⚠️ Usa un file .GLB unico — il .gltf multi-file non funziona caricato da solo');
     return;
   }
+  if (!confirmHeavyFile(type, file)) return;
   showNotification('⏳ Carico ' + file.name + '…');
   const src = await storeUserFile(file);
   const name = file.name.replace(/\.[a-z0-9]+$/i, '');
@@ -5575,10 +5588,23 @@ async function loadGltfCharacters() {
   if (!fileList.length) fileList = CHARACTER_GLTF_FILES.map(f => `${ASSET_BASE}/gltfModels/` + f);
   console.log(`📂 glTF personaggi da caricare (${fileList.length}):`, fileList);
 
-  for (const url of fileList) {
+  const _mb = b => (b / 1048576).toFixed(1);
+  for (let fi = 0; fi < fileList.length; fi++) {
+    const url = fileList[fi];
+    const shortName = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/\.(glb|gltf)$/i, '');
     try {
       const gltf = await new Promise((res, rej) =>
-        loader.load(encodeURI(url) + '?v=' + Date.now(), res, undefined, rej));
+        loader.load(encodeURI(url) + '?v=' + Date.now(), res,
+          ev => {   // avanzamento download: mostra i MB così non sembra bloccato
+            const base = 40 + (fi / fileList.length) * 50;        // banda 40→90% sui modelli
+            if (ev.lengthComputable && ev.total) {
+              const frac = ev.loaded / ev.total;
+              setProgress(Math.round(base + frac * (50 / fileList.length)),
+                `Scaricamento ${shortName}… ${_mb(ev.loaded)} / ${_mb(ev.total)} MB`);
+            } else {
+              setProgress(Math.round(base), `Scaricamento ${shortName}… ${_mb(ev.loaded)} MB`);
+            }
+          }, rej));
       gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
       // Solo il 32 storico spacca i file nei figli root (multi-personaggio);
@@ -6140,6 +6166,7 @@ function uploadModelFile(e) {
   e.target.value = '';
   if (!file || !PROJECT_SLUG) return;
   if (!/\.(glb|gltf)$/i.test(file.name)) { showNotification('Usa un file .glb'); return; }
+  if (!confirmHeavyFile('glb', file)) return;
   showUploadOverlay(`Caricamento ${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`);
   const fd = new FormData(); fd.append('model', file);
   const xhr = new XMLHttpRequest();
