@@ -470,7 +470,7 @@
     .tool-btn.preview:hover { background: rgba(249,115,22,1); }
     .tool-btn.preview.previewing { background: rgba(217,67,67,.92); border-color: #d94343; }
     /* ── Modalità Anteprima: la UI di editing si oscura ma resta visibile ── */
-    body.preview-mode #btn-overhead, body.preview-mode #btn-camera, body.preview-mode #btn-levels,
+    body.preview-mode #btn-levels,
     body.preview-mode #btn-models, body.preview-mode #btn-entrance, body.preview-mode #btn-audio,
     body.preview-mode #btn-save-top, body.preview-mode #btn-exit-editor,
     body.preview-mode #models-panel, body.preview-mode #add-fab, body.preview-mode #add-menu,
@@ -481,6 +481,10 @@
     body.preview-mode #btn-preview { opacity: 1; pointer-events: auto; }
     /* Anteprima è un concetto da editor: in play vero non esiste */
     body.play-mode #btn-preview { display: none; }
+    /* Vista aerea e Prima/Terza persona: NON servono in edit (sei già dall'alto da editor),
+       servono in Anteprima (navighi) e in play (visitatore) → nascosti solo in edit-non-anteprima */
+    body:not(.play-mode):not(.preview-mode) #btn-overhead,
+    body:not(.play-mode):not(.preview-mode) #btn-camera { display: none; }
 
     /* Overlay progresso upload */
     #upload-overlay {
@@ -1936,6 +1940,13 @@ function togglePreview() {
     if (gizmoTarget) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
     const fab = document.getElementById('add-fab'), menu = document.getElementById('add-menu');
     if (fab) fab.classList.remove('open'); if (menu) menu.classList.remove('open');
+    // entri come un visitatore: PRIMA persona (esci dalla vista dall'alto)
+    if (cameraMode === 'overhead') toggleOverhead();
+    if (thirdPerson) toggleThirdPerson();
+    applySpawn();   // parti dall'entrance
+  } else {
+    // tornando a costruire: rimetti la vista dall'alto da editor
+    if (cameraMode === 'fps') toggleOverhead();
   }
   // ricalcola la visibilità degli elementi che dipendono da play vs editor
   for (const ep of entrances) if (ep.group) ep.group.visible = !inPlay();
@@ -5224,6 +5235,10 @@ async function loadScene() {
 
   // Spawn: entrance point piazzato (random se più d'uno), altrimenti vecchio singolo
   applySpawn();
+
+  // In editor si parte dalla VISTA DALL'ALTO (telecamera da editor): si costruisce
+  // dall'alto, non si naviga. La navigazione (prima/terza persona) vive nell'Anteprima.
+  if (EDIT_MODE && cameraMode === 'fps') toggleOverhead();
 
   setProgress(100, 'Pronto!');
   setTimeout(() => {
