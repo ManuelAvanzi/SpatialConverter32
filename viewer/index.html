@@ -1249,8 +1249,11 @@ async function loadAppConfig() {
   } catch {}
   if (PROJECT_SLUG) {
     // Modalità progetto: SOLO gli asset del progetto. Vuoto → scena vuota.
+    // - R2 pubblico (legacy): URL diretto r2Base/prefisso
+    // - S3 privato (AWS): rotta firmata /api/asset/<prefisso> (redirect 302 a presigned URL),
+    //   stesso meccanismo usato dagli oggetti del menu ＋
     const pref = CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix;
-    ASSET_BASE = (pref && r2Base) ? `${r2Base}/${pref}` : '';
+    ASSET_BASE = !pref ? '' : (r2Base ? `${r2Base}/${pref}` : `/api/asset/${pref}`);
   } else if (globalBase) {
     // Modalità singolo progetto (scene-config statico)
     ASSET_BASE = globalBase;
