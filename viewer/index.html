@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spatial Viewer</title>
+  <title>MetaReality</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
@@ -1221,7 +1221,7 @@ async function loadSceneConfig() {
       if (r.ok) {
         CURRENT_PROJECT = await r.json();
         SCENE_CONFIG = CURRENT_PROJECT.sceneConfig || { version: 1 };
-        document.title = `${CURRENT_PROJECT.name} — SpatialConverter`;
+        document.title = `${CURRENT_PROJECT.name} — MetaReality`;
       }
     } catch {}
     return SCENE_CONFIG;   // se non accessibile (bozza/404) → scena vuota, NON i contenuti del 32
@@ -1249,8 +1249,11 @@ async function loadAppConfig() {
   } catch {}
   if (PROJECT_SLUG) {
     // Modalità progetto: SOLO gli asset del progetto. Vuoto → scena vuota.
+    // - R2 pubblico (legacy): URL diretto r2Base/prefisso
+    // - S3 privato (AWS): rotta firmata /api/asset/<prefisso> (redirect 302 a presigned URL),
+    //   stesso meccanismo usato dagli oggetti del menu ＋
     const pref = CURRENT_PROJECT && CURRENT_PROJECT.assetPrefix;
-    ASSET_BASE = (pref && r2Base) ? `${r2Base}/${pref}` : '';
+    ASSET_BASE = !pref ? '' : (r2Base ? `${r2Base}/${pref}` : `/api/asset/${pref}`);
   } else if (globalBase) {
     // Modalità singolo progetto (scene-config statico)
     ASSET_BASE = globalBase;
