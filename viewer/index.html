@@ -465,7 +465,22 @@
     .tool-btn.save:hover { background: rgba(74,255,138,.38); }
     .tool-btn.exit { background: rgba(255,90,90,.22); border-color: rgba(255,90,90,.45); color: #ffd2d2; }
     .tool-btn.exit:hover { background: rgba(255,90,90,.40); }
-
+    /* Anteprima: arancione brand; quando attiva (Esci anteprima) diventa rossa */
+    .tool-btn.preview { background: rgba(249,115,22,.9); border-color: #f97316; color: #fff; }
+    .tool-btn.preview:hover { background: rgba(249,115,22,1); }
+    .tool-btn.preview.previewing { background: rgba(217,67,67,.92); border-color: #d94343; }
+    /* ── Modalità Anteprima: la UI di editing si oscura ma resta visibile ── */
+    body.preview-mode #btn-overhead, body.preview-mode #btn-camera, body.preview-mode #btn-levels,
+    body.preview-mode #btn-models, body.preview-mode #btn-entrance, body.preview-mode #btn-audio,
+    body.preview-mode #btn-save-top, body.preview-mode #btn-exit-editor,
+    body.preview-mode #models-panel, body.preview-mode #add-fab, body.preview-mode #add-menu,
+    body.preview-mode #scene-vitals {
+      opacity: .35; pointer-events: none; transition: opacity .2s;
+    }
+    /* il bottone Anteprima resta vivo per poter uscire */
+    body.preview-mode #btn-preview { opacity: 1; pointer-events: auto; }
+    /* Anteprima è un concetto da editor: in play vero non esiste */
+    body.play-mode #btn-preview { display: none; }
 
     /* Overlay progresso upload */
     #upload-overlay {
@@ -928,6 +943,7 @@
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span>Menu</span></button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Entrata</span></button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
+  <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima: prova la scena come un visitatore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Anteprima</span></button>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span></button>
   <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
 </div>
@@ -1085,6 +1101,11 @@ import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer
 // la scena è SEMPRE quella pubblicata (scene-config.json). Teleport/interactable
 // /entrance restano pienamente funzionanti (è l'esperienza, non l'editing).
 const EDIT_MODE = new URLSearchParams(location.search).has('edit');
+// Modalità Anteprima DENTRO l'editor: provi la scena come un visitatore.
+// inPlay() = true sia in play vero (no edit) SIA in anteprima → le INTERAZIONI
+// si comportano da visitatore. Caricamento/salvataggio restano legati a EDIT_MODE.
+let _previewMode = false;
+function inPlay() { return !EDIT_MODE || _previewMode; }
 // Se presente ?project=<slug>, la scena si carica dal server (piattaforma);
 // altrimenti dal file statico viewer/scene-config.json (modalità "singolo progetto").
 const PROJECT_SLUG = new URLSearchParams(location.search).get('project');
@@ -1724,8 +1745,8 @@ function animateTeleports(t) {
 // Crea il visual: anello del raggio + disco + pin verticale + freccia direzione
 function createEntranceVisual(radius) {
   const group = new THREE.Group();
-  // Il pin verde serve solo alla redazione: in play l'entrance è invisibile
-  group.visible = EDIT_MODE;
+  // Il pin verde serve solo alla redazione: in play e in anteprima è invisibile
+  group.visible = !inPlay();
   const col = 0x4aff8a;
   const add = THREE.AdditiveBlending;
 
@@ -1900,6 +1921,32 @@ function entranceGroundY(x, z) {
   }
   return null;
 }
+// ─── Anteprima (Preview) dentro l'editor ────────────────────────────────────
+// Toggle: provi la scena come un visitatore. La UI di editing si oscura (resta
+// visibile), il gizmo si stacca, e le interazioni passano in modalità "play"
+// grazie a inPlay(). Niente ricaricamenti: è lo stesso stato, solo "vissuto".
+const _SVG_PLAY_TB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Anteprima</span>';
+const _SVG_STOP_TB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span>Esci anteprima</span>';
+function togglePreview() {
+  if (!EDIT_MODE) return;
+  _previewMode = !_previewMode;
+  document.body.classList.toggle('preview-mode', _previewMode);
+  if (_previewMode) {
+    // entrando: stacca il gizmo, chiudi editor coord e il menu ＋
+    if (gizmoTarget) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    const fab = document.getElementById('add-fab'), menu = document.getElementById('add-menu');
+    if (fab) fab.classList.remove('open'); if (menu) menu.classList.remove('open');
+  }
+  // ricalcola la visibilità degli elementi che dipendono da play vs editor
+  for (const ep of entrances) if (ep.group) ep.group.visible = !inPlay();
+  for (const ia of interactables) applyIaRuntimeVisibility(ia);
+  refreshAllTriggerVisibility();
+  if (typeof refreshSelectionRings === 'function') refreshSelectionRings();
+  const b = document.getElementById('btn-preview');
+  if (b) { b.classList.toggle('previewing', _previewMode); b.innerHTML = _previewMode ? _SVG_STOP_TB : _SVG_PLAY_TB; }
+  showNotification(_previewMode ? '▶ Anteprima — provi come un visitatore' : '✏️ Torni a costruire');
+}
+
 function applySpawn() {
   if (entrances.length) {
     const e = entrances[Math.floor(Math.random() * entrances.length)];
@@ -2279,7 +2326,7 @@ function clearQuestTriggers() {
 function triggerIsDone(tr) { const q = questById(tr.questId); return !!(q && q.done.has(tr.taskId)); }
 function updateTriggerVisibility(tr) {
   const done = triggerIsDone(tr), u = tr.group.userData;
-  if (u.ring) u.ring.visible = EDIT_MODE && !done;        // anello del raggio solo in editor
+  if (u.ring) u.ring.visible = !inPlay() && !done;        // anello del raggio solo in editor (non in anteprima)
   if (u.bolt) { u.bolt.visible = !done; u.bolt.material.opacity = 1; u.bolt.scale.setScalar(0.7); }
   if (u.hit) u.hit.visible = !done;
 }
@@ -2416,8 +2463,8 @@ function checkQuestTriggers() {
   if (!questTriggers.length) return;
   const pw = playerWorld();
   for (const tr of questTriggers) {
-    // In play la ⚡ si vede solo entro ~20 m (in editor sempre, per lavorarci)
-    if (!EDIT_MODE && !triggerIsDone(tr)) {
+    // In play/anteprima la ⚡ si vede solo entro ~20 m (in editor sempre, per lavorarci)
+    if (inPlay() && !triggerIsDone(tr)) {
       const u = tr.group.userData, pb = tr.group.position;
       const vx = pw.x - pb.x, vz = pw.z - pb.z;
       const near = (vx * vx + vz * vz) < 400;
@@ -2503,7 +2550,7 @@ function renderQuestPanel() {
   toggle.onclick = doToggle;
   head.onclick = e => { if (e.target !== toggle) doToggle(e); };   // click sull'header = comprimi/espandi
   // In editor le task sono cliccabili (per testare); in PLAY no: si completano nel mondo
-  if (EDIT_MODE) panel.querySelectorAll('.quest-task').forEach(el => el.onclick = e => { e.stopPropagation(); completeTask(q.id, +el.dataset.task); });
+  if (!inPlay()) panel.querySelectorAll('.quest-task').forEach(el => el.onclick = e => { e.stopPropagation(); completeTask(q.id, +el.dataset.task); });
 }
 function celebrateQuest(q) {
   const el = document.getElementById('quest-celebrate');
@@ -2784,7 +2831,7 @@ function checkSpatialInteractables() {
   let best = null, bestD = Infinity;
   const pw = playerWorld();   // world (corretta anche in VR)
   for (const ia of interactables) {
-    if (!EDIT_MODE && ia.on === false) continue;   // spento dalla macchina a stati
+    if (inPlay() && ia.on === false) continue;   // spento dalla macchina a stati
     const p = ia.group.position;
     const dx = pw.x - p.x, dz = pw.z - p.z;
     const d = dx * dx + dz * dz;
@@ -2792,7 +2839,7 @@ function checkSpatialInteractables() {
     // In play l'icona compare solo entro il visibilityRadius (come su Spatial);
     // in editor restano tutte visibili per lavorarci.
     const s = ia.group.userData.sprite;
-    if (s && !EDIT_MODE) { const vr = ia.vis || 14; s.visible = d < vr * vr; }
+    if (s && inPlay()) { const vr = ia.vis || 14; s.visible = d < vr * vr; }
   }
   if (best !== currentSpatialIA) {
     currentSpatialIA = best;
@@ -2813,7 +2860,7 @@ function findIaByUid(uid) {
 }
 function applyIaRuntimeVisibility(ia) {
   const s = ia.group.userData.sprite;
-  if (EDIT_MODE) {
+  if (!inPlay()) {
     ia.group.visible = true;                                   // in editor si vede tutto
     if (s) s.material.opacity = ia.enabled === false ? 0.35 : 1;   // spento all'avvio = semi-trasparente
   } else {
@@ -2916,7 +2963,7 @@ function applyActionTriggers(list) {
   return actionZones.length;
 }
 function checkActionZones() {
-  if (EDIT_MODE || !actionZones.length) return;
+  if (!inPlay() || !actionZones.length) return;
   const pw = playerWorld();
   for (const z of actionZones) {
     if (z.on === false) { z.entered = false; continue; }
@@ -2933,7 +2980,7 @@ function triggerSpatialIA(ia) {
   pulseInteractableSprite(ia.group.userData.sprite);   // l'anello lampeggia azzurro (niente popup)
   if (ia.taskLink) completeTask(ia.taskLink.questId, ia.taskLink.taskId);  // spunta la task collegata
   // Macchina a stati: in play esegue le azioni (accende/spegne interactable e oggetti)
-  if (!EDIT_MODE) execInteractableActions(ia);
+  if (inPlay()) execInteractableActions(ia);
   else if (Array.isArray(ia.actions) && ia.actions.length) showNotification('⚙ ' + ia.actions.length + ' azioni (attive in play)');
 }
 
@@ -3395,7 +3442,7 @@ function answerUiQuiz(a) {
       else {
         closeQuiz();
         showNotification('🎉 ' + q.title + ' completato!');
-        if (!EDIT_MODE) execActions(q.onComplete || []);
+        if (inPlay()) execActions(q.onComplete || []);
       }
     }, 650);
   } else { _uq.feed = 'ko'; syncQuizFeed(); }
@@ -4104,7 +4151,7 @@ function interactUserObject(o, hit, fromVR) {
       if (hit.uv.x > 0.75) { changeUoPdfPage(o, +1); return true; }
       return true;
     }
-    if (!EDIT_MODE) return true;   // corpo pagina: in play non fa nulla, in editor seleziona
+    if (inPlay()) return true;   // corpo pagina: in play/anteprima non fa nulla, in editor seleziona
     return false;
   }
   if (kind === 'mp4ctrl' && hit.uv) {
@@ -4117,7 +4164,7 @@ function interactUserObject(o, hit, fromVR) {
     return true;
   }
   if (kind === 'mp4screen') {
-    if (EDIT_MODE && !fromVR) return false;
+    if (!inPlay() && !fromVR) return false;
     const v = o._video; if (v) { if (v.paused) v.play(); else v.pause(); }
     return true;
   }
@@ -4134,7 +4181,7 @@ function interactUserObject(o, hit, fromVR) {
   }
   if (o.type === 'portal') {
     if (fromVR) { openUoGoVr(o); return true; }
-    if (EDIT_MODE) return false;
+    if (!inPlay()) return false;
     openUoGoModal(o); return true;
   }
   // immagini/modelli: in play, se è un oggetto MIO (e non bloccato) → pill di gestione
@@ -4575,8 +4622,8 @@ async function init() {
       isDragging = false;
       return;
     }
-    // PLAY: clic sull'icona ⚡ di una zona-trigger → completa la task
-    if (!EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
+    // PLAY/ANTEPRIMA: clic sull'icona ⚡ di una zona-trigger → completa la task
+    if (inPlay() && !dragMoved && e.target === renderer.domElement) {
       const qtr = pickQuestTrigger(e.clientX, e.clientY);
       if (qtr && qtr.taskId) { completeTask(qtr.questId, qtr.taskId); isDragging = false; return; }
       const ia = pickInteractableSprite(e.clientX, e.clientY);   // clic sull'icona ⊙ → interagisci
@@ -4588,8 +4635,8 @@ async function init() {
       // Click sul terreno = teletrasporto (se abilitato e il punto ha un collider)
       if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
     }
-    // Editor: clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
-    if (EDIT_MODE && !dragMoved && e.target === renderer.domElement) {
+    // Editor (NON anteprima): clic pulito su una Spatial feature → la seleziona (gizmo + coordinate)
+    if (!inPlay() && !dragMoved && e.target === renderer.domElement) {
       const picked = pickSpatialFeature(e.clientX, e.clientY);
       if (picked) { selectSpatialFeature(picked); isDragging = false; return; }
       // Oggetti utente: frecce PDF / controlli video funzionano anche in editor; altrimenti seleziona
@@ -4642,7 +4689,7 @@ async function init() {
       const t = e.changedTouches[0];
       const up = pickUserObject(t.clientX, t.clientY);
       if (up && interactUserObject(up.o, up.hit, false)) { /* gestito */ }
-      else if (!EDIT_MODE && _clickTeleport && cameraMode === 'fps' && clickTeleportAt(t.clientX, t.clientY)) { /* teletrasportato */ }
+      else if (inPlay() && _clickTeleport && cameraMode === 'fps' && clickTeleportAt(t.clientX, t.clientY)) { /* teletrasportato */ }
       else onInteract();
     }
     isDragging = false; _lookTouchId = null;
@@ -4752,6 +4799,11 @@ async function init() {
   const _exitBtn = document.getElementById('btn-exit-editor');
   if (EDIT_MODE) _exitBtn.style.display = '';
   _exitBtn.addEventListener('click', () => { window.location.href = 'admin.html'; });
+
+  // Pulsante "Anteprima" — prova la scena come un visitatore (solo in editor)
+  const _prevBtn = document.getElementById('btn-preview');
+  if (EDIT_MODE) _prevBtn.style.display = '';
+  _prevBtn.addEventListener('click', togglePreview);
 
   // Pulsante "Carica contenuti" (upload modello) — solo in editor su un progetto
   const _upBtn = document.getElementById('btn-upload-model');
@@ -6817,7 +6869,7 @@ function animate(timestamp, frame) {
   else if (currentSpatialIA) { currentSpatialIA = null; hideInteractPanel(); }
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
   checkActionZones();     // zone-azione (es. siediti alla poltrona → compare il menù)
-  if (EDIT_MODE) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato
+  if (!inPlay()) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato (non in anteprima)
   if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
 
