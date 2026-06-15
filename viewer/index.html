@@ -4812,8 +4812,11 @@ async function init() {
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
 
-    // F: interagisci con l'interactable vicino
-    if (e.code === 'KeyF' && currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
+    // F: in editor inquadra l'oggetto selezionato (come in Unity); altrimenti interagisci
+    if (e.code === 'KeyF') {
+      if (EDIT_MODE && !_previewMode && gizmoTarget) { frameObject(gizmoTarget); return; }
+      if (currentSpatialIA) { triggerSpatialIA(currentSpatialIA); return; }
+    }
 
     // V: alterna prima/terza persona
     if (e.code === 'KeyV') { toggleThirdPerson(); return; }
@@ -5748,6 +5751,7 @@ async function discoverCharacterGltfs() {
 let CHAR_FLIP_Z = true;
 
 const gltfCharacters = [];   // {name, root, action}
+let _modelsHeaderEl = null;  // intestazione "Modelli (N)" del pannello (per aggiornare il contatore)
 
 async function loadGltfCharacters() {
   const loader = new GLTFLoader();
@@ -5898,21 +5902,63 @@ function showCoordEditor(obj, name) {
 }
 function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
 
-// Cancella l'oggetto attualmente selezionato (gizmo agganciato o user-object).
-// Riusa le rimozioni esistenti di ogni tipo. Solo nell'editor. Ritorna true se ha cancellato.
+function updateModelsHeader() {
+  if (_modelsHeaderEl) _modelsHeaderEl.textContent =
+    usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
+}
+
+// Cancella un modello/personaggio dalla scena con UNDO (Ctrl+Z lo ripristina).
+// Non distrugge oggetto né riga: li stacca soltanto, così l'undo li riaggancia.
+function deleteGltfCharacter(ch) {
+  const parent = ch.root.parent || scene;
+  const idx = gltfCharacters.indexOf(ch);
+  if (gizmoTarget === ch.root) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+  if (ch.action) ch.action.stop();
+  parent.remove(ch.root);
+  if (idx !== -1) gltfCharacters.splice(idx, 1);
+  if (ch._row) ch._row.remove();          // stacca la riga dal DOM (i listener restano)
+  updateModelsHeader();
+  showNotification(`🗑 ${ch.name} rimosso`);
+  undoStack.push(() => {
+    parent.add(ch.root);
+    if (ch.action) { ch.action.reset(); ch.action.play(); }
+    if (gltfCharacters.indexOf(ch) === -1) gltfCharacters.splice(Math.min(idx < 0 ? gltfCharacters.length : idx, gltfCharacters.length), 0, ch);
+    const list = document.getElementById('models-list');
+    if (list && ch._row) list.appendChild(ch._row);
+    updateModelsHeader();
+  });
+  if (undoStack.length > 60) undoStack.shift();
+}
+
+// Config serializzabile di un user-object, per ricrearlo nell'undo
+function uoToData(o) {
+  const g = o.group;
+  return { id: o.id, type: o.type, name: o.name, src: o.src, extra: o.extra, locked: o.locked,
+    pos:   g ? g.position.toArray() : undefined,
+    rot:   g ? [g.rotation.x, g.rotation.y, g.rotation.z] : undefined,
+    scale: g ? g.scale.toArray() : undefined };
+}
+
+// Cancella l'oggetto attualmente selezionato. Solo editor. Ritorna true se ha cancellato.
+// Modelli e oggetti "+" sono ripristinabili con Ctrl+Z; i marker (teleport/entrata/…) no.
 function deleteSelected() {
   if (!EDIT_MODE || _previewMode) return false;
-  // 1) user-object selezionato dal "+" (immagini/pdf/video/portali)
-  if (_uoSelected) { removeUserObject(_uoSelected); return true; }
+  // user-object (selezionato da pannello o da scena) — con undo
+  const uo = _uoSelected || (gizmoTarget && userObjects.find(o => o.group === gizmoTarget));
+  if (uo) {
+    const data = uoToData(uo), wasOwn = uo.own;
+    uo.own = false;                         // non cancellare l'asset IDB: serve per l'undo
+    removeUserObject(uo);
+    undoStack.push(() => addUserObject(data, { own: wasOwn, fresh: true }));
+    if (undoStack.length > 60) undoStack.shift();
+    return true;
+  }
   const g = gizmoTarget;
   if (!g) return false;
-  // 2) modello di progetto / personaggio glTF (riuso il pulsante cestino della riga)
+  // modello di progetto / personaggio glTF — con undo
   const ch = gltfCharacters.find(c => c.root === g);
-  if (ch && ch._row) { ch._row.querySelector('.delete-btn').click(); return true; }
-  // 3) user-object agganciato al gizmo (selezionato da scena, senza pillola)
-  const uo = userObjects.find(o => o.group === g);
-  if (uo) { removeUserObject(uo); return true; }
-  // 4) marker dell'editor
+  if (ch) { deleteGltfCharacter(ch); return true; }
+  // marker dell'editor (senza undo)
   const tp = teleports.find(t => t.padGroup === g || t.targetGroup === g);   if (tp) { removeTeleport(tp); return true; }
   const ep = entrances.find(e => e.group === g);                             if (ep) { removeEntrance(ep); return true; }
   const ia = interactables.find(i => i.group === g);                         if (ia) { removeInteractable(ia); return true; }
@@ -6418,6 +6464,7 @@ function addCharactersToPanel() {
     + 'text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
   header.textContent = usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
   list.appendChild(header);
+  _modelsHeaderEl = header;
 
   for (const ch of gltfCharacters) {
     const item = document.createElement('div');
@@ -6462,20 +6509,7 @@ function addCharactersToPanel() {
 
     item.querySelector('.delete-btn').addEventListener('click', e => {
       e.stopPropagation();
-      // Stacca il gizmo se agganciato
-      if (gizmoTarget === ch.root) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
-      // Ferma l'animazione
-      if (ch.action) ch.action.stop();
-      // Rimuovi dalla scena
-      if (ch.root.parent) ch.root.parent.remove(ch.root);
-      // Rimuovi dall'array
-      const idx = gltfCharacters.indexOf(ch);
-      if (idx !== -1) gltfCharacters.splice(idx, 1);
-      // Rimuovi la riga dal pannello
-      item.remove();
-      // Aggiorna contatore header
-      header.textContent = usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
-      showNotification(`🗑 ${ch.name} rimosso dalla scena`);
+      deleteGltfCharacter(ch);   // cancellazione con undo (Ctrl+Z)
     });
 
     list.appendChild(item);
