@@ -1235,6 +1235,7 @@ let transformControls = null;
 let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
 let _inspectorModel = null;       // gltfCharacter selezionato (per la sezione Caratteristiche dell'Inspector)
 let _scaleLinked = true;          // scala uniforme: modificando un asse cambiano tutti (icona catena, stile Unity)
+const _removedModels = new Set(); // modelli cancellati (persistiti in scene-config: "removed")
 let gizmoDragging = false;         // true mentre si trascina un handle
 const POS_STORE_KEY  = 'sc32-positions' + _KP;   // localStorage: { nome: [x,y,z] }
 const ENTRANCE_KEY   = 'sc32-entrance' + _KP;    // localStorage: {x,y,z,yaw,pitch}
@@ -5875,6 +5876,7 @@ async function loadGltfCharacters() {
   }
   console.log(`✅ Personaggi Unity caricati: ${gltfCharacters.length}`);
   addCharactersToPanel();
+  applySavedSceneEdits();   // ripristina cancellazioni e duplicati salvati
 }
 
 // Aggancia/sgancia il gizmo di posizionamento a un personaggio
@@ -6044,17 +6046,56 @@ function deleteGltfCharacter(ch) {
   parent.remove(ch.root);
   if (idx !== -1) gltfCharacters.splice(idx, 1);
   if (ch._row) ch._row.remove();          // stacca la riga dal DOM (i listener restano)
+  if (!ch._cloneOf) _removedModels.add(ch.name);   // i modelli base: ricordo che sono stati cancellati (persistenza)
   updateModelsHeader();
   showNotification(`🗑 ${ch.name} rimosso`);
   undoStack.push(() => {
     parent.add(ch.root);
     if (ch.action) { ch.action.reset(); ch.action.play(); }
     if (gltfCharacters.indexOf(ch) === -1) gltfCharacters.splice(Math.min(idx < 0 ? gltfCharacters.length : idx, gltfCharacters.length), 0, ch);
+    _removedModels.delete(ch.name);
     const list = document.getElementById('models-list');
     if (list && ch._row) list.appendChild(ch._row);
     updateModelsHeader();
   });
   if (undoStack.length > 60) undoStack.shift();
+}
+
+// ── Ripristino al caricamento delle modifiche salvate (cancellazioni + duplicati) ──
+function removeModelByName(name) {
+  const ch = gltfCharacters.find(c => c.name === name);
+  if (!ch) return;
+  if (ch.action) ch.action.stop();
+  if (ch.root.parent) ch.root.parent.remove(ch.root);
+  const i = gltfCharacters.indexOf(ch); if (i !== -1) gltfCharacters.splice(i, 1);
+  if (ch._row) ch._row.remove();
+}
+function recreateSavedClone(def) {
+  if (!def || !def.src || gltfCharacters.some(c => c.name === def.name)) return;
+  const src = gltfCharacters.find(c => c.name === def.src);
+  if (!src || !src.root) return;
+  const clone = SkeletonUtils.clone(src.root);
+  clone.name = def.name; clone.userData.gizmoName = def.name;
+  if (def.p) clone.position.set(def.p[0], def.p[1], def.p[2]);
+  if (def.r) clone.rotation.set(def.r[0], def.r[1], def.r[2]);
+  if (def.s) clone.scale.set(def.s[0], def.s[1], def.s[2]);
+  (src.root.parent || scene).add(clone);
+  let action = null;
+  if (src.action) {
+    const clip = src.action.getClip();
+    const mixer = new THREE.AnimationMixer(clone);
+    action = mixer.clipAction(clip); action.reset(); action.setLoop(THREE.LoopRepeat); action.play();
+    animationMixers.push({ mixer, clips: [clip] });
+  }
+  const copy = { name: def.name, root: clone, action, _cloneOf: def.src };
+  gltfCharacters.push(copy);
+  appendCharacterRow(copy, null, false);
+}
+// Prima ricrea i duplicati (servono gli originali ancora presenti), poi rimuove i cancellati
+function applySavedSceneEdits() {
+  for (const def of (SCENE_CONFIG.clones || [])) recreateSavedClone(def);
+  for (const name of (SCENE_CONFIG.removed || [])) { _removedModels.add(name); removeModelByName(name); }
+  updateModelsHeader();
 }
 
 // Config serializzabile di un user-object, per ricrearlo nell'undo
@@ -6117,7 +6158,8 @@ function duplicateGltfCharacter(ch) {
     action.reset(); action.setLoop(THREE.LoopRepeat); action.play();
     animationMixers.push({ mixer, clips: [clip] });
   }
-  const copy = { name: clone.name, root: clone, action };
+  // _cloneOf punta sempre a un modello ORIGINALE (così al reload si ricrea dall'originale)
+  const copy = { name: clone.name, root: clone, action, _cloneOf: ch._cloneOf || ch.name };
   gltfCharacters.push(copy);
   appendCharacterRow(copy, null, false);
   updateModelsHeader();
@@ -6539,6 +6581,7 @@ function captureLivePositions() {
 }
 function buildSceneConfigObject() {
   const safe = s => { try { return JSON.parse(s); } catch { return null; } };
+  const r4 = v => +v.toFixed(4);
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -6557,6 +6600,13 @@ function buildSceneConfigObject() {
     avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
     hidden:        gltfCharacters.filter(c => c.root && !c.root.visible).map(c => c.name),
+    removed:       [..._removedModels],   // modelli cancellati (da non ricaricare)
+    clones:        gltfCharacters.filter(c => c._cloneOf).map(c => ({   // duplicati (da ricreare)
+      name: c.name, src: c._cloneOf,
+      p: c.root.position.toArray().map(r4),
+      r: [c.root.rotation.x, c.root.rotation.y, c.root.rotation.z].map(r4),
+      s: c.root.scale.toArray().map(r4),
+    })),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
     settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible, clickTeleport: _clickTeleport },
