@@ -4490,7 +4490,7 @@ function frameObject(root) {
 // OutlinePass: traccia il bordo seguendo la silhouette dell'oggetto, non un box.
 // Attivo SOLO nell'editor (in play/anteprima/VR si usa il render normale → nessun
 // impatto sul visore). Composer creato pigro al primo uso.
-let _composer = null, _renderPass = null, _outlinePass = null;
+let _composer = null, _renderPass = null, _outlinePass = null, _gizmoScene = null;
 function ensureEditComposer() {
   if (_composer || !EDIT_MODE) return _composer;
   _composer = new EffectComposer(renderer);
@@ -4662,8 +4662,12 @@ async function init() {
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.setMode('translate');
   transformControls.setSize(1.1);
+  // Il gizmo vive in una scena DEDICATA (non nella scena principale): così
+  // l'OutlinePass — che disegna il contorno sulla scena principale — non può
+  // mai toccare il gizmo. Lo disegno sopra a parte dopo il composer.
+  _gizmoScene = new THREE.Scene();
   // compat: nelle versioni recenti il gizmo si aggiunge via getHelper()
-  scene.add(transformControls.getHelper ? transformControls.getHelper() : transformControls);
+  _gizmoScene.add(transformControls.getHelper ? transformControls.getHelper() : transformControls);
   transformControls.addEventListener('dragging-changed', e => {
     gizmoDragging = e.value;
     if (orbitControls) orbitControls.enabled = !e.value; // non ruotare mentre sposti (vista aerea)
@@ -6980,6 +6984,14 @@ function animate(timestamp, frame) {
     _renderPass.camera = _cam; _outlinePass.renderCamera = _cam;
     _outlinePass.selectedObjects = selectionTargets();
     comp.render();
+    // Gizmo disegnato a parte SOPRA il composer: vive in _gizmoScene, quindi
+    // l'OutlinePass non lo evidenzia mai (il contorno giallo resta solo sull'oggetto).
+    if (_gizmoScene) {
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(_gizmoScene, _cam);
+      renderer.autoClear = true;
+    }
   } else {
     renderer.render(scene, _cam);
   }
