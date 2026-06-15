@@ -600,6 +600,11 @@
       color: #fff; border-radius: 5px; padding: 3px 4px; font-size: .68rem; font-family: monospace; cursor: ew-resize;
     }
     #coord-editor .tr-f input:focus { cursor: text; border-color: rgba(74,158,255,.6); outline: none; }
+    #coord-editor .tr-link { flex: none; width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center;
+      justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 5px; color: #8ea0b8; cursor: pointer; }
+    #coord-editor .tr-link svg { width: 14px; height: 14px; }
+    #coord-editor .tr-link:hover { background: rgba(255,255,255,.1); }
+    #coord-editor .tr-link.active { color: #ffb060; }   /* catena chiusa = scala uniforme */
 
     /* Gerarchia — dock a filo del bordo sinistro (stile Unity), aperto di default in editor */
     #models-panel {
@@ -1110,6 +1115,7 @@
     <span class="tr-f"><i class="ax x">X</i><input id="scl-x" type="number" step="0.1"></span>
     <span class="tr-f"><i class="ax y">Y</i><input id="scl-y" type="number" step="0.1"></span>
     <span class="tr-f"><i class="ax z">Z</i><input id="scl-z" type="number" step="0.1"></span>
+    <button id="scl-link" class="tr-link active" title="Scala uniforme (blocca proporzioni)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg></button>
   </div>
   <div id="ce-props-label" class="ce-props-label" style="display:none">Caratteristiche</div>
   <div id="ce-props" class="ce-props" style="display:none">
@@ -1219,6 +1225,7 @@ function setSceneWireframe(on) {
 let transformControls = null;
 let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
 let _inspectorModel = null;       // gltfCharacter selezionato (per la sezione Caratteristiche dell'Inspector)
+let _scaleLinked = true;          // scala uniforme: modificando un asse cambiano tutti (icona catena, stile Unity)
 let gizmoDragging = false;         // true mentre si trascina un handle
 const POS_STORE_KEY  = 'sc32-positions' + _KP;   // localStorage: { nome: [x,y,z] }
 const ENTRANCE_KEY   = 'sc32-entrance' + _KP;    // localStorage: {x,y,z,yaw,pitch}
@@ -4785,10 +4792,7 @@ async function init() {
       // Click sul terreno = teletrasporto (anche in editor, dopo i pick)
       if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
       // Clic sul vuoto → deseleziona (come Unity)
-      if (gizmoTarget) {
-        transformControls.detach(); gizmoTarget = null; hideCoordEditor();
-        document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
-      }
+      if (gizmoTarget) deselectAll();
     }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
@@ -5971,19 +5975,35 @@ function refreshInspectorProps() {
   if (abtn) { if (ch.action) { abtn.style.display = ''; abtn.classList.toggle('active', !ch.action.paused); } else abtn.style.display = 'none'; }
 }
 
-// "Spegni / accendi" l'oggetto selezionato (come setActive in Unity): non solo invisibile,
+// "Spegni / accendi" un modello (come setActive in Unity): non solo invisibile,
 // ma anche animazione ferma e collider tolto; riaccendendolo si ripristina com'era.
+function setCharacterActive(ch, active) {
+  ch.root.visible = active;
+  if (ch.action) ch.action.paused = !active;
+  if (!active) { ch._colliderWasOn = colliderRoots.has(ch.root); if (ch._colliderWasOn) toggleCollider(ch.root, null); }
+  else if (ch._colliderWasOn && !colliderRoots.has(ch.root)) toggleCollider(ch.root, null);
+  if (ch._row) { const vb = ch._row.querySelector('.vis-btn'); if (vb) { vb.classList.toggle('off', !active); vb.innerHTML = active ? SVG_EYE : SVG_EYE_OFF; } }
+}
 function setActiveSelected(active) {
   const o = gizmoTarget; if (!o) return;
-  o.visible = active;
   const ch = _inspectorModel;
-  if (ch) {
-    if (ch.action) ch.action.paused = !active;
-    if (!active) { ch._colliderWasOn = colliderRoots.has(ch.root); if (ch._colliderWasOn) toggleCollider(ch.root, null); }
-    else if (ch._colliderWasOn && !colliderRoots.has(ch.root)) toggleCollider(ch.root, null);
-    if (ch._row) { const vb = ch._row.querySelector('.vis-btn'); if (vb) { vb.classList.toggle('off', !active); vb.innerHTML = active ? SVG_EYE : SVG_EYE_OFF; } }
-  }
+  if (ch) setCharacterActive(ch, active);
+  else o.visible = active;     // oggetti "+" / marker: solo visibilità
   refreshInspectorProps();
+}
+// Deseleziona tutto (gizmo, Inspector, evidenziazioni)
+function deselectAll() {
+  if (transformControls) transformControls.detach();
+  gizmoTarget = null;
+  hideCoordEditor();          // azzera anche _inspectorModel
+  document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
+}
+// Scala uniforme: copia il valore del campo modificato sugli altri due assi (se attiva)
+function mirrorLinkedScale(srcId) {
+  if (!_scaleLinked) return;
+  const v = document.getElementById(srcId).value;
+  ['scl-x', 'scl-y', 'scl-z'].forEach(id => { if (id !== srcId) document.getElementById(id).value = v; });
 }
 // click su una caratteristica → inoltra al pulsante corrispondente della riga, poi riallinea
 function _inspectorProxyClick(sel) {
@@ -6167,6 +6187,7 @@ function makeScrubbable(input) {
       const base = parseFloat(input.dataset.scrub) || 0.03;   // gradi usano un passo più grande
       const step = e.shiftKey ? base * 0.15 : base;           // Shift = fine
       input.value = (sv + (e.clientX - sx) * step).toFixed(2);
+      if (input.id && input.id.indexOf('scl-') === 0) mirrorLinkedScale(input.id);   // scala uniforme
       applyCoordEditorValues();
       e.preventDefault();
     }
@@ -6195,6 +6216,14 @@ function setupCoordEditor() {
   document.querySelectorAll('#coord-editor .tr-row').forEach(row => {
     const lbl = row.querySelector('.tr-lbl');
     if (lbl) lbl.addEventListener('click', () => setGizmoMode(row.dataset.mode));
+  });
+  // scala uniforme: mentre digiti un asse, rispecchia sugli altri (se la catena è chiusa)
+  ['scl-x', 'scl-y', 'scl-z'].forEach(id => document.getElementById(id).addEventListener('input', () => mirrorLinkedScale(id)));
+  const sclLink = document.getElementById('scl-link');
+  if (sclLink) sclLink.addEventListener('click', () => {
+    _scaleLinked = !_scaleLinked;
+    sclLink.classList.toggle('active', _scaleLinked);
+    sclLink.title = _scaleLinked ? 'Scala uniforme (blocca proporzioni)' : 'Scala libera per asse';
   });
   // checkbox "attivo" = spegni/accendi l'oggetto
   document.getElementById('insp-active').addEventListener('change', e => setActiveSelected(e.target.checked));
@@ -6510,6 +6539,7 @@ function buildSceneConfigObject() {
     levelSpawns:   levelSpawns,
     avatar:        getAvatarColors(),
     colliders:     [...colliderRoots].map(r => r.userData.gizmoName).filter(Boolean),
+    hidden:        gltfCharacters.filter(c => c.root && !c.root.visible).map(c => c.name),
     lighting:      captureLighting(),
     userObjects:   serializeUserObjects(false),
     settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible, clickTeleport: _clickTeleport },
@@ -6650,6 +6680,7 @@ function appendCharacterRow(ch, list, restoreCollider) {
 
   // Il collider si attiva dall'Inspector (a destra). Qui ripristino solo lo stato salvato.
   if (restoreCollider && (SCENE_CONFIG.colliders || []).includes(ch.name) && !colliderRoots.has(ch.root)) toggleCollider(ch.root, null);
+  if (restoreCollider && (SCENE_CONFIG.hidden || []).includes(ch.name)) setCharacterActive(ch, false);   // ripristina lo stato "spento"
 
   const vb = item.querySelector('.vis-btn');
   vb.addEventListener('click', e => {
