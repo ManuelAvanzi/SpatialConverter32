@@ -471,9 +471,13 @@
     .tool-btn.exit { background: rgba(255,90,90,.22); border-color: rgba(255,90,90,.45); color: #ffd2d2; }
     .tool-btn.exit:hover { background: rgba(255,90,90,.40); }
     /* Anteprima: arancione brand; quando attiva (Esci anteprima) diventa rossa */
-    .tool-btn.preview { background: rgba(249,115,22,.9); border-color: #f97316; color: #fff; }
+    /* Anteprima/Stop: solo icona, larghezza fissa così resta nella stessa posizione centrale */
+    .tool-btn.preview { background: rgba(249,115,22,.9); border-color: #f97316; color: #fff; flex: none; width: 42px; padding: 6px 0; justify-content: center; }
     .tool-btn.preview:hover { background: rgba(249,115,22,1); }
     .tool-btn.preview.previewing { background: rgba(217,67,67,.92); border-color: #d94343; }
+    /* Asterisco "modifiche non salvate" sul pulsante Salva */
+    #save-star { display: none; color: #ffd400; font-weight: 800; font-size: .95rem; line-height: 1; margin-left: 1px; }
+    .tool-btn.save.has-changes #save-star { display: inline; }
     /* ── Modalità Anteprima: la UI di editing si oscura ma resta visibile ── */
     body.preview-mode #btn-levels,
     body.preview-mode #btn-models, body.preview-mode #btn-entrance, body.preview-mode #btn-audio,
@@ -718,9 +722,11 @@
 
     /* Tab del menu */
     .menu-tabs { display:flex; gap:6px; margin-bottom:10px; }
-    .menu-tab { flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-      color:rgba(255,255,255,.7); border-radius:7px; padding:6px 8px; cursor:pointer;
-      font-size:.74rem; transition:background .15s; }
+    .menu-tab { flex:1; display:flex; align-items:center; justify-content:center;
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+      color:rgba(255,255,255,.7); border-radius:7px; padding:7px 6px; cursor:pointer;
+      transition:background .15s; }
+    .menu-tab svg { width:18px; height:18px; }
     .menu-tab:hover { background:rgba(255,255,255,.14); }
     .menu-tab.active { background:rgba(74,158,255,.25); border-color:rgba(74,158,255,.5); color:#cfe6ff; }
     .menu-tab-content { display:none; }
@@ -899,10 +905,10 @@
 <div id="models-panel">
   <div id="hierarchy-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="13" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>Gerarchia</div>
   <div class="menu-tabs">
-    <button class="menu-tab active" data-tab="models">📦 Modelli</button>
-    <button class="menu-tab"        data-tab="spatial">🌀 Spatial</button>
-    <button class="menu-tab"        data-tab="light">☀️ Luce</button>
-    <button class="menu-tab"        data-tab="settings">⚙️ Opzioni</button>
+    <button class="menu-tab active" data-tab="models" title="Modelli" aria-label="Modelli"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></button>
+    <button class="menu-tab"        data-tab="spatial" title="Spatial" aria-label="Spatial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-28 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(28 12 12)"/></svg></button>
+    <button class="menu-tab"        data-tab="light" title="Luce" aria-label="Luce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></svg></button>
+    <button class="menu-tab"        data-tab="settings" title="Opzioni" aria-label="Opzioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
   <div id="tab-light" class="menu-tab-content"><!-- adotta #lighting-panel al boot --></div>
   <div id="tab-settings" class="menu-tab-content">
@@ -987,9 +993,9 @@
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Entrata</span></button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
   <div class="tb-spacer"></div>
-  <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima: prova la scena come un visitatore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Anteprima</span></button>
+  <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
   <div class="tb-spacer"></div>
-  <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span></button>
+  <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span><span id="save-star" aria-hidden="true">*</span></button>
   <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
 </div>
 
@@ -1236,6 +1242,9 @@ let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
 let _inspectorModel = null;       // gltfCharacter selezionato (per la sezione Caratteristiche dell'Inspector)
 let _scaleLinked = true;          // scala uniforme: modificando un asse cambiano tutti (icona catena, stile Unity)
 const _removedModels = new Set(); // modelli cancellati (persistiti in scene-config: "removed")
+let _dirty = false;               // ci sono modifiche non salvate? (asterisco sul pulsante Salva)
+function markDirty() { _dirty = true; const b = document.getElementById('btn-save-top'); if (b) b.classList.add('has-changes'); }
+function clearDirty() { _dirty = false; const b = document.getElementById('btn-save-top'); if (b) b.classList.remove('has-changes'); }
 let gizmoDragging = false;         // true mentre si trascina un handle
 const POS_STORE_KEY  = 'sc32-positions' + _KP;   // localStorage: { nome: [x,y,z] }
 const ENTRANCE_KEY   = 'sc32-entrance' + _KP;    // localStorage: {x,y,z,yaw,pitch}
@@ -1990,8 +1999,8 @@ function entranceGroundY(x, z) {
 // Toggle: provi la scena come un visitatore. La UI di editing si oscura (resta
 // visibile), il gizmo si stacca, e le interazioni passano in modalità "play"
 // grazie a inPlay(). Niente ricaricamenti: è lo stesso stato, solo "vissuto".
-const _SVG_PLAY_TB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Anteprima</span>';
-const _SVG_STOP_TB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span>Esci anteprima</span>';
+const _SVG_PLAY_TB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
+const _SVG_STOP_TB = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 function togglePreview() {
   if (!EDIT_MODE) return;
   _previewMode = !_previewMode;
@@ -2015,7 +2024,7 @@ function togglePreview() {
   refreshAllTriggerVisibility();
   if (typeof refreshSelectionRings === 'function') refreshSelectionRings();
   const b = document.getElementById('btn-preview');
-  if (b) { b.classList.toggle('previewing', _previewMode); b.innerHTML = _previewMode ? _SVG_STOP_TB : _SVG_PLAY_TB; }
+  if (b) { b.classList.toggle('previewing', _previewMode); b.innerHTML = _previewMode ? _SVG_STOP_TB : _SVG_PLAY_TB; b.title = _previewMode ? 'Esci anteprima' : 'Anteprima'; }
   showNotification(_previewMode ? '▶ Anteprima — provi come un visitatore' : '✏️ Torni a costruire');
 }
 
@@ -3080,6 +3089,7 @@ function animateInteractables(t) {
 // Salva la posizione del target del gizmo (route per tipo)
 function persistGizmoTarget(obj) {
   if (!obj) return;
+  markDirty();
   if (obj.userData.isUserObject)       { saveUserObjects();    return; }
   if (obj.userData.isTeleportPart)     { saveTeleports();      return; }
   if (obj.userData.isEntrancePart)     { saveEntrances();      return; }
@@ -3788,6 +3798,7 @@ function serializeUserObjects(ownOnly) {
       scale: o.group ? o.group.scale.toArray() : [1, 1, 1] }));
 }
 function saveUserObjects() {
+  markDirty();
   if (EDIT_MODE) localStorage.setItem(UO_KEY, JSON.stringify(serializeUserObjects(false)));
   else localStorage.setItem(UO_VISITOR_KEY, JSON.stringify(serializeUserObjects(true)));
   if (EDIT_MODE) renderUserObjectList();
@@ -4930,6 +4941,9 @@ async function init() {
   // stato iniziale del pulsante: il dock Gerarchia è aperto di default in editor
   document.getElementById('btn-models').classList.toggle('active',
     getComputedStyle(document.getElementById('models-panel')).display !== 'none');
+  // catch-all "modifiche non salvate": ogni change su impostazioni/luci/avatar nella Gerarchia
+  // (i set programmatici al caricamento non emettono 'change', quindi niente falsi positivi)
+  document.getElementById('models-panel').addEventListener('change', () => markDirty());
 
   // ── Tab del menu (Modelli / Spatial) ──────────────────────────────────────
   document.querySelectorAll('.menu-tab').forEach(tab =>
@@ -6008,6 +6022,7 @@ function setActiveSelected(active) {
   const ch = _inspectorModel;
   if (ch) setCharacterActive(ch, active);
   else o.visible = active;     // oggetti "+" / marker: solo visibilità
+  markDirty();
   refreshInspectorProps();
 }
 // Deseleziona tutto (gizmo, Inspector, evidenziazioni)
@@ -6047,6 +6062,7 @@ function deleteGltfCharacter(ch) {
   if (idx !== -1) gltfCharacters.splice(idx, 1);
   if (ch._row) ch._row.remove();          // stacca la riga dal DOM (i listener restano)
   if (!ch._cloneOf) _removedModels.add(ch.name);   // i modelli base: ricordo che sono stati cancellati (persistenza)
+  markDirty();
   updateModelsHeader();
   showNotification(`🗑 ${ch.name} rimosso`);
   undoStack.push(() => {
@@ -6164,6 +6180,7 @@ function duplicateGltfCharacter(ch) {
   appendCharacterRow(copy, null, false);
   updateModelsHeader();
   selectProjectModel(copy);       // la copia nasce già selezionata, pronta da spostare
+  markDirty();
   showNotification(`⧉ ${ch.name} duplicato`);
   undoStack.push(() => {
     if (action) action.stop();
@@ -6287,7 +6304,7 @@ function setupCoordEditor() {
   // checkbox "attivo" = spegni/accendi l'oggetto
   document.getElementById('insp-active').addEventListener('change', e => setActiveSelected(e.target.checked));
   document.getElementById('ce-prop-collider').addEventListener('click', () => {
-    if (_inspectorModel) { toggleCollider(_inspectorModel.root, null); refreshInspectorProps(); }
+    if (_inspectorModel) { toggleCollider(_inspectorModel.root, null); markDirty(); refreshInspectorProps(); }
   });
   document.getElementById('ce-prop-anim').addEventListener('click', () => _inspectorProxyClick('.play-btn'));
 }
@@ -6624,7 +6641,7 @@ async function saveSceneToServer() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sceneConfig: buildSceneConfigObject() }),
     });
-    if (r.ok) showNotification('✅ Progetto salvato in redazione');
+    if (r.ok) { clearDirty(); showNotification('✅ Progetto salvato in redazione'); }
     else if (r.status === 401) showNotification('❌ Non autorizzato — accedi dalla dashboard');
     else showNotification('❌ Salvataggio fallito (' + r.status + ')');
   } catch (e) { showNotification('❌ Errore: ' + e.message); }
