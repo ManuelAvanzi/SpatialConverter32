@@ -556,7 +556,7 @@
     /* Inspector — dock a filo del bordo destro (valori gizmo + caratteristiche oggetto) */
     #coord-editor {
       position: fixed; top: 56px; right: 0; bottom: 0; left: auto; transform: none;
-      width: 270px;
+      width: 304px;
       background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,.1); border-right: none;
       border-radius: 12px 0 0 12px;
@@ -578,25 +578,28 @@
     #coord-editor .ce-prop.active { background: rgba(74,158,255,.28); border-color: rgba(74,158,255,.5); color: #cfe6ff; }
     #coord-editor .ce-props-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em;
       color: #8ea0b8; font-weight: 700; margin-top: 10px; }
-    #coord-editor .ce-modes { display: flex; gap: 4px; margin-bottom: 5px; }
-    #coord-editor .ce-mode { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-      color: #ccc; border-radius: 5px; padding: 3px 5px; cursor: pointer; font-size: .66rem; }
-    #coord-editor .ce-mode.active { background: rgba(255,159,74,.3); border-color: rgba(255,159,74,.5); color: #ffd0a0; }
-    #coord-editor .ce-row { display: flex; align-items: center; gap: 5px; }
-    #coord-editor .ce-row label { color: #ff9f4a; font-weight: 600; width: 11px; }
-    #coord-editor .ce-row input {
-      width: 62px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
-      color: #fff; border-radius: 5px; padding: 3px 5px; font-size: .72rem; font-family: monospace;
-      cursor: ew-resize;   /* trascina per scrubare il valore */
+    /* Header oggetto: checkbox "attivo" + icona + nome (stile Unity) */
+    #coord-editor .insp-head { display: flex; align-items: center; gap: 8px;
+      padding-bottom: 9px; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 10px; }
+    #coord-editor .insp-head input[type=checkbox] { width: 15px; height: 15px; accent-color: #4a9eff; flex: none; cursor: pointer; }
+    #coord-editor .insp-cube { width: 18px; height: 18px; color: #9fb2c8; flex: none; }
+    /* Componente Transform */
+    #coord-editor .insp-comp-head { display: flex; align-items: center; gap: 7px; font-size: .74rem;
+      color: #cdd6e2; font-weight: 600; margin-bottom: 9px; }
+    #coord-editor .insp-comp-head svg { width: 15px; height: 15px; color: #9fb2c8; }
+    #coord-editor .tr-row { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
+    #coord-editor .tr-lbl { width: 56px; flex: none; font-size: .68rem; color: #9fb2c8; cursor: pointer; user-select: none; }
+    #coord-editor .tr-row.active .tr-lbl { color: #ffb060; font-weight: 600; }   /* modo gizmo attivo */
+    #coord-editor .tr-f { display: flex; align-items: center; gap: 3px; flex: 1 1 0; min-width: 0; }
+    #coord-editor .tr-f .ax { font-style: normal; font-weight: 700; font-size: .64rem; width: 9px; flex: none; }
+    #coord-editor .tr-f .ax.x { color: #e2554a; }
+    #coord-editor .tr-f .ax.y { color: #5dca6a; }
+    #coord-editor .tr-f .ax.z { color: #4a9eff; }
+    #coord-editor .tr-f input {
+      width: 100%; min-width: 0; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+      color: #fff; border-radius: 5px; padding: 3px 4px; font-size: .68rem; font-family: monospace; cursor: ew-resize;
     }
-    #coord-editor .ce-row input:focus { cursor: text; }
-    #coord-editor .ce-actions { display: flex; gap: 5px; margin-top: 6px; }
-    #coord-editor .ce-actions button {
-      flex: 1; background: rgba(255,159,74,.25); border: 1px solid rgba(255,159,74,.5);
-      color: #ffd0a0; border-radius: 5px; padding: 4px 6px; cursor: pointer; font-size: .67rem; white-space: nowrap;
-    }
-    #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
-    #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
+    #coord-editor .tr-f input:focus { cursor: text; border-color: rgba(74,158,255,.6); outline: none; }
 
     /* Gerarchia — dock a filo del bordo sinistro (stile Unity), aperto di default in editor */
     #models-panel {
@@ -1087,21 +1090,30 @@
 
 <!-- Editor coordinate manuale (appare con il gizmo) -->
 <div id="coord-editor">
-  <div class="ce-title">✥ <span id="ce-name">oggetto</span></div>
-  <div class="ce-modes">
-    <button id="ce-mode-t" class="ce-mode active">✥ Sposta</button>
-    <button id="ce-mode-r" class="ce-mode">⟳ Ruota</button>
-    <button id="ce-mode-s" class="ce-mode">⤢ Scala</button>
+  <div class="insp-head">
+    <input type="checkbox" id="insp-active" checked title="Attiva / spegni l'oggetto">
+    <svg class="insp-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+    <span id="ce-name" class="ce-title">oggetto</span>
   </div>
-  <div class="ce-row">
-    <label>X</label><input id="ce-x" type="number" step="0.5" />
-    <label>Y</label><input id="ce-y" type="number" step="0.5" />
-    <label>Z</label><input id="ce-z" type="number" step="0.5" />
+  <div class="insp-comp-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg>Transform</div>
+  <div class="tr-row active" data-mode="translate"><span class="tr-lbl" title="Modo Sposta">Posizione</span>
+    <span class="tr-f"><i class="ax x">X</i><input id="pos-x" type="number" step="0.1"></span>
+    <span class="tr-f"><i class="ax y">Y</i><input id="pos-y" type="number" step="0.1"></span>
+    <span class="tr-f"><i class="ax z">Z</i><input id="pos-z" type="number" step="0.1"></span>
+  </div>
+  <div class="tr-row" data-mode="rotate"><span class="tr-lbl" title="Modo Ruota">Rotazione</span>
+    <span class="tr-f"><i class="ax x">X</i><input id="rot-x" type="number" step="1" data-scrub="0.5"></span>
+    <span class="tr-f"><i class="ax y">Y</i><input id="rot-y" type="number" step="1" data-scrub="0.5"></span>
+    <span class="tr-f"><i class="ax z">Z</i><input id="rot-z" type="number" step="1" data-scrub="0.5"></span>
+  </div>
+  <div class="tr-row" data-mode="scale"><span class="tr-lbl" title="Modo Scala">Scala</span>
+    <span class="tr-f"><i class="ax x">X</i><input id="scl-x" type="number" step="0.1"></span>
+    <span class="tr-f"><i class="ax y">Y</i><input id="scl-y" type="number" step="0.1"></span>
+    <span class="tr-f"><i class="ax z">Z</i><input id="scl-z" type="number" step="0.1"></span>
   </div>
   <div id="ce-props-label" class="ce-props-label" style="display:none">Caratteristiche</div>
   <div id="ce-props" class="ce-props" style="display:none">
-    <button id="ce-prop-collider" class="ce-prop" title="Solido: il giocatore ci cammina sopra / non lo attraversa">Solido</button>
-    <button id="ce-prop-vis" class="ce-prop" title="Mostra / nascondi">Visibile</button>
+    <button id="ce-prop-collider" class="ce-prop" title="Mesh collider: il giocatore ci cammina sopra / non lo attraversa">Solido</button>
     <button id="ce-prop-anim" class="ce-prop" title="Pausa / riprendi animazione">Animazione</button>
   </div>
 </div>
@@ -5923,23 +5935,30 @@ function selectSpatialFeature(entry) {
 
 // ─── Editor coordinate manuale ───────────────────────────────────────────────
 function updateCoordEditorFields(obj) {
-  document.getElementById('ce-x').value = obj.position.x.toFixed(2);
-  document.getElementById('ce-y').value = obj.position.y.toFixed(2);
-  document.getElementById('ce-z').value = obj.position.z.toFixed(2);
+  if (!obj) return;
+  const r2 = v => Math.round(v * 100) / 100;
+  const setV = (id, v) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = r2(v); };
+  setV('pos-x', obj.position.x); setV('pos-y', obj.position.y); setV('pos-z', obj.position.z);
+  setV('rot-x', THREE.MathUtils.radToDeg(obj.rotation.x));
+  setV('rot-y', THREE.MathUtils.radToDeg(obj.rotation.y));
+  setV('rot-z', THREE.MathUtils.radToDeg(obj.rotation.z));
+  setV('scl-x', obj.scale.x); setV('scl-y', obj.scale.y); setV('scl-z', obj.scale.z);
 }
 function showCoordEditor(obj, name) {
   document.getElementById('ce-name').textContent = name || 'oggetto';
   updateCoordEditorFields(obj);
-  setGizmoMode('translate', 'ce-mode-t');   // ogni volta riparte da Sposta
+  setGizmoMode('translate');   // ogni volta riparte da Sposta
   document.getElementById('coord-editor').style.display = 'block';
   _inspectorModel = null;                    // niente caratteristiche di default (le imposta selectProjectModel)
   refreshInspectorProps();
 }
 function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; _inspectorModel = null; }
 
-// Sezione "Caratteristiche" dell'Inspector: visibile solo per i modelli.
-// I pulsanti fanno da proxy ai controlli della riga in Gerarchia (stato sempre allineato).
+// Header + sezione "Caratteristiche" dell'Inspector. Il checkbox "attivo" riflette
+// la visibilità; le caratteristiche (Solido/Animazione) solo per i modelli.
 function refreshInspectorProps() {
+  const act = document.getElementById('insp-active');
+  if (act) act.checked = gizmoTarget ? gizmoTarget.visible : true;
   const box = document.getElementById('ce-props');
   const lbl = document.getElementById('ce-props-label');
   if (!box) return;
@@ -5947,11 +5966,24 @@ function refreshInspectorProps() {
   if (!ch) { box.style.display = 'none'; if (lbl) lbl.style.display = 'none'; return; }
   box.style.display = 'flex'; if (lbl) lbl.style.display = 'block';
   const cbtn = document.getElementById('ce-prop-collider');
-  const vbtn = document.getElementById('ce-prop-vis');
   const abtn = document.getElementById('ce-prop-anim');
   if (cbtn) cbtn.classList.toggle('active', colliderRoots.has(ch.root));
-  if (vbtn) { vbtn.classList.toggle('active', ch.root.visible); vbtn.textContent = ch.root.visible ? 'Visibile' : 'Nascosto'; }
   if (abtn) { if (ch.action) { abtn.style.display = ''; abtn.classList.toggle('active', !ch.action.paused); } else abtn.style.display = 'none'; }
+}
+
+// "Spegni / accendi" l'oggetto selezionato (come setActive in Unity): non solo invisibile,
+// ma anche animazione ferma e collider tolto; riaccendendolo si ripristina com'era.
+function setActiveSelected(active) {
+  const o = gizmoTarget; if (!o) return;
+  o.visible = active;
+  const ch = _inspectorModel;
+  if (ch) {
+    if (ch.action) ch.action.paused = !active;
+    if (!active) { ch._colliderWasOn = colliderRoots.has(ch.root); if (ch._colliderWasOn) toggleCollider(ch.root, null); }
+    else if (ch._colliderWasOn && !colliderRoots.has(ch.root)) toggleCollider(ch.root, null);
+    if (ch._row) { const vb = ch._row.querySelector('.vis-btn'); if (vb) { vb.classList.toggle('off', !active); vb.innerHTML = active ? SVG_EYE : SVG_EYE_OFF; } }
+  }
+  refreshInspectorProps();
 }
 // click su una caratteristica → inoltra al pulsante corrispondente della riga, poi riallinea
 function _inspectorProxyClick(sel) {
@@ -6087,13 +6119,16 @@ function duplicateSelected() {
   if (ch) { duplicateGltfCharacter(ch); return true; }
   return false;   // i marker (teleport/entrata/…) per ora non si duplicano
 }
-function applyCoordEditorValues() {           // imposta solo la posizione (no persist)
-  if (!gizmoTarget) return false;
-  const x = parseFloat(document.getElementById('ce-x').value);
-  const y = parseFloat(document.getElementById('ce-y').value);
-  const z = parseFloat(document.getElementById('ce-z').value);
-  if ([x, y, z].some(v => Number.isNaN(v))) return false;
-  gizmoTarget.position.set(x, y, z);
+function applyCoordEditorValues() {           // legge posizione/rotazione/scala dai campi (no persist)
+  const o = gizmoTarget; if (!o) return false;
+  const num = (id, fb) => { const v = parseFloat(document.getElementById(id).value); return Number.isNaN(v) ? fb : v; };
+  o.position.set(num('pos-x', o.position.x), num('pos-y', o.position.y), num('pos-z', o.position.z));
+  o.rotation.set(
+    THREE.MathUtils.degToRad(num('rot-x', THREE.MathUtils.radToDeg(o.rotation.x))),
+    THREE.MathUtils.degToRad(num('rot-y', THREE.MathUtils.radToDeg(o.rotation.y))),
+    THREE.MathUtils.degToRad(num('rot-z', THREE.MathUtils.radToDeg(o.rotation.z)))
+  );
+  o.scale.set(num('scl-x', o.scale.x), num('scl-y', o.scale.y), num('scl-z', o.scale.z));
   return true;
 }
 function applyCoordEditor() {
@@ -6129,7 +6164,8 @@ function makeScrubbable(input) {
       captureUndo(gizmoTarget);   // snapshot prima dello scrub
     }
     if (scrubbing) {
-      const step = e.shiftKey ? 0.005 : 0.03;   // Shift = fine
+      const base = parseFloat(input.dataset.scrub) || 0.03;   // gradi usano un passo più grande
+      const step = e.shiftKey ? base * 0.15 : base;           // Shift = fine
       input.value = (sv + (e.clientX - sx) * step).toFixed(2);
       applyCoordEditorValues();
       e.preventDefault();
@@ -6143,25 +6179,28 @@ function makeScrubbable(input) {
   input.addEventListener('pointerup', stop);
   input.addEventListener('pointercancel', stop);
 }
-function setGizmoMode(mode, btnId) {
+function setGizmoMode(mode) {
   if (transformControls) transformControls.setMode(mode);
-  document.querySelectorAll('#coord-editor .ce-mode').forEach(b => b.classList.remove('active'));
-  const b = document.getElementById(btnId); if (b) b.classList.add('active');
+  // evidenzia la riga corrispondente (Posizione/Rotazione/Scala)
+  document.querySelectorAll('#coord-editor .tr-row').forEach(r => r.classList.toggle('active', r.dataset.mode === mode));
 }
 function setupCoordEditor() {
-  ['ce-x', 'ce-y', 'ce-z'].forEach(id => {
-    const el = document.getElementById(id);
+  ['pos-x','pos-y','pos-z','rot-x','rot-y','rot-z','scl-x','scl-y','scl-z'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
     el.addEventListener('focus', () => captureUndo(gizmoTarget));   // snapshot prima di digitare
     el.addEventListener('change', applyCoordEditor);
     makeScrubbable(el);
   });
-  document.getElementById('ce-mode-t').addEventListener('click', () => setGizmoMode('translate', 'ce-mode-t'));
-  document.getElementById('ce-mode-r').addEventListener('click', () => setGizmoMode('rotate', 'ce-mode-r'));
-  document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
+  // clic sull'etichetta della riga = cambia il modo del gizmo
+  document.querySelectorAll('#coord-editor .tr-row').forEach(row => {
+    const lbl = row.querySelector('.tr-lbl');
+    if (lbl) lbl.addEventListener('click', () => setGizmoMode(row.dataset.mode));
+  });
+  // checkbox "attivo" = spegni/accendi l'oggetto
+  document.getElementById('insp-active').addEventListener('change', e => setActiveSelected(e.target.checked));
   document.getElementById('ce-prop-collider').addEventListener('click', () => {
     if (_inspectorModel) { toggleCollider(_inspectorModel.root, null); refreshInspectorProps(); }
   });
-  document.getElementById('ce-prop-vis').addEventListener('click', () => _inspectorProxyClick('.vis-btn'));
   document.getElementById('ce-prop-anim').addEventListener('click', () => _inspectorProxyClick('.play-btn'));
 }
 
