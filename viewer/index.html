@@ -214,7 +214,7 @@
     #jump-btn svg { width: 26px; height: 26px; }
     body.has-touch #jump-btn { display: flex; }
     /* "+" in alto a destra DENTRO la scena (subito a sinistra dell'Inspector) */
-    #add-fab { position: fixed; right: 316px; top: 56px; width: 40px; height: 40px; border-radius: 10px;
+    #add-fab { position: fixed; right: 316px; top: 56px; width: 42px; height: 42px; border-radius: 50%;
       background: #2f7fe0; border: none; color: #fff; cursor: pointer;
       z-index: 40; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 16px rgba(0,0,0,.4); transition: transform .15s, filter .15s; }
@@ -456,6 +456,11 @@
       border-bottom: 1px solid rgba(255,255,255,.1);
     }
     .tb-spacer { flex: 1 1 0; }
+    /* play/stop ancorati al centro esatto della barra, indipendenti dai gruppi laterali */
+    #preview-controls { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 7px; }
+    /* Navigazione (Vista aerea / Terza persona): in alto a sinistra dentro la scena */
+    #scene-nav { position: fixed; top: 56px; left: 308px; z-index: 30; display: flex; gap: 7px; }
+    body.play-mode #scene-nav { left: 12px; }   /* in play la Gerarchia è nascosta */
     .tool-btn {
       background: rgba(255,255,255,.05);
       border: 1px solid rgba(255,255,255,.1); color: #e8edf5;
@@ -991,19 +996,25 @@
   </div>
 </div>
 
-<!-- Toolbar -->
-<div id="toolbar">
+<!-- Navigazione scena (in alto a sinistra DENTRO la scena, fuori dalla toolbar) -->
+<div id="scene-nav">
   <button class="tool-btn" id="btn-overhead"  title="Vista dall'alto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg><span>Vista aerea</span></button>
   <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Terza persona</span></button>
+</div>
+
+<!-- Toolbar -->
+<div id="toolbar">
   <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Simulazioni</span></button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span>Menu</span></button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
   <div class="tb-spacer"></div>
-  <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
-  <button class="tool-btn stop" id="btn-stop" style="display:none" disabled title="Esci anteprima"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
-  <div class="tb-spacer"></div>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span><span id="save-star" aria-hidden="true">*</span></button>
   <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
+  <!-- play/stop SEMPRE al centro esatto (assoluti, indipendenti dai gruppi laterali) -->
+  <div id="preview-controls">
+    <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+    <button class="tool-btn stop" id="btn-stop" style="display:none" disabled title="Esci anteprima"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+  </div>
 </div>
 
 <!-- Audio di sottofondo (loop) -->
@@ -1932,7 +1943,19 @@ function nextEntranceId() {
   return Math.max(m, _epSeq) + 1;
 }
 
+// Rimuove tutti gli entrance senza notifica (per imporre il massimo di uno)
+function clearAllEntrances() {
+  for (const ep of entrances.slice()) {
+    if (gizmoTarget === ep.group) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    scene.remove(ep.group);
+    ep.group.traverse(o => { if (o.isMesh) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); } });
+    if (ep.row) ep.row.remove();
+  }
+  entrances.length = 0;
+}
+
 function addEntrance(posArr, yaw, radius, id, save) {
+  if (save && entrances.length) clearAllEntrances();   // un solo entrance point: sostituisci l'esistente
   if (id == null) id = nextEntranceId();
   _epSeq = Math.max(_epSeq, id);
   radius = radius || 1.5;
@@ -5498,7 +5521,7 @@ async function loadScene() {
   for (const t of loadSavedTeleports()) addTeleport(t.pad, t.target, t.id, false);
 
   // Ricrea gli entrance point salvati
-  for (const e of loadSavedEntrances()) addEntrance(e.pos, e.yaw, e.radius, e.id, false);
+  { const _eps = loadSavedEntrances(); if (_eps[0]) { const e = _eps[0]; addEntrance(e.pos, e.yaw, e.radius, e.id, false); } }   // un solo entrance
 
   // Ricrea gli interactable salvati (dopo i personaggi → animazioni disponibili nel select)
   for (const sd of loadSavedInteractables()) {
