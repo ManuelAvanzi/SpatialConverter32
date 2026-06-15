@@ -615,11 +615,11 @@
       color: #8ea0b8; font-weight: 700; padding: 2px 2px 9px; display: flex; align-items: center; gap: 7px;
     }
     #hierarchy-title svg { width: 15px; height: 15px; }
-    #models-panel h3 { font-size: .75rem; color: #ffd400; opacity: 1; text-transform: uppercase;
+    #models-panel h3 { font-size: .75rem; color: #8ea0b8; opacity: 1; text-transform: uppercase;
       letter-spacing: .06em; margin-bottom: 10px; }
     #models-panel::-webkit-scrollbar { width: 4px; }
     #models-panel::-webkit-scrollbar-track { background: transparent; }
-    #models-panel::-webkit-scrollbar-thumb { background: rgba(255,212,0,.35); border-radius: 2px; }
+    #models-panel::-webkit-scrollbar-thumb { background: rgba(74,158,255,.35); border-radius: 2px; }
     .model-item { display: flex; align-items: center; gap: 8px;
       font-size: .82rem; padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.06);
       border-radius: 6px; cursor: pointer; transition: background .12s; }
@@ -1104,10 +1104,6 @@
     <button id="ce-prop-vis" class="ce-prop" title="Mostra / nascondi">Visibile</button>
     <button id="ce-prop-anim" class="ce-prop" title="Pausa / riprendi animazione">Animazione</button>
   </div>
-  <div class="ce-actions">
-    <button id="ce-apply">Applica &amp; salva</button>
-    <button id="ce-close">Chiudi</button>
-  </div>
 </div>
 
 <!-- Three.js via CDN -->
@@ -1373,8 +1369,7 @@ function toggleCollider(root, btn) {
     playerGroundY = PLAYER_HEIGHT;   // livello suolo di default
     isOnGround    = false;
     velocityY     = 0;
-    btn.classList.remove('active');
-    btn.title = 'Attiva mesh collider';
+    if (btn) { btn.classList.remove('active'); btn.title = 'Attiva mesh collider'; }
     showNotification(`⬡ Collider disattivato: ${root.userData.gizmoName || root.name}`);
   } else {
     // AGGIUNGI collider
@@ -1386,8 +1381,7 @@ function toggleCollider(root, btn) {
         added++;
       }
     });
-    btn.classList.add('active');
-    btn.title = 'Disattiva mesh collider';
+    if (btn) { btn.classList.add('active'); btn.title = 'Disattiva mesh collider'; }
     showNotification(`⬡ Collider attivo: ${root.userData.gizmoName || root.name} (${added} mesh)`);
   }
 }
@@ -6164,17 +6158,11 @@ function setupCoordEditor() {
   document.getElementById('ce-mode-t').addEventListener('click', () => setGizmoMode('translate', 'ce-mode-t'));
   document.getElementById('ce-mode-r').addEventListener('click', () => setGizmoMode('rotate', 'ce-mode-r'));
   document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
-  document.getElementById('ce-apply').addEventListener('click', applyCoordEditor);
-  document.getElementById('ce-prop-collider').addEventListener('click', () => _inspectorProxyClick('.collider-btn'));
+  document.getElementById('ce-prop-collider').addEventListener('click', () => {
+    if (_inspectorModel) { toggleCollider(_inspectorModel.root, null); refreshInspectorProps(); }
+  });
   document.getElementById('ce-prop-vis').addEventListener('click', () => _inspectorProxyClick('.vis-btn'));
   document.getElementById('ce-prop-anim').addEventListener('click', () => _inspectorProxyClick('.play-btn'));
-  document.getElementById('ce-close').addEventListener('click', () => {
-    if (transformControls) transformControls.detach();
-    gizmoTarget = null;
-    hideCoordEditor();
-    document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
-  });
 }
 
 // ─── Pannello Illuminazione ───────────────────────────────────────────────────
@@ -6591,7 +6579,7 @@ function addCharactersToPanel() {
 
   const header = document.createElement('div');
   header.className = 'char-panel-row';
-  header.style.cssText = 'font-size:.72rem;color:#4a9eff;margin:12px 0 6px;'
+  header.style.cssText = 'font-size:.72rem;color:#8ea0b8;margin:12px 0 6px;'
     + 'text-transform:uppercase;letter-spacing:.05em;font-weight:600;';
   header.textContent = usesStatic32() ? `🧍 Personaggi (${gltfCharacters.length})` : `Modelli del progetto (${gltfCharacters.length})`;
   list.appendChild(header);
@@ -6614,7 +6602,6 @@ function appendCharacterRow(ch, list, restoreCollider) {
   item.innerHTML =
     `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
     + `<span class="model-name">${ch.name}</span>`
-    + `<button class="collider-btn" title="Solido: il giocatore ci cammina sopra / non lo attraversa">${SVG_WALL}</button>`
     + `<button class="vis-btn"      title="Mostra / nascondi nell'editor">${SVG_EYE}</button>`
     + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">${SVG_PAUSE}</button>` : '')
     + `<button class="delete-btn"   title="Rimuovi dalla scena">${SVG_TRASH}</button>`;
@@ -6622,9 +6609,8 @@ function appendCharacterRow(ch, list, restoreCollider) {
   // Click sulla riga = seleziona soltanto (gizmo + contorno giallo). Per inquadrare: tasto F.
   item.addEventListener('click', () => { selectProjectModel(ch); });
 
-  const cob = item.querySelector('.collider-btn');
-  cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
-  if (restoreCollider && (SCENE_CONFIG.colliders || []).includes(ch.name)) toggleCollider(ch.root, cob); // ripristina
+  // Il collider si attiva dall'Inspector (a destra). Qui ripristino solo lo stato salvato.
+  if (restoreCollider && (SCENE_CONFIG.colliders || []).includes(ch.name) && !colliderRoots.has(ch.root)) toggleCollider(ch.root, null);
 
   const vb = item.querySelector('.vis-btn');
   vb.addEventListener('click', e => {
