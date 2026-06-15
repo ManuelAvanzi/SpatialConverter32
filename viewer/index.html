@@ -4497,12 +4497,12 @@ function ensureEditComposer() {
   _renderPass = new RenderPass(scene, camera);
   _composer.addPass(_renderPass);
   _outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
-  _outlinePass.edgeStrength = 5;
-  _outlinePass.edgeGlow = 0.3;
-  _outlinePass.edgeThickness = 1.6;
+  _outlinePass.edgeStrength = 6;
+  _outlinePass.edgeGlow = 0;        // niente alone: il bagliore "sbava" sul gizmo
+  _outlinePass.edgeThickness = 1.2;
   _outlinePass.pulsePeriod = 0;
   _outlinePass.visibleEdgeColor.set('#ffcc00');
-  _outlinePass.hiddenEdgeColor.set('#b88a00');   // bordo visibile anche dietro i muri (più tenue)
+  _outlinePass.hiddenEdgeColor.set('#c79a00');   // bordo visibile anche dietro i muri (più tenue)
   _composer.addPass(_outlinePass);
   _composer.addPass(new OutputPass());
   _composer.setSize(window.innerWidth, window.innerHeight);
