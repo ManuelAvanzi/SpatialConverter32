@@ -213,14 +213,14 @@
     #jump-btn:active { background: rgba(74,158,255,.5); }
     #jump-btn svg { width: 26px; height: 26px; }
     body.has-touch #jump-btn { display: flex; }
-    #add-fab { position: fixed; right: 16px; top: 14px; width: 52px; height: 52px; border-radius: 50%;
-      background: linear-gradient(135deg, #4a9eff, #2f7fe0); border: none; color: #fff; cursor: pointer;
-      z-index: 60; display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 6px 22px rgba(0,0,0,.45); transition: transform .15s, filter .15s; }
-    #add-fab:hover { transform: scale(1.07); filter: brightness(1.1); }
-    #add-fab svg { width: 24px; height: 24px; transition: transform .2s; }
+    #add-fab { position: fixed; right: 10px; top: 6px; width: 34px; height: 34px; border-radius: 8px;
+      background: #2f7fe0; border: none; color: #fff; cursor: pointer;
+      z-index: 40; display: flex; align-items: center; justify-content: center;
+      transition: transform .15s, filter .15s; }
+    #add-fab:hover { filter: brightness(1.12); }
+    #add-fab svg { width: 20px; height: 20px; transition: transform .2s; }
     #add-fab.open svg { transform: rotate(45deg); }
-    #add-menu { position: fixed; right: 16px; top: 74px; z-index: 60; display: none;
+    #add-menu { position: fixed; right: 10px; top: 48px; z-index: 60; display: none;
       background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
       border-radius: 14px; padding: 7px; min-width: 215px; box-shadow: 0 14px 50px rgba(0,0,0,.55); }
     #add-menu.open { display: block; }
@@ -300,7 +300,7 @@
       padding: 8px 2px; cursor: pointer; user-select: none; }
     .set-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #4a9eff; cursor: pointer; }
     /* Scene Vitals (editor) */
-    #scene-vitals { position: fixed; right: 12px; bottom: 88px; z-index: 30; display: none;
+    #scene-vitals { position: fixed; left: 308px; bottom: 12px; right: auto; z-index: 30; display: none;
       background: rgba(12,16,24,.88); border: 1px solid rgba(255,255,255,.12); border-radius: 11px;
       padding: 9px 12px; min-width: 195px; font-size: .72rem; color: #cdd6e6;
       font-family: Consolas, monospace; pointer-events: none; }
@@ -380,7 +380,8 @@
       font-size: .72rem; letter-spacing: .04em; padding: 5px 10px; border-radius: 7px;
       box-shadow: 0 2px 10px rgba(0,0,0,.3);
     }
-    body:not(.play-mode) #editor-badge { display: block; }
+    /* badge EDITOR ridondante con la nuova barra: nascosto */
+    body:not(.play-mode) #editor-badge { display: none; }
 
     /* Notifica azione */
     #notification {
@@ -445,17 +446,21 @@
     #vr-btn:hover { background: #4a9eff; }
 
     /* Toolbar in alto al centro */
+    /* Barra superiore piena (stile Unity), a tutta larghezza */
     #toolbar {
-      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-      display: flex; flex-direction: row; gap: 8px; z-index: 30;
+      position: fixed; top: 0; left: 0; right: 0; height: 46px;
+      display: flex; flex-direction: row; align-items: center; gap: 7px;
+      padding: 0 56px 0 12px; z-index: 30;
+      background: rgba(10,14,20,.92); backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,.1);
     }
+    .tb-spacer { flex: 1 1 0; }
     .tool-btn {
-      background: rgba(14,18,26,.72); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.12); color: #e8edf5;
-      padding: 9px 14px; border-radius: 999px; cursor: pointer;
-      font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 7px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1); color: #e8edf5;
+      padding: 6px 12px; border-radius: 8px; cursor: pointer;
+      font-size: .78rem; font-weight: 600; display: flex; align-items: center; gap: 7px;
       transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0,0,0,.25);
     }
     .tool-btn svg { width: 16px; height: 16px; opacity: .85; }
     .tool-btn:hover { background: rgba(74,158,255,.22); border-color: rgba(74,158,255,.5); color: #fff; }
@@ -555,11 +560,10 @@
 
     /* Inspector — dock a filo del bordo destro (valori gizmo + caratteristiche oggetto) */
     #coord-editor {
-      position: fixed; top: 56px; right: 0; bottom: 0; left: auto; transform: none;
+      position: fixed; top: 46px; right: 0; bottom: 0; left: auto; transform: none;
       width: 304px;
       background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.1); border-right: none;
-      border-radius: 12px 0 0 12px;
+      border-left: 1px solid rgba(255,255,255,.1); border-radius: 0;
       padding: 12px 14px; color: #fff; z-index: 41; display: none;
       font-size: .74rem; overflow-y: auto;
     }
@@ -608,11 +612,10 @@
 
     /* Gerarchia — dock a filo del bordo sinistro (stile Unity), aperto di default in editor */
     #models-panel {
-      position: fixed; top: 56px; left: 0; bottom: 0;
+      position: fixed; top: 46px; left: 0; bottom: 0;
       width: 296px; min-width: 296px; max-width: 296px;
       background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.1); border-left: none;
-      border-radius: 0 12px 12px 0;
+      border-right: 1px solid rgba(255,255,255,.1); border-radius: 0;
       padding: 10px 12px; color: #fff; z-index: 20;
       overflow-y: auto;
       display: block;
@@ -982,7 +985,9 @@
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span>Menu</span></button>
   <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Entrata</span></button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
+  <div class="tb-spacer"></div>
   <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima: prova la scena come un visitatore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Anteprima</span></button>
+  <div class="tb-spacer"></div>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span></button>
   <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
 </div>
