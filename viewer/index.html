@@ -4821,6 +4821,11 @@ async function init() {
     // ESC: annulla la modalità "posiziona destinazione"
     if (e.code === 'Escape' && placingTarget) { exitPlaceTargetMode(); return; }
 
+    // ESC / Canc: cancella l'oggetto selezionato (solo editor)
+    if (e.code === 'Escape' || e.code === 'Delete') {
+      if (deleteSelected()) { e.preventDefault(); return; }
+    }
+
     // Salto (Space) — solo in FPS
     if (e.code === 'Space' && cameraMode === 'fps') {
       e.preventDefault();   // evita lo scroll della pagina
@@ -5892,6 +5897,28 @@ function showCoordEditor(obj, name) {
   document.getElementById('coord-editor').style.display = 'block';
 }
 function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
+
+// Cancella l'oggetto attualmente selezionato (gizmo agganciato o user-object).
+// Riusa le rimozioni esistenti di ogni tipo. Solo nell'editor. Ritorna true se ha cancellato.
+function deleteSelected() {
+  if (!EDIT_MODE || _previewMode) return false;
+  // 1) user-object selezionato dal "+" (immagini/pdf/video/portali)
+  if (_uoSelected) { removeUserObject(_uoSelected); return true; }
+  const g = gizmoTarget;
+  if (!g) return false;
+  // 2) modello di progetto / personaggio glTF (riuso il pulsante cestino della riga)
+  const ch = gltfCharacters.find(c => c.root === g);
+  if (ch && ch._row) { ch._row.querySelector('.delete-btn').click(); return true; }
+  // 3) user-object agganciato al gizmo (selezionato da scena, senza pillola)
+  const uo = userObjects.find(o => o.group === g);
+  if (uo) { removeUserObject(uo); return true; }
+  // 4) marker dell'editor
+  const tp = teleports.find(t => t.padGroup === g || t.targetGroup === g);   if (tp) { removeTeleport(tp); return true; }
+  const ep = entrances.find(e => e.group === g);                             if (ep) { removeEntrance(ep); return true; }
+  const ia = interactables.find(i => i.group === g);                         if (ia) { removeInteractable(ia); return true; }
+  const tr = questTriggers.find(t => t.group === g);                         if (tr) { removeQuestTrigger(tr); return true; }
+  return false;
+}
 function applyCoordEditorValues() {           // imposta solo la posizione (no persist)
   if (!gizmoTarget) return false;
   const x = parseFloat(document.getElementById('ce-x').value);
@@ -6397,6 +6424,7 @@ function addCharactersToPanel() {
     item.className = 'model-item char-panel-row';
     item.dataset.modelName = ch.name;
     item.title = 'Clicca per selezionare nella scena';
+    ch._row = item;   // riferimento alla riga (per cancellare da tastiera)
     // blu = animato (ha una clip), verde = statico
     item.innerHTML =
       `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
