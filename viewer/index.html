@@ -213,14 +213,15 @@
     #jump-btn:active { background: rgba(74,158,255,.5); }
     #jump-btn svg { width: 26px; height: 26px; }
     body.has-touch #jump-btn { display: flex; }
-    #add-fab { position: fixed; right: 10px; top: 6px; width: 34px; height: 34px; border-radius: 8px;
+    /* "+" in alto a destra DENTRO la scena (subito a sinistra dell'Inspector) */
+    #add-fab { position: fixed; right: 316px; top: 56px; width: 40px; height: 40px; border-radius: 10px;
       background: #2f7fe0; border: none; color: #fff; cursor: pointer;
       z-index: 40; display: flex; align-items: center; justify-content: center;
-      transition: transform .15s, filter .15s; }
+      box-shadow: 0 4px 16px rgba(0,0,0,.4); transition: transform .15s, filter .15s; }
     #add-fab:hover { filter: brightness(1.12); }
-    #add-fab svg { width: 20px; height: 20px; transition: transform .2s; }
+    #add-fab svg { width: 22px; height: 22px; transition: transform .2s; }
     #add-fab.open svg { transform: rotate(45deg); }
-    #add-menu { position: fixed; right: 10px; top: 48px; z-index: 60; display: none;
+    #add-menu { position: fixed; right: 316px; top: 102px; z-index: 60; display: none;
       background: rgba(16,20,28,.96); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.13);
       border-radius: 14px; padding: 7px; min-width: 215px; box-shadow: 0 14px 50px rgba(0,0,0,.55); }
     #add-menu.open { display: block; }
@@ -450,7 +451,7 @@
     #toolbar {
       position: fixed; top: 0; left: 0; right: 0; height: 46px;
       display: flex; flex-direction: row; align-items: center; gap: 7px;
-      padding: 0 56px 0 12px; z-index: 30;
+      padding: 0 12px; z-index: 30;
       background: rgba(10,14,20,.92); backdrop-filter: blur(10px);
       border-bottom: 1px solid rgba(255,255,255,.1);
     }
@@ -471,10 +472,12 @@
     .tool-btn.exit { background: rgba(255,90,90,.22); border-color: rgba(255,90,90,.45); color: #ffd2d2; }
     .tool-btn.exit:hover { background: rgba(255,90,90,.40); }
     /* Anteprima: arancione brand; quando attiva (Esci anteprima) diventa rossa */
-    /* Anteprima/Stop: solo icona, larghezza fissa così resta nella stessa posizione centrale */
+    /* Play (Anteprima) + Stop affiancati, solo icona, larghezza fissa → restano centrati */
     .tool-btn.preview { background: rgba(249,115,22,.9); border-color: #f97316; color: #fff; flex: none; width: 42px; padding: 6px 0; justify-content: center; }
-    .tool-btn.preview:hover { background: rgba(249,115,22,1); }
-    .tool-btn.preview.previewing { background: rgba(217,67,67,.92); border-color: #d94343; }
+    .tool-btn.preview:hover:not(:disabled) { background: rgba(249,115,22,1); }
+    .tool-btn.stop { background: rgba(217,67,67,.92); border-color: #d94343; color: #fff; flex: none; width: 42px; padding: 6px 0; justify-content: center; }
+    .tool-btn.stop:hover:not(:disabled) { background: rgba(217,67,67,1); }
+    .tool-btn.preview:disabled, .tool-btn.stop:disabled { opacity: .35; cursor: default; }
     /* Asterisco "modifiche non salvate" sul pulsante Salva */
     #save-star { display: none; color: #ffd400; font-weight: 800; font-size: .95rem; line-height: 1; margin-left: 1px; }
     .tool-btn.save.has-changes #save-star { display: inline; }
@@ -963,7 +966,11 @@
     </div>
     <div class="sec collapsed" data-sec="entrance">
       <h3 class="sec-head">Entrance Points <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
-      <div class="sec-body"><div id="entrance-list"></div></div>
+      <div class="sec-body">
+        <button id="btn-place-entrance" class="import-unity-btn" title="Scegli sulla mappa il punto di partenza dell'avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Posiziona entrata sulla mappa</button>
+        <div class="sf-hint">Muovi il mouse sulla mappa e clicca: <b style="color:#4aff8a">verde</b> = pavimento ok, <b style="color:#ff5a5a">rosso</b> = l'avatar cadrebbe. Se non la imposti, l'entrata è al centro della scena.</div>
+        <div id="entrance-list"></div>
+      </div>
     </div>
     <div class="sec collapsed" data-sec="interactable">
       <h3 class="sec-head">Interactable <span class="sec-count"></span><span class="sec-arrow">▾</span></h3>
@@ -990,10 +997,10 @@
   <button class="tool-btn" id="btn-camera"    title="Alterna prima/terza persona (V)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Terza persona</span></button>
   <button class="tool-btn" id="btn-levels"    title="Stato dei livelli" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Simulazioni</span></button>
   <button class="tool-btn" id="btn-models"    title="Menu: modelli e spatial features"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg><span>Menu</span></button>
-  <button class="tool-btn" id="btn-entrance"  title="Aggiungi un Entrance Point qui (posizione e direzione attuali)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Entrata</span></button>
   <button class="tool-btn" id="btn-audio"     title="Audio di sottofondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Audio</span></button>
   <div class="tb-spacer"></div>
   <button class="tool-btn preview" id="btn-preview" style="display:none" title="Anteprima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+  <button class="tool-btn stop" id="btn-stop" style="display:none" disabled title="Esci anteprima"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
   <div class="tb-spacer"></div>
   <button class="tool-btn save" id="btn-save-top" style="display:none" title="Salva il progetto in redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><span>Salva</span><span id="save-star" aria-hidden="true">*</span></button>
   <button class="tool-btn exit" id="btn-exit-editor" style="display:none" title="Esci dall'editor e torna alla redazione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Esci</span></button>
@@ -1270,7 +1277,6 @@ function saveEntrance() {
     yaw: cameraYaw, pitch: cameraPitch
   };
   localStorage.setItem(ENTRANCE_KEY, JSON.stringify(ep));
-  document.getElementById('btn-entrance').classList.add('active');
   showNotification('📍 Punto d\'entrata salvato! Sarà la posizione iniziale ad ogni caricamento.');
 }
 function applyEntrancePoint() {
@@ -1771,6 +1777,69 @@ function placeTargetAt(clientX, clientY) {
 function showPlaceBanner(txt) { const b = document.getElementById('place-banner'); if (b) { b.textContent = txt; b.style.display = 'block'; } }
 function hidePlaceBanner()    { const b = document.getElementById('place-banner'); if (b) b.style.display = 'none'; }
 
+// ── Strumento "posiziona entrata sulla mappa" (indicatore verde=pavimento / rosso=vuoto) ──
+let _placingEntrance = false, _entranceMarker = null, _entranceValid = false;
+function ensureEntranceMarker() {
+  if (_entranceMarker) return _entranceMarker;
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.85, 40),
+    new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: .9, side: THREE.DoubleSide, depthTest: false }));
+  ring.rotation.x = -Math.PI / 2;
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.2, 28),
+    new THREE.MeshBasicMaterial({ color: 0x4aff8a, transparent: true, opacity: .45, side: THREE.DoubleSide, depthTest: false }));
+  dot.rotation.x = -Math.PI / 2;
+  g.add(ring); g.add(dot); g.visible = false; g.renderOrder = 999;
+  g.userData = { ring, dot };
+  scene.add(g);
+  _entranceMarker = g;
+  return g;
+}
+function enterPlaceEntranceMode() {
+  if (gizmoTarget) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+  if (cameraMode !== 'overhead') toggleOverhead();   // vista mappa per scegliere il punto
+  _placingEntrance = true;
+  ensureEntranceMarker();
+  renderer.domElement.style.cursor = 'crosshair';
+  showPlaceBanner('📍 Muovi il mouse sulla mappa e clicca dove parte l\'avatar · verde = ok, rosso = niente pavimento · ESC per annullare');
+  const btn = document.getElementById('btn-place-entrance'); if (btn) btn.classList.add('active');
+}
+function exitPlaceEntranceMode() {
+  _placingEntrance = false;
+  if (_entranceMarker) _entranceMarker.visible = false;
+  renderer.domElement.style.cursor = '';
+  hidePlaceBanner();
+  const btn = document.getElementById('btn-place-entrance'); if (btn) btn.classList.remove('active');
+}
+function updateEntranceMarker(clientX, clientY) {
+  const m = ensureEntranceMarker();
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, viewCam());
+  let p = null, valid = false;
+  if (collidableMeshes.length) {                       // pavimento calpestabile sotto il cursore?
+    const hits = _qRay.intersectObjects(collidableMeshes, false);
+    if (hits.length) { p = hits[0].point; valid = true; }
+  }
+  if (!p) p = screenToScenePoint(clientX, clientY);    // niente collider → rosso (l'avatar cadrebbe)
+  if (!p) { m.visible = false; return; }
+  m.position.set(p.x, p.y + 0.05, p.z);
+  m.visible = true;
+  _entranceValid = valid;
+  const col = valid ? 0x4aff8a : 0xff5a5a;
+  m.userData.ring.material.color.setHex(col);
+  m.userData.dot.material.color.setHex(col);
+}
+function placeEntranceAt(clientX, clientY) {
+  updateEntranceMarker(clientX, clientY);
+  if (!_entranceMarker || !_entranceMarker.visible) { showNotification('Clic fuori dalla scena — riprova'); return; }
+  if (!_entranceValid) { showNotification('❌ Qui non c\'è pavimento (collider): l\'avatar cadrebbe. Scegli un punto verde.'); return; }
+  const p = _entranceMarker.position;
+  addEntrance([p.x, p.y - 0.05, p.z], 0, 1.5, null, true);
+  showNotification('✅ Entrata posizionata');
+  exitPlaceEntranceMode();
+}
+
 // Controlla se il player è su un pad → teletrasporta sulla destinazione
 function checkTeleports() {
   if (!teleports.length || performance.now() < teleportCooldownUntil) return;
@@ -2023,9 +2092,14 @@ function togglePreview() {
   for (const ia of interactables) applyIaRuntimeVisibility(ia);
   refreshAllTriggerVisibility();
   if (typeof refreshSelectionRings === 'function') refreshSelectionRings();
-  const b = document.getElementById('btn-preview');
-  if (b) { b.classList.toggle('previewing', _previewMode); b.innerHTML = _previewMode ? _SVG_STOP_TB : _SVG_PLAY_TB; b.title = _previewMode ? 'Esci anteprima' : 'Anteprima'; }
+  updatePreviewButtons();
   showNotification(_previewMode ? '▶ Anteprima — provi come un visitatore' : '✏️ Torni a costruire');
+}
+// Play cliccabile solo fuori anteprima, Stop solo in anteprima (restano entrambi al centro)
+function updatePreviewButtons() {
+  const p = document.getElementById('btn-preview'), s = document.getElementById('btn-stop');
+  if (p) p.disabled = _previewMode;
+  if (s) s.disabled = !_previewMode;
 }
 
 function applySpawn() {
@@ -2042,10 +2116,30 @@ function applySpawn() {
     playerGroundY = p.y + PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
     return;
   }
-  if (loadSavedEntrance()) { applyEntrancePoint(); }   // vecchio entrance singolo (localStorage)
-  else { camera.position.set(0, PLAYER_HEIGHT, 0); cameraYaw = 0; cameraPitch = 0;   // origine
-    camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0; }
-  playerGroundY = PLAYER_HEIGHT; velocityY = 0; isOnGround = true; jumpCount = 0;
+  if (loadSavedEntrance()) { applyEntrancePoint(); playerGroundY = PLAYER_HEIGHT; }
+  else {                                                // default: centro della scena, sul pavimento
+    const c = defaultSceneSpawn();
+    camera.position.set(c.x, c.y + PLAYER_HEIGHT, c.z); cameraYaw = 0; cameraPitch = 0;
+    camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0;
+    playerGroundY = c.y + PLAYER_HEIGHT;
+  }
+  velocityY = 0; isOnGround = true; jumpCount = 0;
+}
+// Punto di spawn di default = centro della scena, calato sul pavimento (collider o geometria)
+function defaultSceneSpawn() {
+  let cx = 0, cz = 0, top = 60, gy = 0;
+  if (environmentScene) {
+    const box = new THREE.Box3().setFromObject(environmentScene);
+    if (!box.isEmpty()) { const ctr = box.getCenter(new THREE.Vector3()); cx = ctr.x; cz = ctr.z; top = box.max.y + 5; gy = box.min.y; }
+  }
+  const targets = collidableMeshes.length ? collidableMeshes : (environmentScene ? environmentScene.children : []);
+  if (targets.length) {
+    colRaycaster.near = 0; colRaycaster.far = 1e4;
+    colRaycaster.set(new THREE.Vector3(cx, top, cz), _downVec);
+    const hits = colRaycaster.intersectObjects(targets, true);
+    if (hits.length) gy = hits[0].point.y;
+  }
+  return { x: cx, y: gy, z: cz };
 }
 
 // ─── Interactable: visual + prossimità + trigger animazione ──────────────────
@@ -4751,6 +4845,9 @@ async function init() {
   // ── Drag-to-look ──────────────────────────────────────────────────────────
   const canvas = renderer.domElement;
 
+  // Modalità "posiziona entrata": il marker verde/rosso segue il cursore
+  canvas.addEventListener('mousemove', e => { if (_placingEntrance) updateEntranceMarker(e.clientX, e.clientY); });
+
   canvas.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     if (gizmoDragging || (transformControls && transformControls.axis)) return; // gizmo ha priorità
@@ -4782,6 +4879,12 @@ async function init() {
     // Modalità "posiziona destinazione": clic pulito sul canvas → piazza la destinazione
     if (placingTarget && !dragMoved && e.target === renderer.domElement) {
       placeTargetAt(e.clientX, e.clientY);
+      isDragging = false;
+      return;
+    }
+    // Modalità "posiziona entrata": clic pulito sulla mappa → piazza l'entrata (se verde)
+    if (_placingEntrance && !dragMoved && e.target === renderer.domElement) {
+      placeEntranceAt(e.clientX, e.clientY);
       isDragging = false;
       return;
     }
@@ -4891,6 +4994,7 @@ async function init() {
 
     // ESC: annulla la modalità "posiziona destinazione"
     if (e.code === 'Escape' && placingTarget) { exitPlaceTargetMode(); return; }
+    if (e.code === 'Escape' && _placingEntrance) { exitPlaceEntranceMode(); return; }
 
     // ESC / Canc: cancella l'oggetto selezionato (solo editor)
     if (e.code === 'Escape' || e.code === 'Delete') {
@@ -4950,6 +5054,10 @@ async function init() {
     tab.addEventListener('click', () => switchMenuTab(tab.dataset.tab)));
   buildSpatialPalette();
   setupSpatialSections();
+  const _placeEntBtn = document.getElementById('btn-place-entrance');
+  if (_placeEntBtn) _placeEntBtn.addEventListener('click', () => {
+    if (_placingEntrance) exitPlaceEntranceMode(); else enterPlaceEntranceMode();
+  });
 
   // Color picker avatar (sezione Avatar della tab Spatial)
   const _avBody = document.getElementById('av-color-body');
@@ -4988,8 +5096,11 @@ async function init() {
 
   // Pulsante "Anteprima" — prova la scena come un visitatore (solo in editor)
   const _prevBtn = document.getElementById('btn-preview');
-  if (EDIT_MODE) _prevBtn.style.display = '';
-  _prevBtn.addEventListener('click', togglePreview);
+  const _stopBtn = document.getElementById('btn-stop');
+  if (EDIT_MODE) { _prevBtn.style.display = ''; _stopBtn.style.display = ''; }
+  _prevBtn.addEventListener('click', () => { if (!_previewMode) togglePreview(); });
+  _stopBtn.addEventListener('click', () => { if (_previewMode) togglePreview(); });
+  updatePreviewButtons();
 
   // Pulsante "Carica contenuti" (upload modello) — solo in editor su un progetto
   const _upBtn = document.getElementById('btn-upload-model');
@@ -5081,8 +5192,8 @@ async function init() {
   // ── Joystick movimento (mobile) ───────────────────────────────────────────
   setupJoystick();
 
-  // ── Pulsante Entrata: aggiunge un Entrance Point dove sei ora ──────────────
-  document.getElementById('btn-entrance').addEventListener('click', addEntranceAtMe);
+  // (Il pulsante "Entrata" in toolbar è stato rimosso: l'entrata si posiziona
+  //  dallo strumento in Spatial → Entrance Points, oppure è al centro scena di default)
 
   // Carica scena
   await loadScene();
