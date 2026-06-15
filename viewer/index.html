@@ -6481,8 +6481,8 @@ function addCharactersToPanel() {
       + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">${SVG_PAUSE}</button>` : '')
       + `<button class="delete-btn"   title="Rimuovi dalla scena">${SVG_TRASH}</button>`;
 
-    // Click sulla riga = seleziona l'oggetto nella scena (gizmo + contorno giallo) e lo inquadra
-    item.addEventListener('click', () => { frameObject(ch.root); selectProjectModel(ch); });
+    // Click sulla riga = seleziona soltanto (gizmo + contorno giallo). Per inquadrare: tasto F.
+    item.addEventListener('click', () => { selectProjectModel(ch); });
 
     const cob = item.querySelector('.collider-btn');
     cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
