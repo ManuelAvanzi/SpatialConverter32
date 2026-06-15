@@ -6486,6 +6486,7 @@ function setupAudio() {
 function startBackgroundAudio() {
   const audio = document.getElementById('bg-audio');
   if (!audio || !audio.getAttribute('src')) return;   // niente audio (progetto non-32)
+  if (EDIT_MODE) return;   // in editor niente audio automatico: parte solo col pulsante Audio
   const tryPlay = () => audio.play().catch(() => {});
   tryPlay();
   const resume = () => tryPlay();
