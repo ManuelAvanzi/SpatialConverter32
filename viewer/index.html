@@ -1304,7 +1304,7 @@ async function loadSceneConfig() {
   // 1) Progetto dal server (piattaforma)
   if (PROJECT_SLUG) {
     try {
-      const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}`, { cache: 'no-store' });
+      const r = await fetch(`/api/projects/${encodeURIComponent(PROJECT_SLUG)}?t=${Date.now()}`, { cache: 'no-store' });
       if (r.ok) {
         CURRENT_PROJECT = await r.json();
         SCENE_CONFIG = CURRENT_PROJECT.sceneConfig || { version: 1 };
@@ -3830,7 +3830,8 @@ function renderUoPlayList() {
 async function initUserObjects() {
   let published = null;
   if (EDIT_MODE) { try { published = JSON.parse(localStorage.getItem(UO_KEY)); } catch {} }
-  if (!published) published = SCENE_CONFIG.userObjects || [];
+  // copia-lavoro locale vuota → usa quella pubblicata sul server (evita di mascherarla)
+  if (!published || !published.length) published = SCENE_CONFIG.userObjects || [];
   for (const d of published) await addUserObject(d, { own: false, fresh: false });
   if (!EDIT_MODE) {
     let mine = []; try { mine = JSON.parse(localStorage.getItem(UO_VISITOR_KEY)) || []; } catch {}
