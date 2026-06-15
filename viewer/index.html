@@ -553,15 +553,31 @@
     /* HUD coordinate camera */
     #cam-hud { display: none; }   /* HUD coordinate disattivato (non serviva) */
 
-    /* Editor coordinate manuale */
+    /* Inspector — dock a filo del bordo destro (valori gizmo + caratteristiche oggetto) */
     #coord-editor {
-      position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,.82); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,159,74,.5); border-radius: 9px;
-      padding: 7px 9px; color: #fff; z-index: 41; display: none;
-      font-size: .74rem;
+      position: fixed; top: 56px; right: 0; bottom: 0; left: auto; transform: none;
+      width: 270px;
+      background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.1); border-right: none;
+      border-radius: 12px 0 0 12px;
+      padding: 12px 14px; color: #fff; z-index: 41; display: none;
+      font-size: .74rem; overflow-y: auto;
     }
-    #coord-editor .ce-title { font-size: .7rem; color: #ffb060; margin-bottom: 5px; font-weight: 600; }
+    #coord-editor::before {
+      content: 'Inspector'; display: block; font-size: .68rem; text-transform: uppercase;
+      letter-spacing: .08em; color: #8ea0b8; font-weight: 700; margin-bottom: 9px;
+    }
+    #coord-editor .ce-title { font-size: .82rem; color: #ffb060; margin-bottom: 9px; font-weight: 600;
+      word-break: break-word; }
+    /* Caratteristiche dell'oggetto (proxy ai controlli della riga in Gerarchia) */
+    #coord-editor .ce-props { display: flex; gap: 5px; margin-top: 9px; padding-top: 9px;
+      border-top: 1px solid rgba(255,255,255,.1); }
+    #coord-editor .ce-prop { flex: 1; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
+      color: #cdd6e2; border-radius: 6px; padding: 5px 4px; cursor: pointer; font-size: .64rem; white-space: nowrap; }
+    #coord-editor .ce-prop:hover { background: rgba(255,255,255,.14); }
+    #coord-editor .ce-prop.active { background: rgba(74,158,255,.28); border-color: rgba(74,158,255,.5); color: #cfe6ff; }
+    #coord-editor .ce-props-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em;
+      color: #8ea0b8; font-weight: 700; margin-top: 10px; }
     #coord-editor .ce-modes { display: flex; gap: 4px; margin-bottom: 5px; }
     #coord-editor .ce-mode { flex: 1; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
       color: #ccc; border-radius: 5px; padding: 3px 5px; cursor: pointer; font-size: .66rem; }
@@ -582,12 +598,13 @@
     #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
     #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
 
-    /* Gerarchia — dock fisso a sinistra (stile Unity), aperto di default in editor */
+    /* Gerarchia — dock a filo del bordo sinistro (stile Unity), aperto di default in editor */
     #models-panel {
-      position: fixed; top: 64px; left: 12px; bottom: 12px;
+      position: fixed; top: 56px; left: 0; bottom: 0;
       width: 296px; min-width: 296px; max-width: 296px;
-      background: rgba(10,14,20,.82); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
+      background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.1); border-left: none;
+      border-radius: 0 12px 12px 0;
       padding: 10px 12px; color: #fff; z-index: 20;
       overflow-y: auto;
       display: block;
@@ -1081,6 +1098,12 @@
     <label>Y</label><input id="ce-y" type="number" step="0.5" />
     <label>Z</label><input id="ce-z" type="number" step="0.5" />
   </div>
+  <div id="ce-props-label" class="ce-props-label" style="display:none">Caratteristiche</div>
+  <div id="ce-props" class="ce-props" style="display:none">
+    <button id="ce-prop-collider" class="ce-prop" title="Solido: il giocatore ci cammina sopra / non lo attraversa">Solido</button>
+    <button id="ce-prop-vis" class="ce-prop" title="Mostra / nascondi">Visibile</button>
+    <button id="ce-prop-anim" class="ce-prop" title="Pausa / riprendi animazione">Animazione</button>
+  </div>
   <div class="ce-actions">
     <button id="ce-apply">Applica &amp; salva</button>
     <button id="ce-close">Chiudi</button>
@@ -1187,6 +1210,7 @@ function setSceneWireframe(on) {
 // ─── Gizmo posizionamento (TransformControls) ───────────────────────────────
 let transformControls = null;
 let gizmoTarget = null;            // oggetto attualmente agganciato al gizmo
+let _inspectorModel = null;       // gltfCharacter selezionato (per la sezione Caratteristiche dell'Inspector)
 let gizmoDragging = false;         // true mentre si trascina un handle
 const POS_STORE_KEY  = 'sc32-positions' + _KP;   // localStorage: { nome: [x,y,z] }
 const ENTRANCE_KEY   = 'sc32-entrance' + _KP;    // localStorage: {x,y,z,yaw,pitch}
@@ -4469,6 +4493,7 @@ function selectProjectModel(ch) {
   captureUndo(ch.root);
   transformControls.attach(ch.root); gizmoTarget = ch.root;
   showCoordEditor(ch.root, ch.name);
+  _inspectorModel = ch; refreshInspectorProps();   // mostra le caratteristiche del modello
   // evidenzia la riga corrispondente nella lista
   document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
   const row = document.querySelector(`#models-list .model-item[data-model-name="${(ch.name || '').replace(/"/g, '\\"')}"]`);
@@ -5913,8 +5938,33 @@ function showCoordEditor(obj, name) {
   updateCoordEditorFields(obj);
   setGizmoMode('translate', 'ce-mode-t');   // ogni volta riparte da Sposta
   document.getElementById('coord-editor').style.display = 'block';
+  _inspectorModel = null;                    // niente caratteristiche di default (le imposta selectProjectModel)
+  refreshInspectorProps();
 }
-function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; }
+function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; _inspectorModel = null; }
+
+// Sezione "Caratteristiche" dell'Inspector: visibile solo per i modelli.
+// I pulsanti fanno da proxy ai controlli della riga in Gerarchia (stato sempre allineato).
+function refreshInspectorProps() {
+  const box = document.getElementById('ce-props');
+  const lbl = document.getElementById('ce-props-label');
+  if (!box) return;
+  const ch = _inspectorModel;
+  if (!ch) { box.style.display = 'none'; if (lbl) lbl.style.display = 'none'; return; }
+  box.style.display = 'flex'; if (lbl) lbl.style.display = 'block';
+  const cbtn = document.getElementById('ce-prop-collider');
+  const vbtn = document.getElementById('ce-prop-vis');
+  const abtn = document.getElementById('ce-prop-anim');
+  if (cbtn) cbtn.classList.toggle('active', colliderRoots.has(ch.root));
+  if (vbtn) { vbtn.classList.toggle('active', ch.root.visible); vbtn.textContent = ch.root.visible ? 'Visibile' : 'Nascosto'; }
+  if (abtn) { if (ch.action) { abtn.style.display = ''; abtn.classList.toggle('active', !ch.action.paused); } else abtn.style.display = 'none'; }
+}
+// click su una caratteristica → inoltra al pulsante corrispondente della riga, poi riallinea
+function _inspectorProxyClick(sel) {
+  const ch = _inspectorModel; if (!ch || !ch._row) return;
+  const b = ch._row.querySelector(sel); if (b) b.click();
+  refreshInspectorProps();
+}
 
 function updateModelsHeader() {
   if (_modelsHeaderEl) _modelsHeaderEl.textContent =
@@ -6115,6 +6165,9 @@ function setupCoordEditor() {
   document.getElementById('ce-mode-r').addEventListener('click', () => setGizmoMode('rotate', 'ce-mode-r'));
   document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
   document.getElementById('ce-apply').addEventListener('click', applyCoordEditor);
+  document.getElementById('ce-prop-collider').addEventListener('click', () => _inspectorProxyClick('.collider-btn'));
+  document.getElementById('ce-prop-vis').addEventListener('click', () => _inspectorProxyClick('.vis-btn'));
+  document.getElementById('ce-prop-anim').addEventListener('click', () => _inspectorProxyClick('.play-btn'));
   document.getElementById('ce-close').addEventListener('click', () => {
     if (transformControls) transformControls.detach();
     gizmoTarget = null;
