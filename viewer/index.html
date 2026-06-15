@@ -1105,6 +1105,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';   // clone modelli (anche animati/skinned)
 
 // ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
 // In play: niente strumenti di editing, niente scrittura su localStorage,
@@ -4809,6 +4810,9 @@ async function init() {
     // Ctrl/Cmd+Z = annulla (solo in editor)
     if (EDIT_MODE && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); doUndo(); return; }
 
+    // Ctrl/Cmd+D = duplica l'oggetto selezionato (solo in editor)
+    if (EDIT_MODE && (e.ctrlKey || e.metaKey) && e.code === 'KeyD') { e.preventDefault(); duplicateSelected(); return; }
+
     keys[e.code] = true;
     document.getElementById('instructions').style.display = 'none';
 
@@ -5965,6 +5969,70 @@ function deleteSelected() {
   const tr = questTriggers.find(t => t.group === g);                         if (tr) { removeQuestTrigger(tr); return true; }
   return false;
 }
+
+// Nome univoco per le copie (i nomi sono chiavi di posizione/collider)
+function uniqueCharName(base) {
+  const exists = nm => gltfCharacters.some(c => c.name === nm);
+  if (!exists(base)) return base;
+  let n = 2; while (exists(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
+}
+
+// Duplica un modello/personaggio (clona anche scheletro e animazione). Con undo.
+function duplicateGltfCharacter(ch) {
+  const parent = ch.root.parent || scene;
+  const clone = SkeletonUtils.clone(ch.root);
+  clone.name = uniqueCharName(`${ch.name} (copia)`);
+  clone.userData.gizmoName = clone.name;
+  clone.position.x += 1;          // piccolo offset per distinguere la copia
+  parent.add(clone);
+  let action = null;
+  if (ch.action) {                // ricrea mixer+clip sul clone così si anima da solo
+    const clip = ch.action.getClip();
+    const mixer = new THREE.AnimationMixer(clone);
+    action = mixer.clipAction(clip);
+    action.reset(); action.setLoop(THREE.LoopRepeat); action.play();
+    animationMixers.push({ mixer, clips: [clip] });
+  }
+  const copy = { name: clone.name, root: clone, action };
+  gltfCharacters.push(copy);
+  appendCharacterRow(copy, null, false);
+  updateModelsHeader();
+  selectProjectModel(copy);       // la copia nasce già selezionata, pronta da spostare
+  showNotification(`⧉ ${ch.name} duplicato`);
+  undoStack.push(() => {
+    if (action) action.stop();
+    parent.remove(clone);
+    const i = gltfCharacters.indexOf(copy); if (i !== -1) gltfCharacters.splice(i, 1);
+    if (copy._row) copy._row.remove();
+    if (gizmoTarget === clone) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+    updateModelsHeader();
+  });
+  if (undoStack.length > 60) undoStack.shift();
+  return copy;
+}
+
+// Duplica l'oggetto selezionato (Ctrl/Cmd+D). Solo editor. Modelli e oggetti "+".
+function duplicateSelected() {
+  if (!EDIT_MODE || _previewMode) return false;
+  // user-object (lo sfondo 360° è unico: non si duplica)
+  const uo = _uoSelected || (gizmoTarget && userObjects.find(o => o.group === gizmoTarget));
+  if (uo && uo.type !== 'bg360') {
+    const data = uoToData(uo); data.id = null;     // nuovo id
+    if (data.pos) data.pos = [data.pos[0] + 1, data.pos[1], data.pos[2]];
+    const wasOwn = uo.own;
+    addUserObject(data, { own: wasOwn, fresh: true }).then(copy => {
+      if (copy) { undoStack.push(() => removeUserObject(copy)); if (undoStack.length > 60) undoStack.shift(); }
+    });
+    showNotification(`⧉ ${uo.name || 'oggetto'} duplicato`);
+    return true;
+  }
+  const g = gizmoTarget;
+  if (!g) return false;
+  const ch = gltfCharacters.find(c => c.root === g);
+  if (ch) { duplicateGltfCharacter(ch); return true; }
+  return false;   // i marker (teleport/entrata/…) per ora non si duplicano
+}
 function applyCoordEditorValues() {           // imposta solo la posizione (no persist)
   if (!gizmoTarget) return false;
   const x = parseFloat(document.getElementById('ce-x').value);
@@ -6466,54 +6534,61 @@ function addCharactersToPanel() {
   list.appendChild(header);
   _modelsHeaderEl = header;
 
-  for (const ch of gltfCharacters) {
-    const item = document.createElement('div');
-    item.className = 'model-item char-panel-row';
-    item.dataset.modelName = ch.name;
-    item.title = 'Clicca per selezionare nella scena';
-    ch._row = item;   // riferimento alla riga (per cancellare da tastiera)
-    // blu = animato (ha una clip), verde = statico
-    item.innerHTML =
-      `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
-      + `<span class="model-name">${ch.name}</span>`
-      + `<button class="collider-btn" title="Solido: il giocatore ci cammina sopra / non lo attraversa">${SVG_WALL}</button>`
-      + `<button class="vis-btn"      title="Mostra / nascondi nell'editor">${SVG_EYE}</button>`
-      + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">${SVG_PAUSE}</button>` : '')
-      + `<button class="delete-btn"   title="Rimuovi dalla scena">${SVG_TRASH}</button>`;
+  for (const ch of gltfCharacters) appendCharacterRow(ch, list, true);
+}
 
-    // Click sulla riga = seleziona soltanto (gizmo + contorno giallo). Per inquadrare: tasto F.
-    item.addEventListener('click', () => { selectProjectModel(ch); });
+// Crea e aggiunge la riga di UN personaggio (senza ricostruire l'intera lista).
+// restoreCollider = applica il collider da SCENE_CONFIG (solo al primo build, non per le copie).
+function appendCharacterRow(ch, list, restoreCollider) {
+  list = list || document.getElementById('models-list');
+  if (!list) return null;
+  const item = document.createElement('div');
+  item.className = 'model-item char-panel-row';
+  item.dataset.modelName = ch.name;
+  item.title = 'Clicca per selezionare nella scena';
+  ch._row = item;   // riferimento alla riga (per cancellare/duplicare da tastiera)
+  // blu = animato (ha una clip), verde = statico
+  item.innerHTML =
+    `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
+    + `<span class="model-name">${ch.name}</span>`
+    + `<button class="collider-btn" title="Solido: il giocatore ci cammina sopra / non lo attraversa">${SVG_WALL}</button>`
+    + `<button class="vis-btn"      title="Mostra / nascondi nell'editor">${SVG_EYE}</button>`
+    + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">${SVG_PAUSE}</button>` : '')
+    + `<button class="delete-btn"   title="Rimuovi dalla scena">${SVG_TRASH}</button>`;
 
-    const cob = item.querySelector('.collider-btn');
-    cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
-    if ((SCENE_CONFIG.colliders || []).includes(ch.name)) toggleCollider(ch.root, cob); // ripristina
+  // Click sulla riga = seleziona soltanto (gizmo + contorno giallo). Per inquadrare: tasto F.
+  item.addEventListener('click', () => { selectProjectModel(ch); });
 
-    const vb = item.querySelector('.vis-btn');
-    vb.addEventListener('click', e => {
+  const cob = item.querySelector('.collider-btn');
+  cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
+  if (restoreCollider && (SCENE_CONFIG.colliders || []).includes(ch.name)) toggleCollider(ch.root, cob); // ripristina
+
+  const vb = item.querySelector('.vis-btn');
+  vb.addEventListener('click', e => {
+    e.stopPropagation();
+    ch.root.visible = !ch.root.visible;
+    vb.classList.toggle('off', !ch.root.visible);
+    vb.innerHTML = ch.root.visible ? SVG_EYE : SVG_EYE_OFF;
+  });
+
+  const pb = item.querySelector('.play-btn');
+  if (pb) {
+    ch._playBtn = pb;
+    pb.addEventListener('click', e => {
       e.stopPropagation();
-      ch.root.visible = !ch.root.visible;
-      vb.classList.toggle('off', !ch.root.visible);
-      vb.innerHTML = ch.root.visible ? SVG_EYE : SVG_EYE_OFF;
+      ch.action.paused = !ch.action.paused;
+      pb.classList.toggle('playing', !ch.action.paused);
+      pb.innerHTML = ch.action.paused ? SVG_PLAY : SVG_PAUSE;
     });
-
-    const pb = item.querySelector('.play-btn');
-    if (pb) {
-      ch._playBtn = pb;
-      pb.addEventListener('click', e => {
-        e.stopPropagation();
-        ch.action.paused = !ch.action.paused;
-        pb.classList.toggle('playing', !ch.action.paused);
-        pb.innerHTML = ch.action.paused ? SVG_PLAY : SVG_PAUSE;
-      });
-    }
-
-    item.querySelector('.delete-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      deleteGltfCharacter(ch);   // cancellazione con undo (Ctrl+Z)
-    });
-
-    list.appendChild(item);
   }
+
+  item.querySelector('.delete-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    deleteGltfCharacter(ch);   // cancellazione con undo (Ctrl+Z)
+  });
+
+  list.appendChild(item);
+  return item;
 }
 
 // ─── Centro utile della scena (usato da vista aerea) ─────────────────────
