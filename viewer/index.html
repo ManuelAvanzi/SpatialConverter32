@@ -479,7 +479,7 @@
     body.preview-mode #btn-models, body.preview-mode #btn-entrance, body.preview-mode #btn-audio,
     body.preview-mode #btn-save-top, body.preview-mode #btn-exit-editor,
     body.preview-mode #models-panel, body.preview-mode #add-fab, body.preview-mode #add-menu,
-    body.preview-mode #scene-vitals {
+    body.preview-mode #coord-editor, body.preview-mode #scene-vitals {
       opacity: .35; pointer-events: none; transition: opacity .2s;
     }
     /* il bottone Anteprima resta vivo per poter uscire */
@@ -564,9 +564,10 @@
       width: 304px;
       background: rgba(10,14,20,.86); backdrop-filter: blur(10px);
       border-left: 1px solid rgba(255,255,255,.1); border-radius: 0;
-      padding: 12px 14px; color: #fff; z-index: 41; display: none;
+      padding: 12px 14px; color: #fff; z-index: 41; display: block;
       font-size: .74rem; overflow-y: auto;
     }
+    #insp-empty { color: #6b7a8d; font-size: .74rem; text-align: center; padding: 28px 10px; line-height: 1.6; }
     #coord-editor::before {
       content: 'Inspector'; display: block; font-size: .68rem; text-transform: uppercase;
       letter-spacing: .08em; color: #8ea0b8; font-weight: 700; margin-bottom: 9px;
@@ -1100,6 +1101,8 @@
 
 <!-- Editor coordinate manuale (appare con il gizmo) -->
 <div id="coord-editor">
+  <div id="insp-empty">Seleziona un oggetto<br>per vederne le proprietà</div>
+  <div id="insp-content" style="display:none">
   <div class="insp-head">
     <input type="checkbox" id="insp-active" checked title="Attiva / spegni l'oggetto">
     <svg class="insp-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
@@ -1126,6 +1129,7 @@
   <div id="ce-props" class="ce-props" style="display:none">
     <button id="ce-prop-collider" class="ce-prop" title="Mesh collider: il giocatore ci cammina sopra / non lo attraversa">Solido</button>
     <button id="ce-prop-anim" class="ce-prop" title="Pausa / riprendi animazione">Animazione</button>
+  </div>
   </div>
 </div>
 
@@ -5957,11 +5961,18 @@ function showCoordEditor(obj, name) {
   document.getElementById('ce-name').textContent = name || 'oggetto';
   updateCoordEditorFields(obj);
   setGizmoMode('translate');   // ogni volta riparte da Sposta
-  document.getElementById('coord-editor').style.display = 'block';
+  // l'Inspector è sempre visibile: mostro il contenuto, nascondo lo stato vuoto
+  document.getElementById('insp-content').style.display = 'block';
+  document.getElementById('insp-empty').style.display = 'none';
   _inspectorModel = null;                    // niente caratteristiche di default (le imposta selectProjectModel)
   refreshInspectorProps();
 }
-function hideCoordEditor() { document.getElementById('coord-editor').style.display = 'none'; _inspectorModel = null; }
+// "Chiude" l'Inspector mostrando lo stato vuoto (il pannello resta sempre aperto, stile Unity)
+function hideCoordEditor() {
+  document.getElementById('insp-content').style.display = 'none';
+  document.getElementById('insp-empty').style.display = 'block';
+  _inspectorModel = null;
+}
 
 // Header + sezione "Caratteristiche" dell'Inspector. Il checkbox "attivo" riflette
 // la visibilità; le caratteristiche (Solido/Animazione) solo per i modelli.
