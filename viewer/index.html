@@ -4433,6 +4433,47 @@ function selectUserObject(o) {
   if (row && typeof expandSectionFor === 'function') expandSectionFor(row);
 }
 
+// ── Click-to-select dei modelli del progetto (stile Unity) ──
+// Clicchi una mesh nella scena → seleziona il modello: gizmo + coordinate + contorno giallo.
+function pickProjectModel(clientX, clientY) {
+  if (!gltfCharacters.length) return null;
+  const meshes = [];
+  for (const ch of gltfCharacters) if (ch.root && ch.root.visible) ch.root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  if (!meshes.length) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _qNdc.x = ((clientX - r.left) / r.width) * 2 - 1;
+  _qNdc.y = -((clientY - r.top) / r.height) * 2 + 1;
+  _qRay.setFromCamera(_qNdc, viewCam());
+  const hits = _qRay.intersectObjects(meshes, false);
+  if (!hits.length) return null;
+  let n = hits[0].object;
+  while (n) { const ch = gltfCharacters.find(c => c.root === n); if (ch) return ch; n = n.parent; }
+  return null;
+}
+function selectProjectModel(ch) {
+  if (!ch || !ch.root) return;
+  captureUndo(ch.root);
+  transformControls.attach(ch.root); gizmoTarget = ch.root;
+  showCoordEditor(ch.root, ch.name);
+  showNotification(`✥ ${ch.name} — trascina o usa le coordinate`);
+}
+
+// ── Contorno giallo dell'oggetto selezionato (BoxHelper, non distruttivo) ──
+let _selBox = null, _selBoxTarget = null;
+function updateSelectionHighlight() {
+  const t = (EDIT_MODE && !_previewMode && gizmoTarget) ? gizmoTarget : null;
+  if (t !== _selBoxTarget) {
+    if (_selBox) { scene.remove(_selBox); _selBox.geometry.dispose(); _selBox = null; }
+    _selBoxTarget = t;
+    if (t) {
+      _selBox = new THREE.BoxHelper(t, 0xffd400);
+      _selBox.material.depthTest = false; _selBox.material.transparent = true; _selBox.renderOrder = 997;
+      scene.add(_selBox);
+    }
+  }
+  if (_selBox && t && gizmoDragging) _selBox.update();   // segue l'oggetto mentre lo trasformi
+}
+
 // ── Wiring UI (FAB, menu, input, modali) ──
 (function setupUserObjectsUI() {
   const fab = document.getElementById('add-fab'), menu = document.getElementById('add-menu');
@@ -4656,8 +4697,13 @@ async function init() {
         if (!interactUserObject(up.o, up.hit, false)) selectUserObject(up.o);
         isDragging = false; return;
       }
+      // Modelli del progetto: clic sulla mesh → seleziona (gizmo + contorno giallo)
+      const pm = pickProjectModel(e.clientX, e.clientY);
+      if (pm) { selectProjectModel(pm); isDragging = false; return; }
       // Click sul terreno = teletrasporto (anche in editor, dopo i pick)
       if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
+      // Clic sul vuoto → deseleziona (come Unity)
+      if (gizmoTarget) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
     }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
@@ -6885,6 +6931,7 @@ function animate(timestamp, frame) {
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
   checkActionZones();     // zone-azione (es. siediti alla poltrona → compare il menù)
   if (!inPlay()) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato (non in anteprima)
+  updateSelectionHighlight();   // contorno giallo dell'oggetto selezionato (editor)
   if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
 
