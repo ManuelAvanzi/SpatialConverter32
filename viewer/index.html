@@ -582,16 +582,22 @@
     #coord-editor .ce-actions button:hover { background: rgba(255,159,74,.45); }
     #coord-editor #ce-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #ccc; }
 
-    /* Pannello modelli — a sinistra, scrollabile */
+    /* Gerarchia — dock fisso a sinistra (stile Unity), aperto di default in editor */
     #models-panel {
-      position: fixed; top: 20px; left: 20px;
-      background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
-      padding: 12px 16px; color: #fff; z-index: 20;
-      min-width: 320px; max-width: 440px;
-      max-height: calc(100vh - 40px); overflow-y: auto;
-      display: none;
+      position: fixed; top: 64px; left: 12px; bottom: 12px;
+      width: 296px; min-width: 296px; max-width: 296px;
+      background: rgba(10,14,20,.82); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
+      padding: 10px 12px; color: #fff; z-index: 20;
+      overflow-y: auto;
+      display: block;
     }
+    /* Intestazione del dock */
+    #hierarchy-title {
+      font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+      color: #8ea0b8; font-weight: 700; padding: 2px 2px 9px; display: flex; align-items: center; gap: 7px;
+    }
+    #hierarchy-title svg { width: 15px; height: 15px; }
     #models-panel h3 { font-size: .75rem; color: #ffd400; opacity: 1; text-transform: uppercase;
       letter-spacing: .06em; margin-bottom: 10px; }
     #models-panel::-webkit-scrollbar { width: 4px; }
@@ -862,6 +868,7 @@
 
 <!-- Pannello menu (modelli + spatial features) -->
 <div id="models-panel">
+  <div id="hierarchy-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="13" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>Gerarchia</div>
   <div class="menu-tabs">
     <button class="menu-tab active" data-tab="models">📦 Modelli</button>
     <button class="menu-tab"        data-tab="spatial">🌀 Spatial</button>
@@ -4870,10 +4877,13 @@ async function init() {
   // ── Pulsante Modelli ─────────────────────────────────────────────────────
   document.getElementById('btn-models').addEventListener('click', () => {
     const panel = document.getElementById('models-panel');
-    const isVisible = panel.style.display === 'block';
+    const isVisible = getComputedStyle(panel).display !== 'none';
     panel.style.display = isVisible ? 'none' : 'block';
     document.getElementById('btn-models').classList.toggle('active', !isVisible);
   });
+  // stato iniziale del pulsante: il dock Gerarchia è aperto di default in editor
+  document.getElementById('btn-models').classList.toggle('active',
+    getComputedStyle(document.getElementById('models-panel')).display !== 'none');
 
   // ── Tab del menu (Modelli / Spatial) ──────────────────────────────────────
   document.querySelectorAll('.menu-tab').forEach(tab =>
