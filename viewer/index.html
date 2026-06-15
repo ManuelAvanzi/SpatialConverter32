@@ -598,8 +598,11 @@
     #models-panel::-webkit-scrollbar-track { background: transparent; }
     #models-panel::-webkit-scrollbar-thumb { background: rgba(255,212,0,.35); border-radius: 2px; }
     .model-item { display: flex; align-items: center; gap: 8px;
-      font-size: .82rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+      font-size: .82rem; padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.06);
+      border-radius: 6px; cursor: pointer; transition: background .12s; }
     .model-item:last-child { border-bottom: none; }
+    .model-item.char-panel-row:hover { background: rgba(255,255,255,.06); }
+    .model-item.selected { background: rgba(255,204,0,.16); box-shadow: inset 2px 0 0 #ffcc00; }
     .model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .model-info { opacity: .55; font-size: .72rem; }
     .model-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1073,7 +1076,6 @@
   </div>
   <div class="ce-actions">
     <button id="ce-apply">Applica &amp; salva</button>
-    <button id="ce-here">Porta davanti a me</button>
     <button id="ce-close">Chiudi</button>
   </div>
 </div>
@@ -1098,6 +1100,10 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
 // ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
@@ -4455,23 +4461,56 @@ function selectProjectModel(ch) {
   captureUndo(ch.root);
   transformControls.attach(ch.root); gizmoTarget = ch.root;
   showCoordEditor(ch.root, ch.name);
+  // evidenzia la riga corrispondente nella lista
+  document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`#models-list .model-item[data-model-name="${(ch.name || '').replace(/"/g, '\\"')}"]`);
+  if (row) row.classList.add('selected');
   showNotification(`✥ ${ch.name} — trascina o usa le coordinate`);
 }
-
-// ── Contorno giallo dell'oggetto selezionato (BoxHelper, non distruttivo) ──
-let _selBox = null, _selBoxTarget = null;
-function updateSelectionHighlight() {
-  const t = (EDIT_MODE && !_previewMode && gizmoTarget) ? gizmoTarget : null;
-  if (t !== _selBoxTarget) {
-    if (_selBox) { scene.remove(_selBox); _selBox.geometry.dispose(); _selBox = null; }
-    _selBoxTarget = t;
-    if (t) {
-      _selBox = new THREE.BoxHelper(t, 0xffd400);
-      _selBox.material.depthTest = false; _selBox.material.transparent = true; _selBox.renderOrder = 997;
-      scene.add(_selBox);
-    }
+// Inquadra un oggetto: centra la vista (orbit) o si avvicina (fps) senza perdere la modalità
+function frameObject(root) {
+  if (!root) return;
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const dist = Math.max(size.x, size.y, size.z, 1.5) * 2.2;
+  if (cameraMode === 'overhead' && orbitControls) {
+    orbitControls.target.copy(center);
+    camera.position.set(center.x + dist * 0.5, center.y + dist * 0.55, center.z + dist * 0.6);
+    orbitControls.update();
+  } else {
+    camera.position.set(center.x, center.y + 1.6, center.z + dist);
+    cameraYaw = 0; cameraPitch = 0;
+    camera.rotation.order = 'YXZ'; camera.rotation.y = 0; camera.rotation.x = 0;
   }
-  if (_selBox && t && gizmoDragging) _selBox.update();   // segue l'oggetto mentre lo trasformi
+}
+
+// ── Contorno giallo a SAGOMA dell'oggetto selezionato (stile Twinmotion) ──
+// OutlinePass: traccia il bordo seguendo la silhouette dell'oggetto, non un box.
+// Attivo SOLO nell'editor (in play/anteprima/VR si usa il render normale → nessun
+// impatto sul visore). Composer creato pigro al primo uso.
+let _composer = null, _renderPass = null, _outlinePass = null;
+function ensureEditComposer() {
+  if (_composer || !EDIT_MODE) return _composer;
+  _composer = new EffectComposer(renderer);
+  _renderPass = new RenderPass(scene, camera);
+  _composer.addPass(_renderPass);
+  _outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+  _outlinePass.edgeStrength = 5;
+  _outlinePass.edgeGlow = 0.3;
+  _outlinePass.edgeThickness = 1.6;
+  _outlinePass.pulsePeriod = 0;
+  _outlinePass.visibleEdgeColor.set('#ffcc00');
+  _outlinePass.hiddenEdgeColor.set('#b88a00');   // bordo visibile anche dietro i muri (più tenue)
+  _composer.addPass(_outlinePass);
+  _composer.addPass(new OutputPass());
+  _composer.setSize(window.innerWidth, window.innerHeight);
+  return _composer;
+}
+// Quali oggetti evidenziare (solo editor, non in anteprima): l'oggetto selezionato
+function selectionTargets() {
+  return (EDIT_MODE && !_previewMode && gizmoTarget) ? [gizmoTarget] : [];
 }
 
 // ── Wiring UI (FAB, menu, input, modali) ──
@@ -4703,7 +4742,10 @@ async function init() {
       // Click sul terreno = teletrasporto (anche in editor, dopo i pick)
       if (_clickTeleport && cameraMode === 'fps' && clickTeleportAt(e.clientX, e.clientY)) { isDragging = false; return; }
       // Clic sul vuoto → deseleziona (come Unity)
-      if (gizmoTarget) { transformControls.detach(); gizmoTarget = null; hideCoordEditor(); }
+      if (gizmoTarget) {
+        transformControls.detach(); gizmoTarget = null; hideCoordEditor();
+        document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
+      }
     }
     // Se il mouse non si è mosso = click → interagisci
     if (!dragMoved) onInteract();
@@ -4793,6 +4835,7 @@ async function init() {
     camera.updateProjectionMatrix();
     if (followCam) { followCam.aspect = camera.aspect; followCam.updateProjectionMatrix(); }
     renderer.setSize(window.innerWidth, window.innerHeight);
+    if (_composer) _composer.setSize(window.innerWidth, window.innerHeight);
   });
 
   // WebXR VR
@@ -5918,18 +5961,11 @@ function setupCoordEditor() {
   document.getElementById('ce-mode-s').addEventListener('click', () => setGizmoMode('scale', 'ce-mode-s'));
   document.getElementById('ce-apply').addEventListener('click', applyCoordEditor);
   document.getElementById('ce-close').addEventListener('click', () => {
-    if (gizmoTarget) toggleGizmo(gizmoTarget, null);
-  });
-  // "Porta davanti a me": utile per oggetti lontanissimi (es. Z 39780)
-  document.getElementById('ce-here').addEventListener('click', () => {
-    if (!gizmoTarget) return;
-    captureUndo(gizmoTarget);
-    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
-    const p = camera.position.clone().add(fwd.multiplyScalar(5));
-    gizmoTarget.position.set(p.x, 0, p.z);   // a terra, 5m davanti
-    updateCoordEditorFields(gizmoTarget);
-    persistGizmoTarget(gizmoTarget);
-    showNotification('Portato davanti alla camera');
+    if (transformControls) transformControls.detach();
+    gizmoTarget = null;
+    hideCoordEditor();
+    document.querySelectorAll('.gizmo-btn, .tp-target-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#models-list .model-item.selected').forEach(r => r.classList.remove('selected'));
   });
 }
 
@@ -6355,30 +6391,19 @@ function addCharactersToPanel() {
   for (const ch of gltfCharacters) {
     const item = document.createElement('div');
     item.className = 'model-item char-panel-row';
+    item.dataset.modelName = ch.name;
+    item.title = 'Clicca per selezionare nella scena';
     // blu = animato (ha una clip), verde = statico
     item.innerHTML =
       `<div class="model-dot" style="background:${ch.action ? '#4a9eff' : '#4aff8a'}"></div>`
       + `<span class="model-name">${ch.name}</span>`
-      + `<button class="goto-btn"     title="Vai all'oggetto">${SVG_LOCATE}</button>`
-      + `<button class="gizmo-btn"    title="Sposta / Ruota / Scala col gizmo">${SVG_MOVE}</button>`
       + `<button class="collider-btn" title="Solido: il giocatore ci cammina sopra / non lo attraversa">${SVG_WALL}</button>`
       + `<button class="vis-btn"      title="Mostra / nascondi nell'editor">${SVG_EYE}</button>`
       + (ch.action ? `<button class="play-btn playing" title="Pausa/Riprendi">${SVG_PAUSE}</button>` : '')
       + `<button class="delete-btn"   title="Rimuovi dalla scena">${SVG_TRASH}</button>`;
 
-    item.querySelector('.goto-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      if (cameraMode !== 'fps') toggleOverhead();
-      const p = ch.root.getWorldPosition(new THREE.Vector3());
-      camera.position.set(p.x, p.y + 1.7, p.z + 4);
-      cameraYaw = 0; cameraPitch = 0;
-      camera.rotation.order = 'YXZ';
-      camera.rotation.y = 0; camera.rotation.x = 0;
-      showNotification(`📍 ${ch.name}`);
-    });
-
-    const gb = item.querySelector('.gizmo-btn');
-    gb.addEventListener('click', e => { e.stopPropagation(); toggleGizmo(ch.root, gb); });
+    // Click sulla riga = seleziona l'oggetto nella scena (gizmo + contorno giallo) e lo inquadra
+    item.addEventListener('click', () => { frameObject(ch.root); selectProjectModel(ch); });
 
     const cob = item.querySelector('.collider-btn');
     cob.addEventListener('click', e => { e.stopPropagation(); toggleCollider(ch.root, cob); });
@@ -6931,7 +6956,6 @@ function animate(timestamp, frame) {
   checkQuestTriggers();   // zone-trigger delle quest (camminandoci dentro spunta la task)
   checkActionZones();     // zone-azione (es. siediti alla poltrona → compare il menù)
   if (!inPlay()) refreshSelectionRings();   // anelli raggio solo sull'oggetto selezionato (non in anteprima)
-  updateSelectionHighlight();   // contorno giallo dell'oggetto selezionato (editor)
   if (_questVrPanel) _questVrPanel.visible = renderer.xr.isPresenting && quests.some(q => q.tasks.length);
 
 
@@ -6948,7 +6972,17 @@ function animate(timestamp, frame) {
   animateUserObjects(t);
 
   updateThirdPerson(delta);
-  renderer.render(scene, viewCam());
+  // In editor (non anteprima) renderizzo col composer per il contorno a sagoma (OutlinePass);
+  // in play/anteprima/VR uso il render normale (nessun impatto sul visore).
+  const _cam = viewCam();
+  if (EDIT_MODE && !_previewMode && !renderer.xr.isPresenting) {
+    const comp = ensureEditComposer();
+    _renderPass.camera = _cam; _outlinePass.renderCamera = _cam;
+    _outlinePass.selectedObjects = selectionTargets();
+    comp.render();
+  } else {
+    renderer.render(scene, _cam);
+  }
   _vitFrames++;   // contatore per il pannello Scene Vitals
 }
 
