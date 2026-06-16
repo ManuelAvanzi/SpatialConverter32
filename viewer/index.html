@@ -111,18 +111,20 @@
       color: #d7c4ff; border-radius: 6px; padding: 8px; cursor: pointer; font-size: .78rem;
       font-weight: 600; margin-bottom: 8px; transition: background .15s; }
     .import-unity-btn:hover { background: rgba(180,120,255,.32); }
-    /* Sezioni a scomparsa della tab Spatial */
-    #tab-spatial .sec { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.07); padding-top: 8px; }
-    #tab-spatial .sec:first-of-type { border-top: none; padding-top: 0; }
-    #tab-spatial .sec-head { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+    /* Sezioni a scomparsa (tab Spatial + tab Scena) */
+    #tab-spatial .sec, #tab-light .sec { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.07); padding-top: 8px; }
+    #tab-spatial .sec:first-of-type, #tab-light .sec:first-of-type { border-top: none; padding-top: 0; }
+    #tab-spatial .sec-head, #tab-light .sec-head { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
       padding: 3px 2px; border-radius: 6px; }
-    #tab-spatial .sec-head:hover { background: rgba(255,255,255,.05); }
+    #tab-spatial .sec-head:hover, #tab-light .sec-head:hover { background: rgba(255,255,255,.05); }
+    /* nella tab Scena le intestazioni di sezione sono in stile "titolo" oro come ILLUMINAZIONE */
+    #tab-light .sec-head { font-size: .75rem; color: #ffd400; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; font-weight: 600; }
     #tab-spatial .sec-count { background: rgba(74,158,255,.18); border: 1px solid rgba(74,158,255,.35);
       color: #9fccff; border-radius: 999px; padding: 0 7px; font-size: .66rem; font-weight: 700; line-height: 1.5; }
     #tab-spatial .sec-count:empty { display: none; }
-    #tab-spatial .sec-arrow { margin-left: auto; color: #8ea0b8; font-size: .7rem; transition: transform .15s; }
-    #tab-spatial .sec.collapsed .sec-arrow { transform: rotate(-90deg); }
-    #tab-spatial .sec.collapsed .sec-body { display: none; }
+    #tab-spatial .sec-arrow, #tab-light .sec-arrow { margin-left: auto; color: #8ea0b8; font-size: .7rem; transition: transform .15s; }
+    #tab-spatial .sec.collapsed .sec-arrow, #tab-light .sec.collapsed .sec-arrow { transform: rotate(-90deg); }
+    #tab-spatial .sec.collapsed .sec-body, #tab-light .sec.collapsed .sec-body { display: none; }
     .av-row { display: flex; align-items: center; gap: 10px; font-size: .76rem; color: #cdd6e6; margin-bottom: 6px; }
     .av-row label { width: 60px; opacity: .7; }
     .av-row input[type=color] { width: 46px; height: 26px; border: 1px solid rgba(255,255,255,.2);
@@ -919,13 +921,44 @@
     <button class="menu-tab"        data-tab="settings" title="Opzioni" aria-label="Opzioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
   <div id="tab-light" class="menu-tab-content">
-    <div class="lp-section">
-      <div class="lp-section-title">Preset ambiente</div>
+    <div class="sec" data-sec="env">
+      <h3 class="sec-head">Preset ambiente <span class="sec-arrow">▾</span></h3>
+      <div class="sec-body">
       <div class="lp-presets">
         <button class="preset-btn env-btn" data-env="sea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><path d="M2 6c2 0 2 1.6 4 1.6S8 6 10 6s2 1.6 4 1.6S16 6 18 6s2 1.6 4 1.6"/><path d="M2 12c2 0 2 1.6 4 1.6S8 12 10 12s2 1.6 4 1.6S16 12 18 12s2 1.6 4 1.6"/><path d="M2 18c2 0 2 1.6 4 1.6S8 18 10 18s2 1.6 4 1.6S16 18 18 18s2 1.6 4 1.6"/></svg>Mare</button>
         <button class="preset-btn env-btn active" data-env="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>Nessuno</button>
       </div>
-      <div class="sf-hint">Mare = piano d'acqua animato a quota 0, come nel demo. Salvato col progetto.</div>
+      <div class="sf-hint">Mare = piano d'acqua animato. Regola i parametri qui sotto; salvati col progetto.</div>
+      <div id="sea-params" style="display:none">
+        <div class="lp-section-title" style="margin-top:10px">Parametri mare</div>
+        <div class="lp-row">
+          <label>Livello</label>
+          <input type="range" id="sea-level" min="-30" max="30" step="0.5" value="0" class="lp-slider">
+          <span id="sea-level-val" class="lp-val">0 m</span>
+        </div>
+        <div class="lp-row">
+          <label>Colore</label>
+          <input type="color" id="sea-color" value="#06283c" class="lp-color">
+          <span class="lp-val" style="opacity:.35">acqua</span>
+        </div>
+        <div class="lp-row">
+          <label>Increspatura</label>
+          <input type="range" id="sea-distort" min="0" max="8" step="0.1" value="3.6" class="lp-slider">
+          <span id="sea-distort-val" class="lp-val">3.6</span>
+        </div>
+        <div class="lp-row">
+          <label>Scala onde</label>
+          <input type="range" id="sea-size" min="0.5" max="10" step="0.1" value="1" class="lp-slider">
+          <span id="sea-size-val" class="lp-val">1.0</span>
+        </div>
+        <div class="lp-row">
+          <label>Velocità</label>
+          <input type="range" id="sea-speed" min="0" max="3" step="0.05" value="1" class="lp-slider">
+          <span id="sea-speed-val" class="lp-val">1.00</span>
+        </div>
+        <button class="preset-btn" id="sea-reset" style="width:100%;margin-top:6px">Ripristina valori demo</button>
+      </div>
+      </div>
     </div>
     <!-- #lighting-panel adottato qui sotto al boot -->
   </div>
@@ -1039,7 +1072,9 @@
 
 <!-- Pannello illuminazione -->
 <div id="lighting-panel">
-  <h3>☀️ Illuminazione</h3>
+  <div class="sec" data-sec="lighting">
+  <h3 class="sec-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Illuminazione <span class="sec-arrow">▾</span></h3>
+  <div class="sec-body">
 
   <div class="lp-section">
     <div class="lp-section-title">Preset cielo</div>
@@ -1048,6 +1083,7 @@
       <button class="preset-btn"        data-preset="sunset">🌅 Tramonto</button>
       <button class="preset-btn"        data-preset="night">🌙 Notte</button>
       <button class="preset-btn"        data-preset="overcast">☁️ Nuvoloso</button>
+      <button class="preset-btn" data-preset="marine" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><circle cx="17" cy="7" r="3"/><path d="M2 14c2 0 2 1.6 4 1.6S8 14 10 14s2 1.6 4 1.6S16 14 18 14s2 1.6 4 1.6"/><path d="M2 19c2 0 2 1.6 4 1.6S8 19 10 19s2 1.6 4 1.6S16 19 18 19s2 1.6 4 1.6"/></svg>Marino (porto)</button>
     </div>
   </div>
 
@@ -1120,6 +1156,8 @@
       <input type="range" id="lp-fog-dens" min="0.001" max="0.04" step="0.001" value="0.008" class="lp-slider">
       <span id="lp-fog-dens-val" class="lp-val">0.008</span>
     </div>
+  </div>
+  </div>
   </div>
 </div>
 <div id="instructions">
@@ -1224,7 +1262,11 @@ let scene, camera, renderer;
 let ambientLight = null;   // accessibile dal pannello illuminazione
 let dirLight     = null;   // sole direzionale
 let _waterMesh = null, _waterNormals = null;   // preset ambiente "Mare"
-// Preset ambiente "Mare": aggiunge/toglie il piano d'acqua animato (quota 0), come nel demo porto
+let _seaSpeed = 1;                              // moltiplicatore velocità onde (slider)
+const SEA_DEFAULTS = { level: 0, color: '#06283c', distortion: 3.6, size: 1, speed: 1 };
+let _seaParams = Object.assign({}, SEA_DEFAULTS);   // parametri correnti del mare (persistiti nel progetto)
+// Preset ambiente "Mare": aggiunge/toglie il piano d'acqua animato, come nel demo porto.
+// I parametri regolabili (livello, colore, increspatura, scala onde, velocità) vivono in _seaParams.
 function setSeaEnvironment(on) {
   if (on) {
     if (!_waterMesh) {
@@ -1233,20 +1275,45 @@ function setSeaEnvironment(on) {
         t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
       _waterMesh = new Water(new THREE.PlaneGeometry(8000, 8000), {
         textureWidth: 512, textureHeight: 512, waterNormals: _waterNormals,
-        sunDirection: new THREE.Vector3(), sunColor: 0xffffff, waterColor: 0x06283c,
-        distortionScale: 3.6, fog: !!(scene && scene.fog) });
+        sunDirection: new THREE.Vector3(), sunColor: 0xffffff,
+        waterColor: new THREE.Color(_seaParams.color).getHex(),
+        distortionScale: _seaParams.distortion, size: _seaParams.size,
+        fog: !!(scene && scene.fog) });
       _waterMesh.rotation.x = -Math.PI / 2;
-      _waterMesh.position.y = 0;
       _waterMesh.renderOrder = -1;
       _waterMesh.userData.isSea = true;   // escluso da selezione/collider/export
     }
     if (dirLight) _waterMesh.material.uniforms['sunDirection'].value.copy(dirLight.position).normalize();
     if (scene && !_waterMesh.parent) scene.add(_waterMesh);
+    applySeaParams();
   } else if (_waterMesh && _waterMesh.parent) {
     scene.remove(_waterMesh);
   }
+  const sp = document.getElementById('sea-params');
+  if (sp) sp.style.display = on ? '' : 'none';
+  syncSeaUI();
   document.querySelectorAll('.env-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.env === (on ? 'sea' : 'none')));
+}
+// Spinge i valori di _seaParams sul piano d'acqua (effetto live)
+function applySeaParams() {
+  if (!_waterMesh) return;
+  const u = _waterMesh.material.uniforms;
+  _waterMesh.position.y = _seaParams.level;
+  u['waterColor'].value.set(_seaParams.color);
+  u['distortionScale'].value = _seaParams.distortion;
+  u['size'].value = _seaParams.size;
+  _seaSpeed = _seaParams.speed;
+}
+// Allinea slider ed etichette del pannello allo stato corrente
+function syncSeaUI() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const lbl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('sea-level', _seaParams.level);        lbl('sea-level-val', _seaParams.level + ' m');
+  set('sea-color', _seaParams.color);
+  set('sea-distort', _seaParams.distortion); lbl('sea-distort-val', _seaParams.distortion.toFixed(1));
+  set('sea-size', _seaParams.size);          lbl('sea-size-val', _seaParams.size.toFixed(1));
+  set('sea-speed', _seaParams.speed);        lbl('sea-speed-val', _seaParams.speed.toFixed(2));
 }
 let sceneData = null;
 let loadedManifest = null;   // manifest caricato prima del GLB
@@ -1765,6 +1832,24 @@ function setupSpatialSections() {
   const obs = new MutationObserver(updateSectionCounts);
   document.querySelectorAll('#tab-spatial .sec-body > div[id$="-list"]').forEach(l => obs.observe(l, { childList: true }));
   updateSectionCounts();
+}
+// Sezioni a scomparsa della tab Scena (Preset ambiente + Illuminazione), stesso meccanismo della tab Spatial
+function setupLightSections() {
+  const KEY = 'sc32-light-sections' + _KP;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
+  const secs = document.querySelectorAll('#tab-light .sec');
+  secs.forEach(sec => {
+    const k = sec.dataset.sec;
+    if (k in saved) sec.classList.toggle('collapsed', !!saved[k]);
+    const head = sec.querySelector('.sec-head');
+    if (head) head.addEventListener('click', () => {
+      sec.classList.toggle('collapsed');
+      const st = {};
+      secs.forEach(s => st[s.dataset.sec] = s.classList.contains('collapsed'));
+      localStorage.setItem(KEY, JSON.stringify(st));
+    });
+  });
 }
 function updateSectionCounts() {
   document.querySelectorAll('#tab-spatial .sec').forEach(sec => {
@@ -5183,6 +5268,7 @@ async function init() {
   _lp.classList.add('in-sidebar');
   _lp.style.display = 'block';
   setupLightingPanel();
+  setupLightSections();   // Preset ambiente + Illuminazione = sezioni a scomparsa (stile tab Spatial)
 
   // ── Tab Opzioni: pavimento, griglia, metratura, wireframe, vitals ────────
   const _floorCb = document.getElementById('set-floor');
@@ -6486,6 +6572,8 @@ function setupLightingPanel() {
     sunset:  { bg:'#ff6e40', fogDens:0.014,  fogOn:true,  ambInt:0.35, ambCol:'#ffb74d', sunInt:1.0,  sunCol:'#ff6f00', elev:10, azim:270, exp:1.00 },
     night:   { bg:'#080818', fogDens:0.018,  fogOn:true,  ambInt:0.08, ambCol:'#304080', sunInt:0.20, sunCol:'#b0c4de', elev:25, azim:180, exp:0.55 },
     overcast:{ bg:'#a8b4bc', fogDens:0.022,  fogOn:true,  ambInt:0.95, ambCol:'#ccd4dc', sunInt:0.25, sunCol:'#dce4ec', elev:45, azim:90,  exp:1.00 },
+    // "Marino" = riproduce la luce del porto di Catania (cielo foschioso pallido, sole caldo a elev 27°/azim 35°, esposizione bassa)
+    marine:  { bg:'#dce6ed', fogDens:0.001,  fogOn:true,  ambInt:0.55, ambCol:'#cfe4f5', sunInt:1.6,  sunCol:'#fff0d8', elev:27, azim:35,  exp:0.95 },
   };
 
   let _sunElev = 60, _sunAzim = 45;
@@ -6537,15 +6625,41 @@ function setupLightingPanel() {
       applyPreset(PRESETS[btn.dataset.preset]);
     })
   );
-  // Preset ambiente: Mare (acqua + luce da giorno) / Nessuno
+  // Preset ambiente: Mare = acqua + luce "marina" (come il porto di Catania) / Nessuno
   document.querySelectorAll('.env-btn').forEach(btn =>
     btn.addEventListener('click', () => {
       const sea = btn.dataset.env === 'sea';
-      setSeaEnvironment(sea);
-      if (sea) { const d = document.querySelector('.preset-btn[data-preset="day"]'); if (d) d.click(); }
+      if (sea) {
+        Object.assign(_seaParams, SEA_DEFAULTS);              // acqua come nel porto (= valori demo)
+        const m = document.querySelector('.preset-btn[data-preset="marine"]');
+        if (m) m.click();                                     // luce/cielo/fog/esposizione del porto
+      }
+      setSeaEnvironment(sea);   // crea/aggiorna l'acqua (sunDirection dal sole marino) + sincronizza gli slider
       markDirty();
     })
   );
+  // Parametri mare: carica dal progetto e collega gli slider (effetto live + dirty)
+  if (SCENE_CONFIG.environmentParams) Object.assign(_seaParams, SCENE_CONFIG.environmentParams);
+  const bindSea = (id, key, fmt) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', e => {
+      _seaParams[key] = (el.type === 'color') ? e.target.value : parseFloat(e.target.value);
+      const lab = document.getElementById(id + '-val');
+      if (lab && fmt) lab.textContent = fmt(_seaParams[key]);
+      applySeaParams(); markDirty();
+    });
+  };
+  bindSea('sea-level',   'level',      v => v + ' m');
+  bindSea('sea-color',   'color',      null);
+  bindSea('sea-distort', 'distortion', v => v.toFixed(1));
+  bindSea('sea-size',    'size',       v => v.toFixed(1));
+  bindSea('sea-speed',   'speed',      v => v.toFixed(2));
+  const seaReset = document.getElementById('sea-reset');
+  if (seaReset) seaReset.addEventListener('click', () => {
+    Object.assign(_seaParams, SEA_DEFAULTS);
+    applySeaParams(); syncSeaUI(); markDirty();
+  });
   if (SCENE_CONFIG.environment === 'sea') setSeaEnvironment(true);   // ripristina dal progetto
 
   // Sfondo
@@ -6807,6 +6921,7 @@ function buildSceneConfigObject() {
     })),
     lighting:      captureLighting(),
     environment:   (_waterMesh && _waterMesh.parent) ? 'sea' : null,   // preset ambiente
+    environmentParams: (_waterMesh && _waterMesh.parent) ? Object.assign({}, _seaParams) : null,   // parametri del mare
     userObjects:   serializeUserObjects(false),
     settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible, clickTeleport: _clickTeleport },
   };
@@ -7351,7 +7466,7 @@ function getDemoScene() {
 function animate(timestamp, frame) {
   const delta = clock.getDelta();
   const t = clock.getElapsedTime();
-  if (_waterMesh && _waterMesh.parent) _waterMesh.material.uniforms['time'].value += delta;   // onde del mare
+  if (_waterMesh && _waterMesh.parent) _waterMesh.material.uniforms['time'].value += delta * _seaSpeed;   // onde del mare
 
   // OrbitControls (vista aerea)
   if (cameraMode === 'overhead' && orbitControls) {
