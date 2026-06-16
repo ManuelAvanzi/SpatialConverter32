@@ -993,6 +993,8 @@
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
     <button id="btn-import-config" class="export-cfg-btn" title="Carica una scene-config.json e monta/posiziona i modelli già caricati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importa scena (posiziona i modelli)</button>
     <input id="import-config-input" type="file" accept="application/json,.json" style="display:none">
+    <button id="btn-import-project" class="export-cfg-btn" style="display:none" title="Carica un .zip di progetto (tutti i GLB + scene-config) e monta tutto in un colpo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Importa progetto (.zip)</button>
+    <input id="import-project-input" type="file" accept=".zip,application/zip" style="display:none">
     <div class="sec" data-sec="palette">
       <h3 class="sec-head">Spatial Features <span class="sec-arrow">▾</span></h3>
       <div class="sec-body">
@@ -1211,6 +1213,8 @@
   </div>
 </div>
 
+<!-- JSZip: lettura del .zip di progetto per "Importa progetto" -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- Three.js via CDN -->
 <script type="importmap">
 {
@@ -5247,6 +5251,14 @@ async function init() {
     _impCfgBtn.addEventListener('click', () => _impCfgInput.click());
     _impCfgInput.addEventListener('change', handleSceneImportFile);
   }
+  // Importa progetto (.zip): tutti i GLB + scene-config → carica e monta in un colpo
+  const _impPrjBtn = document.getElementById('btn-import-project');
+  const _impPrjInput = document.getElementById('import-project-input');
+  if (_impPrjBtn && _impPrjInput) {
+    if (PROJECT_SLUG && EDIT_MODE) _impPrjBtn.style.display = '';
+    _impPrjBtn.addEventListener('click', () => _impPrjInput.click());
+    _impPrjInput.addEventListener('change', handleProjectImportFile);
+  }
   // Pulsante "Salva" in toolbar (solo in editor su un progetto)
   const _saveTop = document.getElementById('btn-save-top');
   _saveTop.addEventListener('click', saveSceneToServer);
@@ -7054,6 +7066,77 @@ function uploadModelFile(e) {
   };
   xhr.onerror = () => { hideUploadOverlay(); showNotification('❌ Errore di rete'); };
   xhr.send(fd);
+}
+
+// ─── Importa progetto (.zip): tutti i GLB + scene-config in un colpo solo ──────
+function handleProjectImportFile(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) importProjectZip(file);
+}
+// upload di un singolo modello (File/Blob) come Promise → risolve col nome-file salvato dal server
+function uploadModelBlob(name, blob, onProgress) {
+  return new Promise((resolve, reject) => {
+    const f = (blob instanceof File) ? blob : new File([blob], name, { type: 'model/gltf-binary' });
+    const fd = new FormData(); fd.append('model', f, name);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/projects/${encodeURIComponent(PROJECT_SLUG)}/upload`);
+    xhr.upload.onprogress = ev => { if (ev.lengthComputable && onProgress) onProgress(ev.loaded / ev.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        let saved = name.replace(/[^a-zA-Z0-9._ -]/g, '_');
+        try { saved = JSON.parse(xhr.responseText).file || saved; } catch {}
+        resolve(saved);
+      } else if (xhr.status === 401) reject(new Error('non autorizzato — accedi dalla dashboard'));
+      else { let m = 'upload ' + xhr.status; try { m = JSON.parse(xhr.responseText).error || m; } catch {} reject(new Error(m)); }
+    };
+    xhr.onerror = () => reject(new Error('rete'));
+    xhr.send(fd);
+  });
+}
+// Carica un intero progetto da un .zip in un colpo: scompatta i GLB (ovunque nello zip), li
+// carica sul progetto riusando l'upload + li monta in scena, poi applica la scene-config (posizioni,
+// duplicati, collider, ambiente, spawn) e salva. Compatibile sia con lo zip di /download
+// (index.html + scene-config.json + models/gltfModels/*.glb) sia con un bundle gltfModels/+config.
+async function importProjectZip(file) {
+  if (!PROJECT_SLUG || !EDIT_MODE) { showNotification('Apri un progetto in modalità editor per importare'); return; }
+  if (typeof JSZip === 'undefined') { showNotification('❌ JSZip non disponibile (controlla la connessione)'); return; }
+  let zip;
+  try { zip = await JSZip.loadAsync(file); } catch { showNotification('❌ ZIP non valido'); return; }
+  // raccogli i GLB (ovunque) e la scene-config (per nome, o il primo .json con "positions")
+  const glbs = []; const jsons = []; let cfgEntry = null;
+  zip.forEach((path, entry) => {
+    if (entry.dir) return;
+    const base = path.split('/').pop() || '';
+    if (/\.(glb|gltf)$/i.test(base)) glbs.push({ entry, name: base });
+    else if (/\.json$/i.test(base) && !/models\.json$/i.test(base)) { jsons.push(entry); if (/scene-config/i.test(base)) cfgEntry = cfgEntry || entry; }
+  });
+  if (!cfgEntry) for (const j of jsons) { try { const o = JSON.parse(await j.async('string')); if (o && o.positions) { cfgEntry = j; break; } } catch {} }
+  if (!glbs.length) { showNotification('❌ Nessun .glb nello ZIP'); return; }
+  if (!confirm(`Importo ${glbs.length} modelli${cfgEntry ? ' + layout scena' : ''} nel progetto «${PROJECT_SLUG}»?`)) return;
+
+  showUploadOverlay(`Importo progetto · 0/${glbs.length} modelli`);
+  const errori = [];
+  for (let i = 0; i < glbs.length; i++) {
+    const g = glbs[i];
+    setUploadLabel(`Carico ${g.name} · ${i + 1}/${glbs.length}`);
+    try {
+      const blob = await g.entry.async('blob');
+      const saved = await uploadModelBlob(g.name, blob, frac => setUploadProgress((i + frac) / glbs.length));
+      await loadOneProjectModel(saved).catch(() => {});   // monta in scena (il file resta comunque sul server)
+    } catch (err) { console.error('[import]', g.name, err); errori.push(g.name); }
+    setUploadProgress((i + 1) / glbs.length);
+  }
+  if (cfgEntry) {
+    setUploadLabel('Applico il layout della scena…');
+    try { applySceneConfig(JSON.parse(await cfgEntry.async('string'))); }
+    catch (e) { console.error('[import] scene-config', e); showNotification('⚠ Layout non applicato (scene-config non valida)'); }
+  }
+  setUploadLabel('Salvo il progetto…');
+  await saveSceneToServer();
+  hideUploadOverlay();
+  const ok = glbs.length - errori.length;
+  showNotification(`✅ Progetto importato: ${ok}/${glbs.length} modelli${cfgEntry ? ' + layout' : ''}` + (errori.length ? ` · falliti: ${errori.join(', ')}` : ''));
 }
 
 // Carica UN modello del progetto appena uploadato, senza ricaricare la pagina
