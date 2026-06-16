@@ -915,10 +915,20 @@
   <div class="menu-tabs">
     <button class="menu-tab active" data-tab="models" title="Modelli" aria-label="Modelli"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></button>
     <button class="menu-tab"        data-tab="spatial" title="Spatial" aria-label="Spatial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-28 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(28 12 12)"/></svg></button>
-    <button class="menu-tab"        data-tab="light" title="Luce" aria-label="Luce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></svg></button>
+    <button class="menu-tab"        data-tab="light" title="Scena" aria-label="Scena"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="m4 20 6-11 4 6 2-3.5 4 8.5"/><circle cx="17.5" cy="6.5" r="2"/></svg></button>
     <button class="menu-tab"        data-tab="settings" title="Opzioni" aria-label="Opzioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
-  <div id="tab-light" class="menu-tab-content"><!-- adotta #lighting-panel al boot --></div>
+  <div id="tab-light" class="menu-tab-content">
+    <div class="lp-section">
+      <div class="lp-section-title">Preset ambiente</div>
+      <div class="lp-presets">
+        <button class="preset-btn env-btn" data-env="sea"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><path d="M2 6c2 0 2 1.6 4 1.6S8 6 10 6s2 1.6 4 1.6S16 6 18 6s2 1.6 4 1.6"/><path d="M2 12c2 0 2 1.6 4 1.6S8 12 10 12s2 1.6 4 1.6S16 12 18 12s2 1.6 4 1.6"/><path d="M2 18c2 0 2 1.6 4 1.6S8 18 10 18s2 1.6 4 1.6S16 18 18 18s2 1.6 4 1.6"/></svg>Mare</button>
+        <button class="preset-btn env-btn active" data-env="none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>Nessuno</button>
+      </div>
+      <div class="sf-hint">Mare = piano d'acqua animato a quota 0, come nel demo. Salvato col progetto.</div>
+    </div>
+    <!-- #lighting-panel adottato qui sotto al boot -->
+  </div>
   <div id="tab-settings" class="menu-tab-content">
     <h3>Impostazioni scena</h3>
     <label class="set-row"><input type="checkbox" id="set-floor" checked> Pavimento</label>
@@ -1183,6 +1193,7 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';   // clone modelli (anche animati/skinned)
+import { Water } from 'three/addons/objects/Water.js';   // preset ambiente "Mare"
 
 // ─── Modalità: editor (?edit nell'URL) o play (default, per gli utenti) ──────
 // In play: niente strumenti di editing, niente scrittura su localStorage,
@@ -1212,6 +1223,31 @@ function usesStatic32() {
 let scene, camera, renderer;
 let ambientLight = null;   // accessibile dal pannello illuminazione
 let dirLight     = null;   // sole direzionale
+let _waterMesh = null, _waterNormals = null;   // preset ambiente "Mare"
+// Preset ambiente "Mare": aggiunge/toglie il piano d'acqua animato (quota 0), come nel demo porto
+function setSeaEnvironment(on) {
+  if (on) {
+    if (!_waterMesh) {
+      if (!_waterNormals) _waterNormals = new THREE.TextureLoader().load(
+        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/waternormals.jpg',
+        t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+      _waterMesh = new Water(new THREE.PlaneGeometry(8000, 8000), {
+        textureWidth: 512, textureHeight: 512, waterNormals: _waterNormals,
+        sunDirection: new THREE.Vector3(), sunColor: 0xffffff, waterColor: 0x06283c,
+        distortionScale: 3.6, fog: !!(scene && scene.fog) });
+      _waterMesh.rotation.x = -Math.PI / 2;
+      _waterMesh.position.y = 0;
+      _waterMesh.renderOrder = -1;
+      _waterMesh.userData.isSea = true;   // escluso da selezione/collider/export
+    }
+    if (dirLight) _waterMesh.material.uniforms['sunDirection'].value.copy(dirLight.position).normalize();
+    if (scene && !_waterMesh.parent) scene.add(_waterMesh);
+  } else if (_waterMesh && _waterMesh.parent) {
+    scene.remove(_waterMesh);
+  }
+  document.querySelectorAll('.env-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.env === (on ? 'sea' : 'none')));
+}
 let sceneData = null;
 let loadedManifest = null;   // manifest caricato prima del GLB
 let interactableMeshes = [];
@@ -6494,13 +6530,23 @@ function setupLightingPanel() {
   }
 
   // Preset
-  document.querySelectorAll('.preset-btn').forEach(btn =>
+  document.querySelectorAll('.preset-btn:not(.env-btn)').forEach(btn =>
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.preset-btn:not(.env-btn)').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       applyPreset(PRESETS[btn.dataset.preset]);
     })
   );
+  // Preset ambiente: Mare (acqua + luce da giorno) / Nessuno
+  document.querySelectorAll('.env-btn').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const sea = btn.dataset.env === 'sea';
+      setSeaEnvironment(sea);
+      if (sea) { const d = document.querySelector('.preset-btn[data-preset="day"]'); if (d) d.click(); }
+      markDirty();
+    })
+  );
+  if (SCENE_CONFIG.environment === 'sea') setSeaEnvironment(true);   // ripristina dal progetto
 
   // Sfondo
   document.getElementById('lp-bg-color').addEventListener('input', e => {
@@ -6760,6 +6806,7 @@ function buildSceneConfigObject() {
       s: c.root.scale.toArray().map(r4),
     })),
     lighting:      captureLighting(),
+    environment:   (_waterMesh && _waterMesh.parent) ? 'sea' : null,   // preset ambiente
     userObjects:   serializeUserObjects(false),
     settings:      { grid: !_sceneGrid || _sceneGrid.visible, gridSize: _gridCellSize, floor: !_sceneFloor || _sceneFloor.visible, clickTeleport: _clickTeleport },
   };
@@ -7304,6 +7351,7 @@ function getDemoScene() {
 function animate(timestamp, frame) {
   const delta = clock.getDelta();
   const t = clock.getElapsedTime();
+  if (_waterMesh && _waterMesh.parent) _waterMesh.material.uniforms['time'].value += delta;   // onde del mare
 
   // OrbitControls (vista aerea)
   if (cameraMode === 'overhead' && orbitControls) {
