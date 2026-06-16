@@ -991,6 +991,8 @@
   </div>
   <div id="tab-spatial" class="menu-tab-content">
     <button id="btn-export-config" class="export-cfg-btn">⬇️ Esporta scene-config.json</button>
+    <button id="btn-import-config" class="export-cfg-btn" title="Carica una scene-config.json e monta/posiziona i modelli già caricati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importa scena (posiziona i modelli)</button>
+    <input id="import-config-input" type="file" accept="application/json,.json" style="display:none">
     <div class="sec" data-sec="palette">
       <h3 class="sec-head">Spatial Features <span class="sec-arrow">▾</span></h3>
       <div class="sec-body">
@@ -2536,6 +2538,18 @@ function handleUnityImportFile(ev) {
   reader.onload = () => {
     try { importFromUnity(JSON.parse(reader.result)); }
     catch (e) { console.error(e); showNotification('❌ File non valido (JSON atteso)'); }
+  };
+  reader.readAsText(file);
+}
+// Importa una scene-config.json completa e la applica alla scena corrente (vedi applySceneConfig)
+function handleSceneImportFile(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { applySceneConfig(JSON.parse(reader.result)); }
+    catch (e) { console.error(e); showNotification('❌ File non valido (scene-config JSON atteso)'); }
   };
   reader.readAsText(file);
 }
@@ -5226,6 +5240,13 @@ async function init() {
     _impBtn.addEventListener('click', () => _impInput.click());
     _impInput.addEventListener('change', handleUnityImportFile);
   }
+  // Importa scena (scene-config.json completa → posiziona i modelli caricati)
+  const _impCfgBtn = document.getElementById('btn-import-config');
+  const _impCfgInput = document.getElementById('import-config-input');
+  if (_impCfgBtn && _impCfgInput) {
+    _impCfgBtn.addEventListener('click', () => _impCfgInput.click());
+    _impCfgInput.addEventListener('change', handleSceneImportFile);
+  }
   // Pulsante "Salva" in toolbar (solo in editor su un progetto)
   const _saveTop = document.getElementById('btn-save-top');
   _saveTop.addEventListener('click', saveSceneToServer);
@@ -6931,6 +6952,54 @@ function buildSceneConfigObject() {
 function exportSceneConfig() {
   downloadJSON('scene-config.json', buildSceneConfigObject());
   showNotification('⬇️ scene-config.json esportato — mettilo in viewer/ e committa');
+}
+// Importa una scene-config completa nella scena CORRENTE (i modelli devono essere già caricati,
+// es. con "Carica contenuti"). Posiziona per nome, ricrea i duplicati, applica collider/ambiente/
+// luce/entrata. Riusa le stesse primitive del caricamento progetto. Serve a montare scene già pronte
+// (es. il porto) senza piazzare a mano. Le chiavi di positions e i src dei cloni = nomi-file dei GLB.
+function applySceneConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') { showNotification('❌ scene-config non valida'); return; }
+  let nPos = 0, nClo = 0, nCol = 0; const missing = new Set();
+  // 1) posizioni per nome
+  for (const [nome, prs] of Object.entries(cfg.positions || {})) {
+    const ch = gltfCharacters.find(c => c.name === nome);
+    if (!ch) { missing.add(nome); continue; }
+    SAVED_POSITIONS[nome] = prs; applySavedToObject(ch.root, nome); nPos++;
+  }
+  // 2) cloni (il sorgente def.src deve già esistere)
+  for (const def of (cfg.clones || [])) {
+    if (!gltfCharacters.some(c => c.name === def.src)) { missing.add(def.src); continue; }
+    recreateSavedClone(def); nClo++;
+  }
+  // 3) removed / 4) hidden
+  for (const n of (cfg.removed || [])) removeModelByName(n);
+  for (const n of (cfg.hidden || [])) { const ch = gltfCharacters.find(c => c.name === n); if (ch) setCharacterActive(ch, false); }
+  // 5) collider (toggle → guardia per non spegnerlo)
+  for (const n of (cfg.colliders || [])) { const ch = gltfCharacters.find(c => c.name === n); if (ch && !colliderRoots.has(ch.root)) { toggleCollider(ch.root, null); nCol++; } }
+  // 6) luce
+  if (cfg.lighting) applyLighting(cfg.lighting);
+  // 7) ambiente (mare)
+  if (cfg.environmentParams) Object.assign(_seaParams, cfg.environmentParams);
+  if (cfg.environment === 'sea') setSeaEnvironment(true);
+  // 8) entrate / 9) teleport / 10) interagibili
+  for (const e of (cfg.entrances || [])) addEntrance(e.pos, e.yaw || 0, e.radius || 1, e.id, false);
+  for (const t of (cfg.teleports || [])) addTeleport(t.pad, t.target, t.id, false);
+  for (const sd of (cfg.interactables || [])) {
+    const ia = addInteractable(sd.pos, sd.text, sd.radius, sd.anim, sd.showRing !== false, sd.id, false, sd.uid, sd.taskLink, sd.vis);
+    if (ia) { if (sd.enabled === false) ia.enabled = false; if (Array.isArray(sd.actions)) ia.actions = sd.actions; ia.on = ia.enabled !== false; if (typeof applyIaRuntimeVisibility === 'function') applyIaRuntimeVisibility(ia); }
+  }
+  // 11) settings (floor/grid esistono solo nella scena vuota)
+  const s = cfg.settings || {};
+  if (_sceneFloor) _sceneFloor.visible = s.floor !== false;
+  if (s.gridSize) rebuildSceneGrid(s.gridSize);
+  if (_sceneGrid) _sceneGrid.visible = s.grid !== false;
+  _clickTeleport = !!s.clickTeleport;
+  // 12) outliner + spawn + dirty
+  if (typeof scheduleExtras === 'function') scheduleExtras();
+  if (cfg.entrances && cfg.entrances.length) applySpawn();
+  markDirty();
+  showNotification(`✥ Scena importata: ${nPos} posizionati, ${nClo} duplicati${nCol ? ', ' + nCol + ' solidi' : ''}${missing.size ? ' · mancano ' + missing.size + ' modelli' : ''}`);
+  if (missing.size) showNotification('⚠ Carica prima i GLB mancanti: ' + [...missing].join(', '));
 }
 // Salva la scena nel progetto sul server (solo con ?project e login redazione)
 async function saveSceneToServer() {
