@@ -7134,9 +7134,12 @@ async function importProjectZip(file) {
   }
   setUploadLabel('Salvo il progetto…');
   await saveSceneToServer();
-  hideUploadOverlay();
   const ok = glbs.length - errori.length;
-  showNotification(`✅ Progetto importato: ${ok}/${glbs.length} modelli${cfgEntry ? ' + layout' : ''}` + (errori.length ? ` · falliti: ${errori.join(', ')}` : ''));
+  if (ok === 0) { hideUploadOverlay(); showNotification('❌ Nessun modello caricato' + (errori.length ? ': ' + errori.join(', ') : '')); return; }
+  // i GLB appena caricati si montano in modo affidabile col reload (come riaprendo il progetto):
+  // evita il caso "non compare nulla finché non esci e rientri".
+  setUploadLabel(`Importati ${ok}/${glbs.length} modelli — ricarico la scena…`);
+  setTimeout(() => location.reload(), 900);
 }
 
 // Carica UN modello del progetto appena uploadato, senza ricaricare la pagina
