@@ -120,24 +120,98 @@ camera.position.set(0, EYE, 0); playerRig.add(camera);
 let pitch = 0;
 addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
 
-// ─────────── controller VR (raggio + select per attivare gli interagibili) ───────────
+// ─────────── controller VR: raggio + selezione, locomozione, menu fluttuante ───────────
 const ctrlFactory = new XRControllerModelFactory();
 const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1)]);
 const controllers = [];
 for(let i=0;i<2;i++){
   const c = renderer.xr.getController(i); playerRig.add(c);
-  const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color:0x4aa3ff })); ray.scale.z = 5; c.add(ray);
-  c.addEventListener('selectstart', ()=> onVRSelect(c));
+  const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color:0x4aa3ff, transparent:true, opacity:0.85 })); ray.scale.z = 6; c.add(ray);
+  c.addEventListener('selectstart', ()=> onSelect(c));
   controllers.push(c);
   const grip = renderer.xr.getControllerGrip(i); grip.add(ctrlFactory.createControllerModel(grip)); playerRig.add(grip);
 }
-const _ctrlMat = new THREE.Matrix4();
-function onVRSelect(c){
-  _ctrlMat.identity().extractRotation(c.matrixWorld);
-  _ray.ray.origin.setFromMatrixPosition(c.matrixWorld);
-  _ray.ray.direction.set(0,0,-1).applyMatrix4(_ctrlMat);
-  const hit = _ray.intersectObjects(markerGroup.children, true)[0];
-  if(hit){ const it = findInteractableByObject(hit.object); if(it){ try{ it.onActivate({source:'vr', controller:c}); }catch(e){ console.error(e); } } }
+const _cray = new THREE.Raycaster(), _cm = new THREE.Matrix4();
+function controllerRay(c){ _cm.identity().extractRotation(c.matrixWorld);
+  _cray.ray.origin.setFromMatrixPosition(c.matrixWorld); _cray.ray.direction.set(0,0,-1).applyMatrix4(_cm).normalize(); return _cray; }
+function pointerRay(controller){ if(controller) return controllerRay(controller); _cray.setFromCamera({x:0,y:0}, camera); return _cray; }
+
+// selezione unificata: menu aperto → bottone puntato; altrimenti interagibile puntato (o il più vicino = mira indulgente)
+function onSelect(controller){
+  const ray = pointerRay(controller);
+  if(vrMenu.visible){ const b = pickMenuButton(ray); if(b && b.userData.onSelect) b.userData.onSelect(); return; }
+  const hit = ray.intersectObjects(markerGroup.children, true)[0];
+  let it = hit && findInteractableByObject(hit.object);
+  if(!it && nearest) it = nearest;                       // fallback: il più vicino
+  if(it){ try{ it.onActivate({ source: controller?'vr':'desktop', controller }); }catch(e){ console.error(e); } }
+}
+
+// ── MENU FLUTTUANTE (la "UI da visore"): si apre/chiude con un pulsante, elenca le azioni del progetto ──
+const vrMenu = new THREE.Group(); vrMenu.visible = false; scene.add(vrMenu);
+let menuButtons = [];
+function _round(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function _wrap(g,text,cx,cy,maxW,lh){ const words=String(text).split(' '); let line='',lines=[]; for(const w of words){ const t=line?line+' '+w:w; if(g.measureText(t).width>maxW&&line){lines.push(line);line=w;}else line=t;} if(line)lines.push(line); const y0=cy-(lines.length-1)*lh/2; lines.forEach((l,i)=>g.fillText(l,cx,y0+i*lh)); }
+function makeTextPlane(text, w, h, bg){
+  const cv=document.createElement('canvas'); cv.width=512; cv.height=Math.max(96,Math.round(512*h/w));
+  const g=cv.getContext('2d'); g.fillStyle=bg||'rgba(12,18,28,0.95)'; _round(g,2,2,cv.width-4,cv.height-4,26); g.fill();
+  g.strokeStyle='rgba(255,255,255,0.14)'; g.lineWidth=2; g.stroke();
+  g.fillStyle='#e8eef5'; g.font='600 '+Math.round(cv.height*0.30)+'px system-ui'; g.textAlign='center'; g.textBaseline='middle';
+  _wrap(g, text, cv.width/2, cv.height/2, cv.width-48, cv.height*0.34);
+  const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({map:tex, transparent:true, depthTest:false, side:THREE.DoubleSide}));
+  m.renderOrder=999; m.userData.tex=tex; return m;
+}
+function buildMenu(){
+  while(vrMenu.children.length){ const c=vrMenu.children[0]; vrMenu.remove(c); }
+  menuButtons=[];
+  const acts = (api && api.interactables) || [];
+  const N = Math.max(1, acts.length);
+  const half = (N-1)*0.24/2;                       // blocco azioni centrato sull'origine (= mirino/sguardo)
+  const title = makeTextPlane(manifest?manifest.name:'Menu', 1.05, 0.18, 'rgba(74,163,255,0.28)'); title.position.set(0, half+0.27, 0); vrMenu.add(title);
+  if(acts.length){ acts.forEach((it,i)=>{ const b=makeTextPlane(it.text||('Azione '+(i+1)), 1.05, 0.2); b.position.set(0, half-i*0.24, 0);
+    b.userData.onSelect=()=>{ try{ it.onActivate({source:'menu'}); }catch(e){console.error(e);} }; vrMenu.add(b); menuButtons.push(b); }); }
+  else { const none=makeTextPlane('(Questo progetto non dichiara azioni)', 1.05, 0.18); none.position.set(0, 0, 0); vrMenu.add(none); }
+}
+const _camPos=new THREE.Vector3(), _camDir=new THREE.Vector3();
+function openMenu(){ buildMenu();
+  camera.getWorldPosition(_camPos); camera.getWorldDirection(_camDir); _camDir.y=0; if(_camDir.lengthSq()<1e-4)_camDir.set(0,0,-1); _camDir.normalize();
+  vrMenu.position.copy(_camPos).addScaledVector(_camDir, 1.25); vrMenu.position.y = _camPos.y;
+  vrMenu.lookAt(_camPos.x, vrMenu.position.y, _camPos.z);   // fronte verso di me
+  vrMenu.visible=true;
+  vrMenu.updateMatrixWorld(true);   // matrici subito valide → la selezione funziona anche al primo frame
+}
+function toggleMenu(){ if(vrMenu.visible) vrMenu.visible=false; else openMenu(); }
+function pickMenuButton(ray){ const hit=ray.intersectObjects(menuButtons,false)[0]; return hit?hit.object:null; }
+function updateMenuHover(){ if(!vrMenu.visible) return;
+  const ray = (renderer.xr.isPresenting && controllers[1]) ? controllerRay(controllers[1]) : pointerRay(null);
+  const hit = pickMenuButton(ray);
+  menuButtons.forEach(b=>{ b.material.opacity = (b===hit)?1:0.85; b.scale.setScalar(b===hit?1.06:1); });
+}
+
+// ── LOCOMOZIONE VR: stick sx = muovi rispetto allo sguardo, stick dx = rotazione a scatti, B/Y = menu ──
+const _hdir=new THREE.Vector3(), _hright=new THREE.Vector3(), _UP=new THREE.Vector3(0,1,0);
+const _before=new THREE.Vector3(), _after=new THREE.Vector3();
+let _snapCool=0, _menuBtnDown=false;
+function snapTurn(ang){ camera.getWorldPosition(_before); playerRig.rotation.y += ang; playerRig.updateMatrixWorld(true);
+  camera.getWorldPosition(_after); playerRig.position.add(_before.sub(_after)); }
+function vrLocomotion(dt){
+  const session=renderer.xr.getSession(); if(!session) return;
+  _snapCool=Math.max(0,_snapCool-dt);
+  for(const src of (session.inputSources||[])){
+    const gp=src.gamepad; if(!gp) continue; const ax=gp.axes||[];
+    const sx = ax.length>=4 ? ax[2] : (ax[0]||0); const sy = ax.length>=4 ? ax[3] : (ax[1]||0);
+    if(src.handedness==='left'){
+      if(Math.abs(sx)>0.15||Math.abs(sy)>0.15){
+        camera.getWorldDirection(_hdir); _hdir.y=0; _hdir.normalize();
+        _hright.copy(_hdir).cross(_UP).normalize();
+        const sp=3.2*dt; playerRig.position.addScaledVector(_hdir, -sy*sp); playerRig.position.addScaledVector(_hright, sx*sp); groundPlayer();
+      }
+      const pressed = (gp.buttons[5]&&gp.buttons[5].pressed) || (gp.buttons[4]&&gp.buttons[4].pressed);
+      if(pressed && !_menuBtnDown){ toggleMenu(); _menuBtnDown=true; } else if(!pressed) _menuBtnDown=false;
+    } else if(src.handedness==='right'){
+      if(_snapCool<=0 && Math.abs(sx)>0.7){ snapTurn(sx>0 ? -Math.PI/4 : Math.PI/4); _snapCool=0.32; }
+    }
+  }
 }
 
 // ─────────── locomozione desktop (WASD + drag-look) ───────────
@@ -170,7 +244,7 @@ function groundPlayer(){ if(!colliders.length) return; _org.copy(playerRig.posit
 const buttonSubs = { menu:[], primary:[], secondary:[] };
 let _menuButton = 'menu';
 addEventListener('keydown', e=>{ if(e.repeat) return;
-  if(e.code==='KeyM') buttonSubs[_menuButton].forEach(cb=>{try{cb({source:'desktop'})}catch(err){console.error(err)}}); });
+  if(e.code==='KeyM'){ toggleMenu(); buttonSubs[_menuButton].forEach(cb=>{try{cb({source:'desktop'})}catch(err){console.error(err)}}); } });
 
 // ─────────── ctx (§6) ───────────
 let ASSET_BASE='', _time={dt:0,elapsed:0,frame:0}, _simVR=false;
@@ -208,8 +282,7 @@ function updateInteractables(elapsed){
   const p=$('#prompt'); if(nearest && !renderer.xr.isPresenting){ $('#prompttxt').textContent=nearest.text||'Interagisci'; p.style.display='block'; } else p.style.display='none';
 }
 addEventListener('keydown', e=>{ if(e.code==='KeyF'&&nearest&&!e.repeat){ try{ nearest.onActivate({source:'desktop'}); }catch(err){console.error(err);} } });
-renderer.domElement.addEventListener('click', ()=>{ if(dragging) return; _ray.setFromCamera({x:0,y:0},camera);
-  const hit=_ray.intersectObjects(markerGroup.children,true)[0]; if(hit){ const it=findInteractableByObject(hit.object); if(it){ try{ it.onActivate({source:'desktop'}); }catch(e){console.error(e);} } } });
+renderer.domElement.addEventListener('click', ()=>{ if(dragging) return; onSelect(null); });
 
 // ─────────── caricamento progetto ───────────
 let api=null, mod=null, manifest=null, ctx=null, projectRecord=null;
@@ -309,10 +382,10 @@ function buildTopbar(){
 let _last=0,_frames=0,_acc=0,_fps=0;
 renderer.setAnimationLoop(ts=>{
   const dt=_last?Math.min((ts-_last)/1000,0.05):0; _last=ts;
-  moveAvatar(dt);
+  moveAvatar(dt); vrLocomotion(dt);
   if(api){ _time.dt=dt; _time.elapsed+=dt; _time.frame++;
     if(api.update){ try{ api.update(dt,_time.elapsed); }catch(e){ fail('update(): '+e.message); console.error(e);} }
-    updateInteractables(_time.elapsed); }
+    updateInteractables(_time.elapsed); updateMenuHover(); }
   _acc+=dt; _frames++; if(_acc>=0.5){ _fps=Math.round(_frames/_acc); _frames=0; _acc=0;
     setStat(`${manifest?manifest.name:'—'}\nSDK ${SDK_VERSION} · ${_fps} FPS · ${EDIT?'editor':'play'}${_dirty?' · *non salvato':''}\nVR: ${renderer.xr.isPresenting?'reale':(_simVR?'sim':'no')}`); }
   renderer.render(scene,camera);
