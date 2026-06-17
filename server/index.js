@@ -190,6 +190,52 @@ app.post('/api/projects/:slug/asset', requireAuth, upload.single('file'), async 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Bundle PROGETTO CUSTOM (SDK): un file per chiamata sotto <prefix>/custom/ ─
+// Il client (dashboard) scompatta lo .zip con JSZip e carica ogni file qui.
+const CUSTOM_CT = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
+  '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp', '.bin': 'application/octet-stream', '.ktx2': 'image/ktx2', '.hdr': 'application/octet-stream' };
+app.post('/api/projects/:slug/custom-file', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const proj = await store.getProject(slug);
+    if (!proj) return res.status(404).json({ error: 'Progetto non trovato' });
+    if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+    let rel = String((req.body && req.body.path) || req.file.originalname || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!rel || rel.includes('..')) return res.status(400).json({ error: 'Path non valido' });
+    rel = rel.split('/').map(s => s.replace(/[^a-zA-Z0-9._ -]/g, '_')).join('/');
+    const ext = (rel.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    const ct = CUSTOM_CT[ext];
+    if (!ct) return res.status(400).json({ error: 'Tipo file non ammesso nel bundle: ' + (ext || '(senza estensione)') });
+    const prefix = proj.assetPrefix || slug;
+    await store.putAsset(`${prefix}/custom/${rel}`, req.file.buffer, ct);
+    const patch = {};
+    if (!proj.assetPrefix) patch.assetPrefix = prefix;
+    if (rel === 'project.json') patch.sceneConfig = Object.assign({ version: 1 }, proj.sceneConfig || {}, { custom: true, customEntry: 'entry.js' });
+    if (Object.keys(patch).length) await store.saveProject(slug, patch);
+    res.json({ ok: true, file: 'custom/' + rel });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Serve i file del bundle custom SAME-ORIGIN (proxy dei byte da S3): così l'import()
+// dell'entry.js e i fetch del manifest/asset non incappano in CORS/MIME del redirect S3.
+app.get('/api/projects/:slug/custom/*', async (req, res) => {
+  try {
+    const proj = await store.getProject(req.params.slug);
+    if (!proj) return res.status(404).send('Progetto non trovato');
+    if (proj.status !== 'published' && !isAuthed(req)) return res.status(403).send('Bozza riservata');
+    const rel = String(req.params[0] || '').replace(/^\/+/, '');
+    if (!rel || rel.includes('..')) return res.status(400).send('Path non valido');
+    const prefix = proj.assetPrefix || req.params.slug;
+    const buf = await store.getAssetBuffer(`${prefix}/custom/${rel}`);
+    if (!buf) return res.status(404).send('File non trovato');
+    const ext = (rel.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+    res.set('Content-Type', CUSTOM_CT[ext] || 'application/octet-stream');
+    res.set('Cache-Control', 'no-store');
+    res.send(buf);
+  } catch (e) { res.status(500).send(e.message); }
+});
+
 app.post('/api/projects/:slug/cover', requireAuth, upload.single('cover'), async (req, res) => {
   try {
     const slug = req.params.slug;

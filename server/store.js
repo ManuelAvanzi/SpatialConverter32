@@ -57,6 +57,7 @@ function summary(p) {
     slug: p.slug, name: p.name, status: p.status,
     assetPrefix: p.assetPrefix || '', tags: Array.isArray(p.tags) ? p.tags : [],
     cover: p.cover || '', updatedAt: p.updatedAt,
+    custom: !!(p.sceneConfig && p.sceneConfig.custom),   // progetto custom (SDK) → si apre in custom.html
   };
 }
 
