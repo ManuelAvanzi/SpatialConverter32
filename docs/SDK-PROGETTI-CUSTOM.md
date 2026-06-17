@@ -3,10 +3,13 @@
 > **Versione SDK:** `1.0.0-draft` · **Piattaforma runtime di riferimento:** SpatialConverter / MetaReality viewer (Three.js `0.165.0`)
 > **Pubblico di questo documento:** un agente di coding (Claude Code) che, dato SOLO questo file, deve poter costruire da zero un progetto custom compatibile in una cartella locale.
 > **Convenzione di etichettatura usata ovunque:**
-> - **[ESISTE OGGI]** = già presente e funzionante nel codice della piattaforma (vedi report dei sottosistemi).
-> - **[DA COSTRUIRE LATO PIATTAFORMA]** = parte del contratto che dovrà essere implementata nel runtime/editor della piattaforma. È un impegno dello SDK, non qualcosa che puoi già usare oggi.
+> - **[ESISTE OGGI]** = già presente e funzionante nel runtime deployato (`platform/viewer/custom.html`) o nel codice della piattaforma.
+> - **[DA COSTRUIRE LATO PIATTAFORMA — Fase 2]** = parte del contratto ancora da implementare. Oggi resta in Fase 2 SOLO il `ctx.ui` dichiarativo, `ctx.env` on-demand e l'harness locale offline. Tutto il resto del runtime (caricamento bundle, `ctx`, `createScene`, `update`, locomozione VR, pannello settings su PC+VR) **ESISTE OGGI**.
 >
-> **Onestà totale.** Questo documento descrive DUE cose insieme: l'engine VR che gira **oggi** nel viewer, e il **contratto SDK** che ancora non esiste come API pubblica. Dove la VR, l'oggetto `ctx`, la UI spaziale "a menu unico", `ctx.env`, l'editor ridotto o l'harness **non esistono ancora**, lo dico e lo marco `[DA COSTRUIRE]`. Non fingo che siano usabili oggi: un progetto che chiama `ctx.ui`, `ctx.env` o anche solo riceve un `ctx` oggi **non gira**, perché il runtime che costruisce `ctx` e chiama `createScene` è esso stesso `[DA COSTRUIRE]`. Leggi prima la sezione **"Stato di maturità"** qui sotto: è la mappa di cosa puoi toccare oggi e cosa stai progettando contro un contratto futuro.
+> **Onestà totale.** Il runtime esiste **oggi** ed è deployato: il file `platform/viewer/custom.html` carica il bundle custom, costruisce `ctx`, chiama `createScene(ctx)`, instrada `update`/VR lifecycle, fornisce la locomozione VR completa (movimento, snap-turn, salto/doppio salto, teletrasporto) e rende il **pannello impostazioni** del manifest IDENTICO su PC e in VR. Quello che resta `[DA COSTRUIRE — Fase 2]` è SOLO il `ctx.ui` **dichiarativo** (pannelli/pagine arbitrari decisi dal progetto, oltre ai settings) e `ctx.env` on-demand. Dove una capacità non esiste ancora lo dico e lo marco `[DA COSTRUIRE]`; dove invece gira già oggi nel runtime deployato la marco `[ESISTE OGGI]`. Leggi prima la sezione **"Stato di maturità"** qui sotto: è la mappa di cosa puoi usare oggi e cosa stai progettando contro la Fase 2.
+
+> ## 🟢 PRINCIPIO CARDINE: STESSA UI SU PC E IN VISORE
+> **Il progetto NON costruisce due interfacce.** Dichiara i suoi parametri regolabili come `settings[]` nel manifest (§10), e la piattaforma li rende **come pannello IDENTICO in due posti**: sul PC (editor ridotto, inspector in alto a destra) E in VR (slider trascinabili con il raggio del controller, via `HTMLMesh` + `InteractiveGroup`). Stessa dichiarazione, stessa UI, due rendering. Vale per **OGNI** progetto custom, senza scrivere codice UI. Il file del runtime che lo fa è **`platform/viewer/custom.html`** [ESISTE OGGI], ereditato da ogni progetto custom caricato. Se in futuro (Fase 2, `ctx.ui`) vorrai UI 3D **arbitraria** oltre ai settings, quello è ancora da costruire (§7).
 
 ---
 
@@ -43,12 +46,16 @@ I due modelli **coesistono**: un progetto custom è semplicemente un progetto co
 
 ## Stato di maturità — cosa esiste oggi vs cosa è da costruire
 
-> Questa è la sezione più importante del documento. Leggila prima di tutto il resto. Distingue ciò che il viewer **fa già girare** da ciò che è **il contratto SDK ancora da implementare**. Se confondi i due, scrivi codice che "sembra giusto" ma che oggi non parte.
+> Questa è la sezione più importante del documento. Leggila prima di tutto il resto. Distingue ciò che il runtime deployato (`platform/viewer/custom.html`) **fa già girare** da ciò che resta **Fase 2**. Oggi il runtime esegue `createScene`/`ctx`/`update`, la locomozione VR e il pannello settings su PC+VR: un progetto custom scritto contro questo contratto **parte e gira**. Resta da costruire solo il `ctx.ui` dichiarativo, `ctx.env` on-demand e l'harness locale offline.
 
 ### [ESISTE OGGI nel viewer]
 
-Tutto questo è codice reale, già funzionante nel viewer MetaReality. È il motore su cui il tuo progetto custom andrà a girare:
+Tutto questo è codice reale, già funzionante nel viewer MetaReality e nel runtime custom deployato. È il motore su cui il tuo progetto custom gira:
 
+- **Il RUNTIME custom (`platform/viewer/custom.html`)**: carica il bundle, fa `fetch` di `project.json`, valida `sdkVersion`, fa il merge dei settings (default manifest + valori salvati), importa l'entry come ES module, costruisce `ctx`, chiama `mod.createScene(ctx)`, instrada `update`/VR lifecycle e registra collider/entrances/interactables. Ogni progetto custom caricato lo eredita.
+- **Locomozione VR completa**: movimento con stick sinistro (3.2 u/s), snap-turn ±45° con stick destro (cooldown 0.32s), salto + **doppio salto** (velocità 4.8 m/s, max 2, reset al contatto), gravità −16 m/s² con grounding a raycast, teletrasporto ad arco parabolico con grip (anello di destinazione). Fornita dalla piattaforma; il progetto NON la implementa (vedi §LOCOMOZIONE & CONTROLLI VR).
+- **Pannello impostazioni su PC E in VR** (STESSA UI): il runtime legge `manifest.settings` e genera dinamicamente i controlli (slider per int/float, checkbox per bool, select), li mostra sul PC (`#editor`) E in VR rendendoli con `HTMLMesh` dentro un `InteractiveGroup` (slider trascinabili col raggio del controller). Cambio setting → `markDirty()` + `scheduleRebuild(keepPose=true)` (rebuild che preserva posizione/rotazione camera). Pulsante apri/chiudi configurabile (`vrMenuButton`: menu / primary A·X / secondary B·Y), default B/Y, o tasto `M` da desktop.
+- **L'oggetto `ctx`**: costruito e passato a `createScene` dal runtime, con `THREE`, `loader`, `assets`, `time`, `avatar` (sola lettura, incluso `isPresentingVR`), `input` (`onButton`), `settings`, `events`, `log` (§6).
 - **Three.js `0.165.0`** caricato via importmap (versione esatta, §3.1).
 - **Renderer condiviso**: `WebGLRenderer` con `renderer.xr.enabled = true`, tone mapping ACES (`exposure 1.2`), shadow map PCF soft. Un solo render loop (`renderer.setAnimationLoop(animate)`), della piattaforma.
 - **VR funzionante**: `VRButton` per l'ingresso, `XRControllerModelFactory` per i modelli dei controller, la `camera` **figlia del `playerRig`** (`playerRig.add(camera)`), controller XR letti e gestiti.
@@ -60,21 +67,17 @@ Tutto questo è codice reale, già funzionante nel viewer MetaReality. È il mot
 - **Preset ambiente**: "Mare" (`Water` animata), luci (`ambientLight` + `dirLight`), fog, tone mapping.
 - **Backend / lifecycle**: storage progetti (R2/S3 sotto `<assetPrefix>/`), upload modelli (fino a 200 MB/file), `scene-config`, presigned URL, `status: draft/published`, download ZIP, record progetto.
 
-### [DA COSTRUIRE LATO PIATTAFORMA come parte di questo SDK]
+### [DA COSTRUIRE LATO PIATTAFORMA — Fase 2]
 
-Niente di quanto segue esiste oggi come API pubblica. È il **contratto** di questo SDK: lo stai progettando, non usando. Un progetto che dipende da queste cose **non gira finché la piattaforma non le implementa**:
+Il runtime, `ctx`, `createScene`, `update`, la locomozione VR e il pannello settings su PC+VR **esistono già** (vedi lista sopra). Resta in Fase 2 solo quanto segue. Un progetto che dipende da queste cose deve proteggersi (`if (ctx.ui)` / `if (ctx.env)`), perché oggi sono `undefined`:
 
-- **Il RUNTIME (host/loader)** che carica un bundle custom dallo ZIP, ne importa l'entry come ES module, costruisce `ctx`, chiama `createScene(ctx)`, instrada `update`/`dispose`/VR lifecycle. Senza questo, **nessun** progetto custom parte: è il pezzo zero (§4, §13).
-- **L'oggetto `ctx` e tutte le sue sotto-API**: `ctx.THREE`, `ctx.loader`, `ctx.assets`, `ctx.avatar`, `ctx.input`, `ctx.settings`, `ctx.ui`, `ctx.env`, `ctx.time`, `ctx.events`, `ctx.log`. Alcune **avvolgono** capacità che esistono già (es. `ctx.THREE` riusa l'istanza esistente, `ctx.env` riusa i preset Mare/luci); altre sono interamente nuove (`ctx.ui`, `ctx.settings`, `ctx.events`). L'oggetto unificato in sé non esiste (§6).
-- **Il sistema UI spaziale dichiarativo**: `ctx.ui`, `UISpec`, e in particolare il "menu unico di default chiuso, aperto da un pulsante del controller". Oggi esistono pannelli specifici (quest tablet, quiz, livelli), ma **nessun menu generico dichiarativo** (§7).
+- **Il sistema UI spaziale DICHIARATIVO**: `ctx.ui`, `UISpec`, ossia pannelli/pagine **arbitrari** decisi dal progetto OLTRE ai settings del manifest (es. menu multi-pagina, voci dinamiche). NB: il pannello dei **settings** è già reso in VR (sopra); ciò che manca è la UI 3D generica dichiarativa del progetto (§7).
 - **`ctx.env`** come API on-demand per i progetti custom (acqua/luci accese su richiesta del progetto), costruita sopra i preset esistenti (§6.10).
-- **L'editor RIDOTTO** guidato dal manifest: invece dell'editor completo (gizmo, posizionamento), per i custom mostra solo i `settings[]` del manifest + UI da visore + qualità (§13).
-- **L'harness di sviluppo locale**: il runtime locale che implementa `ctx` per testare prima di caricare (§12) — è il deliverable principale dell'SDK v1.0.
-- **Il caricamento/parse del manifest e il ciclo dei settings**: parse di `project.json` dallo ZIP, popolamento di `ctx.settings`, propagazione dei cambi dall'editor a runtime (§4, §10, §13).
+- **L'harness di sviluppo locale offline**: un runtime locale che replica `ctx` per testare senza caricare in piattaforma (§12). Oggi testi caricando il bundle nel runtime ospitato (`custom.html`).
 
 ### In una frase
 
-> Tutto ciò che è **[DA COSTRUIRE]** è il contratto verso cui costruisci: il tuo progetto lo userà, e girerà davvero quando il runtime sarà implementato e testabile tramite l'harness locale. Scrivi il progetto seguendo questo contratto: quando la piattaforma costruisce `ctx`, l'harness e il menu spaziale, il tuo bundle funzionerà senza modifiche.
+> Il runtime **ESISTE OGGI**: scrivi `createScene(ctx)` contro il contratto di questo documento, dichiara i tuoi `settings[]`, e il tuo bundle gira ospitato in `custom.html` — su PC e in VR — con il pannello settings reso automaticamente in entrambi. Le uniche cose verso cui progetti "a futuro" sono il `ctx.ui` dichiarativo e `ctx.env` (Fase 2): proteggile con `if (ctx.ui)` / `if (ctx.env)`.
 
 ---
 
@@ -100,6 +103,23 @@ Onestà: **nella v1 la protezione della camera/renderer NON è un sandbox tecnic
 
 Questo è coerente col **trust model INTERNO / creatori fidati** (§11): i progetti sono scritti dal team, non dal pubblico ostile. Non fingere che ci sia un enforcement tecnico forte: **non c'è**, e va bene così per un sistema interno. La sicurezza è "contratto che non espone + occhi umani in revisione". Per il dettaglio completo del modello di fiducia e di cosa è vietato, vedi **§11**.
 
+### 2.2 LOCOMOZIONE & CONTROLLI VR (fornita dalla piattaforma — tu NON la implementi)
+
+**[ESISTE OGGI]** nel runtime `platform/viewer/custom.html`. La locomozione, la rotazione, il salto, il teletrasporto e l'apertura del pannello impostazioni sono **interamente gestiti dalla piattaforma**. Il tuo progetto **NON** li implementa, **NON** li configura via codice e **NON** riceve gli eventi raw del controller (§6.6). Questa è la mappatura ESATTA dal runtime:
+
+| Controllo fisico | Gamepad index / asse | Azione (piattaforma) | Dettagli |
+|---|---|---|---|
+| **Stick sinistro** | `axes[2]`/`axes[3]` (sx/sy) | **Movimento** | 3.2 u/s; avanti/indietro da sy (negato), laterale da sx |
+| **Stick destro** | `axes[2]` (sx) — fallback `axes[0]` se il gamepad ha <4 assi | **Snap-turn** | +45° se sx>0.7, −45° se sx<−0.7; cooldown 0.32 s |
+| **A / X** (pulsante basso) | `buttons[4]` | **Salto + doppio salto** | velocità iniziale 4.8 m/s; max 2 salti; reset al contatto col suolo |
+| **B / Y** (pulsante alto) | `buttons[5]` | **Apre/chiude il pannello impostazioni** | toggle del pannello — **FISSO su B/Y** (A/X è già il salto) |
+| **Grip** (squeeze, entrambe le mani) | `squeezestart`/`squeezeend` | **Teletrasporto** | hold → arco parabolico blu + anello di destinazione; rilascio → teletrasporto |
+| (gravità/grounding) | — | **Caduta/atterraggio** | −16 m/s², raycast verso il basso per il pavimento (i tuoi `colliders`, §9) |
+
+Il pannello impostazioni si apre/chiude con **B/Y in VR** (fisso: `buttons[5]`; A/X è il salto) e col tasto **M** da desktop. *(Nota: il selettore "Pulsante apertura menu" nell'editor e `sceneConfig.vrMenuButton` riguardano `ctx.input.onButton` e il futuro menu dichiarativo §7.2 — oggi NON cambiano il pulsante del pannello impostazioni, che resta B/Y.)*
+
+> **Conseguenza per te:** non scrivere logica di movimento/rotazione/salto/teleport. Ricevi un `dt` in `update` e muovi i **tuoi** oggetti; per segnali "alti" (es. un pulsante d'azione del tuo progetto) usa `ctx.input.onButton(...)` (§6.6), che NON collide con questi controlli riservati.
+
 **Conseguenza pratica per te (agente di coding):** nel tuo codice **non esiste** `camera`, non esiste `renderer`, non esiste `new THREE.WebGLRenderer`, non esiste `setAnimationLoop`, non esiste `requestSession`, non esiste `OrbitControls`. Se senti il bisogno di scriverli, stai sbagliando contratto e la revisione ti respinge. Tu ricevi un **frame di tempo** (`dt`) e muovi i **tuoi** oggetti. Punto.
 
 ---
@@ -122,7 +142,7 @@ importmap:
 - incompatibilità di tipi (`instanceof THREE.Mesh` fallisce tra istanze diverse),
 - potenziali context leak.
 
-> **Perché via `ctx` e non via importmap?** Il viewer di oggi è un monolite con un suo `<script type="module">` e una sua importmap. Un bundle custom caricato a runtime non condivide automaticamente quell'importmap. Il modo affidabile e a prova di futuro per darti Three.js è **iniezione via `ctx`**. Vedi §4 e §6. (L'iniezione di `ctx.THREE` è essa stessa parte del runtime **[DA COSTRUIRE]**.)
+> **Perché via `ctx` e non via importmap?** Il viewer di oggi è un monolite con un suo `<script type="module">` e una sua importmap. Un bundle custom caricato a runtime non condivide automaticamente quell'importmap. Il modo affidabile e a prova di futuro per darti Three.js è **iniezione via `ctx`**. Vedi §4 e §6. (L'iniezione di `ctx.THREE` è fatta dal runtime `custom.html` **[ESISTE OGGI]**.)
 
 ### 3.2 Addon ammessi
 
@@ -170,7 +190,7 @@ Il **peso non è un problema**: la piattaforma regge bundle ben oltre 44 MB (upl
 
 ## 4. Architettura runtime e ciclo di vita
 
-> **Tutta questa sequenza è il runtime [DA COSTRUIRE LATO PIATTAFORMA].** L'host/loader che orchestra questi passi non esiste ancora: è il "pezzo zero" dell'SDK (vedi "Stato di maturità"). Il report `project-lifecycle` (§6 di quel report) ne descrive il punto d'innesto reale previsto (`loadCustomProjectBundle`). Finché questo non è implementato, nessun `createScene` viene mai chiamato.
+> **Questa sequenza è implementata dal runtime `platform/viewer/custom.html` [ESISTE OGGI].** L'host/loader che orchestra questi passi è deployato: fa `resolveBundle()` (fetch `project.json`), valida `sdkVersion`, fa il merge dei settings, importa l'entry come ES module, costruisce `ctx` e chiama `mod.createScene(ctx)`. I passi qui sotto descrivono **cosa accade oggi**, non un contratto futuro.
 
 ```
             PIATTAFORMA                                  PROGETTO CUSTOM
@@ -210,26 +230,26 @@ Il **peso non è un problema**: la piattaforma regge bundle ben oltre 44 MB (upl
 
 ### 4.1 Passo "loadManifest" (chi parsa cosa)
 
-**[DA COSTRUIRE]** Al passo 2 la piattaforma:
-1. estrae e parsa `project.json` da dentro lo ZIP (la dipendenza JSZip **[ESISTE OGGI]**);
+**[ESISTE OGGI]** Al passo 2 il runtime `custom.html`:
+1. fa `fetch` di `project.json` dal bundle (`resolveBundle()`, da `/api/projects/<slug>/custom/` o dal path DEV locale);
 2. **valida `sdkVersion`** contro la versione di SDK del runtime (§16.0): major del progetto > major del runtime ⇒ **rifiuto a load-time** (il progetto non viene caricato);
 3. legge `settings[]` e **popola i valori iniziali in `ctx.settings`**: per ogni `key`, il valore è quello salvato nel record del progetto (`sceneConfig.customSettings`, §13) se presente, altrimenti il `default` dichiarato nel manifest;
 4. solo dopo importa l'entry e costruisce `ctx` con `ctx.settings` già pieno, così che `createScene` lo legga subito.
 
 ### 4.2 Ciclo di vita VR (come il progetto sa di essere in VR)
 
-**[DA COSTRUIRE]** Il progetto **non** ha accesso raw alla sessione XR (niente `requestSession`, niente `session.inputSources`, §2). Sa di essere in VR in due modi, entrambi forniti dal runtime:
+**[ESISTE OGGI]** Il progetto **non** ha accesso raw alla sessione XR (niente `requestSession`, niente `session.inputSources`, §2). Sa di essere in VR in due modi, entrambi forniti dal runtime:
 
-- **Lettura di stato (CONSIGLIATO):** leggi `ctx.avatar.isPresentingVR` (specchio di `renderer.xr.isPresenting`, **[ESISTE OGGI]** come valore, **[DA COSTRUIRE]** la sua esposizione). Leggilo **dentro `update()`**: è il modo robusto e senza sorprese di adattare scala/posizione/comportamento ogni frame.
-- **Callback di transizione (OPZIONALI):** se esporti `onEnterVR()` / `onExitVR()` nella `SceneAPI`, la piattaforma li chiama all'**avvio** e alla **fine** della sessione XR (monitorando gli eventi di sessione WebXR `session.start`/`session.end`, **[ESISTE OGGI]** gli eventi, **[DA COSTRUIRE]** l'inoltro al tuo modulo). Sono comodi per azioni one-shot (es. riposizionare il menu una volta all'ingresso). **Non ricevono la sessione XR né i controller raw**: nessun argomento sensibile.
+- **Lettura di stato (CONSIGLIATO):** leggi `ctx.avatar.isPresentingVR` (specchio di `renderer.xr.isPresenting`, **[ESISTE OGGI]** sia come valore sia come esposizione via `ctx.avatar`). Leggilo **dentro `update()`**: è il modo robusto e senza sorprese di adattare scala/posizione/comportamento ogni frame.
+- **Callback di transizione (OPZIONALI):** se esporti `onEnterVR()` / `onExitVR()` nella `SceneAPI`, il runtime li chiama all'**avvio** e alla **fine** della sessione XR **[ESISTE OGGI]**. Sono comodi per azioni one-shot (es. riposizionare il menu una volta all'ingresso). **Non ricevono la sessione XR né i controller raw**: nessun argomento sensibile.
 
 > **Quale uso?** Per logica continua (scala, distanze) → leggi `isPresentingVR` in `update`. Per azioni one-shot all'ingresso/uscita → usa i callback. Non sono in conflitto: i callback ti dicono *quando* cambia, `isPresentingVR` ti dice *qual è* lo stato in ogni frame. Mai accedere alla sessione XR direttamente.
 
 ### 4.3 Chi chiama cosa (riassunto)
 
 - `createScene(ctx)` → chiamato **una volta**, dalla piattaforma, dopo `loadManifest` + costruzione di `ctx`. Può essere `async`.
-- `update(dt, elapsed)` → chiamato **ogni frame** dalla piattaforma, dentro il suo `animate()`. **[ESISTE OGGI]**: il loop `renderer.setAnimationLoop(animate)` e l'aggiornamento dei mixer (`mixer.update(delta)`) esistono già; **[DA COSTRUIRE]** lo SDK aggiunge la chiamata al tuo `update`. **`update` è l'UNICA fonte di verità per il tempo** (§4.4).
-- `onEnterVR()` / `onExitVR()` → chiamati quando la sessione XR inizia/finisce (§4.2). **[DA COSTRUIRE]** l'inoltro.
+- `update(dt, elapsed)` → chiamato **ogni frame** dalla piattaforma, dentro il suo `animate()`. **[ESISTE OGGI]**: il loop `renderer.setAnimationLoop(animate)`, l'aggiornamento dei mixer e la chiamata al tuo `update` sono nel runtime `custom.html`. **`update` è l'UNICA fonte di verità per il tempo** (§4.4).
+- `onEnterVR()` / `onExitVR()` → chiamati quando la sessione XR inizia/finisce (§4.2). **[ESISTE OGGI]**.
 - `dispose()` → chiamato alla chiusura/cambio progetto **e** quando un setting cambia e si rilancia `createScene` (§4.5).
 
 ### 4.4 Tempo: una sola sorgente di verità
@@ -240,9 +260,9 @@ Il **peso non è un problema**: la piattaforma regge bundle ben oltre 44 MB (upl
 
 ### 4.5 Settings che cambiano a runtime
 
-**[DA COSTRUIRE]** Quando il creatore cambia un setting nell'editor ridotto **mentre il progetto gira**, il comportamento di **default** è:
+**[ESISTE OGGI]** Quando il creatore cambia un setting (sul PC nell'editor ridotto, o **in VR trascinando uno slider del pannello** reso via HTMLMesh), il runtime aggiorna `ctx.settings[key]` in tempo reale, chiama `markDirty()` e `scheduleRebuild(keepPose=true)`. Il comportamento di **default** è:
 1. la piattaforma chiama `dispose()` sul progetto corrente (liberi le risorse);
-2. **rilancia `createScene(ctx)`** con `ctx.settings` aggiornato.
+2. **rilancia `createScene(ctx)`** con `ctx.settings` aggiornato, **preservando posizione/rotazione della camera** (`keepPose=true`): il rebuild non ti rispawna.
 
 In altre parole: **ricostruzione pulita**. Scrivi `createScene` in modo che possa essere richiamato più volte (stato tutto nella closure, nessun side-effect globale). Opzionalmente, la piattaforma può anche emettere un evento `settings:changed` (§6.9) per progetti che preferiscono adattarsi *senza* ricostruire (es. cambiare solo un parametro live): gestisci difensivamente entrambi i casi. I valori dei settings **persistono nel record del progetto** (`sceneConfig.customSettings`, §13): l'editor li legge da lì e li ripropone al caricamento successivo.
 
@@ -284,12 +304,12 @@ export function createScene(ctx) {
 |---|---|:---:|---|
 | `root` | `THREE.Group` | **Sì** | Il sotto-albero della tua scena. La piattaforma fa `scene.add(root)`. **Tutto** ciò che vuoi mostrare deve essere figlio di `root` (o discendente). Non aggiungere nulla direttamente a `scene`. |
 | `update` | `(dt:number, elapsed:number) => void` | No | Chiamata ogni frame. `dt` = secondi dall'ultimo frame (già clampato). `elapsed` = secondi totali. **Fonte di verità del tempo** (§4.4). Qui muovi/animi i tuoi oggetti. **Non** allocare oggetti nuovi per frame. |
-| `interactables` | `Interactable[]` | No | Lista dichiarativa di oggetti interagibili (§5.3). La piattaforma li registra nel suo sistema di prossimità + grilletto VR ([ESISTE OGGI], `addInteractable`; **[DA COSTRUIRE]** il binding al tuo `onActivate`). |
+| `interactables` | `Interactable[]` | No | Lista dichiarativa di oggetti interagibili (§5.3). Il runtime li registra nel suo sistema di prossimità + grilletto VR e instrada l'attivazione al tuo `onActivate` **[ESISTE OGGI]**. |
 | `ui` | `UISpec` | No | Dichiarazione del menu spaziale (§7). **[DA COSTRUIRE — Fase 2]**: oggi NON ha effetto; usa il fallback §7.5. |
 | `colliders` | `THREE.Object3D[]` | No (di fatto necessario) | Geometria camminabile (§9). Senza almeno un pavimento collider, il giocatore cade. |
 | `entrances` | `Array<{position,yaw?,radius?}>` | No | Punti di spawn (§9). Se assenti, fallback `defaultSceneSpawn()`. |
-| `onEnterVR` | `() => void` | No | Chiamata all'ingresso in sessione VR (§4.2). Per azioni one-shot. **[DA COSTRUIRE]** l'inoltro. |
-| `onExitVR` | `() => void` | No | Chiamata all'uscita dalla VR (§4.2). **[DA COSTRUIRE]** l'inoltro. |
+| `onEnterVR` | `() => void` | No | Chiamata all'ingresso in sessione VR (§4.2). Per azioni one-shot. **[ESISTE OGGI]**. |
+| `onExitVR` | `() => void` | No | Chiamata all'uscita dalla VR (§4.2). **[ESISTE OGGI]**. |
 | `dispose` | `() => void` | No (consigliato) | Libera risorse: `geometry.dispose()`, `material.dispose()`, `texture.dispose()`, ferma audio, annulla timer. La piattaforma rimuove `root` dalla scena dopo. Chiamata anche al rilancio per settings (§4.5). |
 
 ### 5.3 `Interactable` — definizione
@@ -311,7 +331,7 @@ interface Interactable {
 
 `onActivate(ev)` riceve un piccolo evento `{ source: 'desktop'|'vr', controller? }`. È **il** punto dove apri un pannello, fai partire un'animazione, cambi fase, ecc. **È anche il principale "gancio" su cui costruire UI funzionante OGGI** (§7.5): la piattaforma chiama il tuo `onActivate`, e lì dentro mostri/nascondi un pannello costruito da te.
 
-> **Nota di mapping [ESISTE OGGI] vs [DA COSTRUIRE]:** il sistema nativo attiva interagibili facendo partire **animazioni di modello per nome** (`anim`) e azioni dichiarative show/hide. Il contratto custom invece ti dà un **callback JS** (`onActivate`). **[DA COSTRUIRE LATO PIATTAFORMA]:** il binding tra l'interagibile registrato e il tuo callback (oggi `onVRInteract`/prossimità chiamano logica interna; lo SDK deve instradare l'attivazione al tuo `onActivate`).
+> **Nota di mapping:** il sistema nativo attiva interagibili facendo partire **animazioni di modello per nome** (`anim`) e azioni dichiarative show/hide. Il contratto custom invece ti dà un **callback JS** (`onActivate`). **[ESISTE OGGI]:** il runtime `custom.html` registra i tuoi interactables e instrada l'attivazione (grilletto VR / tasto F desktop) direttamente al tuo `onActivate`.
 
 ### 5.4 Esempio scheletro completo
 
@@ -362,38 +382,38 @@ export function createScene(ctx) {
 
 ## 6. L'API `ctx` (cosa fornisce la piattaforma)
 
-> **L'intero oggetto `ctx` è [DA COSTRUIRE LATO PIATTAFORMA].** Oggi nessun `ctx` viene costruito né passato, perché il runtime che lo crea (§4) non esiste ancora. Alcuni campi **avvolgono** capacità già presenti nel viewer (marcate "[ESISTE OGGI: ...]" come capacità sottostante); altri sono interamente nuovi. Quando leggi "[ESISTE OGGI]" qui sotto, significa: *la capacità sotto esiste, ma l'esposizione via `ctx` è da costruire.*
+> **L'intero oggetto `ctx` è costruito e passato a `createScene` dal runtime `platform/viewer/custom.html` [ESISTE OGGI].** Tutti i campi qui sotto sono esposti e usabili oggi, TRANNE `ctx.ui` e `ctx.env`, che restano **[DA COSTRUIRE — Fase 2]** (oggi sono `undefined`: proteggili con `if (ctx.ui)` / `if (ctx.env)`).
 
 `ctx` è l'unico canale tra il tuo progetto e la piattaforma. Tutto ciò che ti serve passa da qui; tutto ciò che NON è qui, **non ti è concesso** (incluso camera/renderer/sessione XR, §2).
 
 ```ts
 interface Ctx {
-  THREE:    typeof THREE;        // wrapper su istanza 0.165.0 esistente [DA COSTRUIRE l'iniezione]
-  loader:   ProjectLoader;       // wrapper su GLTFLoader esistente [DA COSTRUIRE]
-  assets:   AssetResolver;       // su ASSET_BASE esistente [DA COSTRUIRE]
-  time:     TimeInfo;            // mirror di dt/elapsed (§4.4) [DA COSTRUIRE]
-  avatar:   AvatarInfo;          // sola lettura su playerWorld() [DA COSTRUIRE]
-  input:    InputInfo;           // input filtrato (no eventi raw) [DA COSTRUIRE]
-  settings: Record<string,any>;  // valori dal manifest/editor [DA COSTRUIRE]
-  ui:       UIController;        // menu spaziale unico [DA COSTRUIRE — Fase 2]
+  THREE:    typeof THREE;        // istanza 0.165.0 della piattaforma [ESISTE OGGI]
+  loader:   ProjectLoader;       // wrapper su GLTFLoader (loadAsync) [ESISTE OGGI]
+  assets:   AssetResolver;       // su ASSET_BASE [ESISTE OGGI]
+  time:     TimeInfo;            // mirror di dt/elapsed/frame (§4.4) [ESISTE OGGI]
+  avatar:   AvatarInfo;          // sola lettura: getWorldPosition, isPresentingVR [ESISTE OGGI]
+  input:    InputInfo;           // onButton filtrato (no eventi raw) [ESISTE OGGI]
+  settings: Record<string,any>;  // valori dal manifest/editor [ESISTE OGGI]
+  ui:       UIController;        // menu spaziale DICHIARATIVO [DA COSTRUIRE — Fase 2]
   env:      EnvController;       // Mare/luci on-demand [DA COSTRUIRE — Fase 2]
-  events:   EventBus;            // [DA COSTRUIRE]
-  log:      (...args)=>void;     // wrapper su console [DA COSTRUIRE]
+  events:   EventBus;            // on/emit [ESISTE OGGI]
+  log:      (...args)=>void;     // wrapper su console [ESISTE OGGI]
 }
 ```
 
 ### 6.1 `ctx.THREE`
 
-L'istanza di Three.js `0.165.0` della piattaforma. **Usa sempre questa** per creare oggetti (`new ctx.THREE.Group()`, `new ctx.THREE.Mesh(...)`). Non importarne un'altra (§3.1). **[DA COSTRUIRE]** l'iniezione (la capacità — l'istanza Three — **[ESISTE OGGI]**).
+L'istanza di Three.js `0.165.0` della piattaforma. **Usa sempre questa** per creare oggetti (`new ctx.THREE.Group()`, `new ctx.THREE.Mesh(...)`). Non importarne un'altra (§3.1). **[ESISTE OGGI]**: il runtime inietta l'istanza in `ctx.THREE`.
 
 ### 6.2 `ctx.loader` — caricamento GLB
 
-**[ESISTE OGGI]** la capacità: la piattaforma usa `GLTFLoader` base (report `assets-anim-env`). **[DA COSTRUIRE]** il wrapper a promessa.
+**[ESISTE OGGI]**: il runtime espone `ctx.loader.load(url)` come wrapper a promessa su `GLTFLoader.loadAsync` (base, senza decoder di compressione).
 
 ```ts
 interface ProjectLoader {
   // carica un GLB dal tuo bundle; ritorna il gltf { scene, animations, ... }
-  load(url: string): Promise<GLTF>;
+  load(url: string): Promise<GLTF>;   // = _loader.loadAsync(url)
 }
 ```
 
@@ -407,11 +427,11 @@ root.add(gltf.scene);
 
 ### 6.3 `ctx.assets` — risoluzione path
 
-**[DA COSTRUIRE]**, costruito sopra `ASSET_BASE` che **[ESISTE OGGI]** (report `stack-build`).
+**[ESISTE OGGI]**: il runtime espone `ctx.assets` con `base` (= `ASSET_BASE`) e `url(rel)` (= `ASSET_BASE + rel`).
 
 ```ts
 interface AssetResolver {
-  url(relPath: string): string;  // risolve relativamente ad ASSET_BASE
+  url(relPath: string): string;  // = ASSET_BASE + relPath
   base: string;                  // l'ASSET_BASE calcolato (sola lettura)
 }
 ```
@@ -422,7 +442,7 @@ interface AssetResolver {
 
 ### 6.4 `ctx.time` — tempo (mirror, non fonte)
 
-**[ESISTE OGGI]** la capacità (il `delta` del loop: `mixer.update(delta)`, animazione mare `time += delta * speed`). **[DA COSTRUIRE]** l'oggetto wrapper.
+**[ESISTE OGGI]**: il runtime espone `ctx.time` con `dt` (delta dell'ultimo frame, clampato a max 0.05 s), `elapsed` (tempo totale) e `frame` (contatore frame).
 
 ```ts
 interface TimeInfo { dt: number; elapsed: number; frame: number; }
@@ -432,13 +452,13 @@ interface TimeInfo { dt: number; elapsed: number; frame: number; }
 
 ### 6.5 `ctx.avatar` — posizione/stato del giocatore (SOLA LETTURA)
 
-**[ESISTE OGGI]** la capacità: la piattaforma calcola `playerWorld()` (posizione mondo corretta anche in VR), gestisce gravità/salto/locomozione su `playerRig`. **[DA COSTRUIRE]** l'esposizione **in sola lettura** al progetto.
+**[ESISTE OGGI]**: il runtime espone `ctx.avatar` **in sola lettura**, costruito su `playerRig.getWorldPosition()` e `renderer.xr.isPresenting`.
 
 ```ts
 interface AvatarInfo {
-  getWorldPosition(target: THREE.Vector3): THREE.Vector3; // [su playerWorld()]
+  getWorldPosition(target?: THREE.Vector3): THREE.Vector3; // posizione mondo del rig
   isPresentingVR: boolean;   // mirror di renderer.xr.isPresenting — leggilo in update() (§4.2)
-  thirdPerson: boolean;      // true se in terza persona
+  thirdPerson: boolean;      // oggi fissato a false
 }
 ```
 
@@ -446,7 +466,7 @@ interface AvatarInfo {
 
 ### 6.6 `ctx.input` — input e routing (cosa passa e cosa NO)
 
-**[ESISTE OGGI]** la capacità: controller XR letti via `renderer.xr.getController(i)`, eventi `selectstart` (grilletto), `squeezestart/end` (grip/teleport), pulsanti via `session.inputSources[].gamepad.buttons[...]`. **[DA COSTRUIRE]** un'API pulita che **filtra** ciò che è già consumato dalla piattaforma.
+**[ESISTE OGGI]**: il runtime espone `ctx.input.onButton(name, cb)` (con `name` ∈ `'menu'|'primary'|'secondary'`), che **filtra** ciò che è già consumato dalla piattaforma (locomozione, snap-turn, salto, teleport) e ti consegna solo i segnali "alti". La callback riceve `{ source: 'vr'|'desktop', controller? }` e `onButton` ritorna una funzione di unsubscribe.
 
 **Routing dell'input — la regola chiave:** il progetto **NON riceve eventi controller grezzi** (`selectstart`, `squeezestart`, ecc.). Grip = teleport e il tasto salto sono **RISERVATI alla piattaforma** e non ti arrivano mai. Il modello di interazione è **dichiarativo**:
 
@@ -467,7 +487,7 @@ interface InputInfo {
 
 ### 6.7 `ctx.settings` — valori dell'editor ridotto
 
-**[DA COSTRUIRE]**. Contiene i valori dei `settings[]` dichiarati nel manifest (§10), popolati al passo `loadManifest` (§4.1) dai default + dal record del progetto, e modificabili dal creatore nell'editor ridotto.
+**[ESISTE OGGI]**. Contiene i valori dei `settings[]` dichiarati nel manifest (§10), popolati al passo `loadManifest` (§4.1) dai default + dai valori salvati, e modificabili dal creatore **sia sul PC (editor ridotto) sia in VR (pannello HTMLMesh)** — stessa UI in entrambi i posti. Il runtime genera automaticamente uno slider per `int`/`float` e una checkbox per `bool`, e aggiorna `ctx.settings[key]` in tempo reale.
 
 ```js
 // se nel manifest hai settings: [{ key: "birdCount", type:"int", default: 12 }]
@@ -478,7 +498,9 @@ Leggili in `createScene` per parametrizzare la costruzione. Se cambiano a runtim
 
 ### 6.8 `ctx.ui` — controller del menu spaziale — **[DA COSTRUIRE — Fase 2]**
 
-**[DA COSTRUIRE — Fase 2]** (vedi §7). **Oggi NON esiste**: un progetto che chiama `ctx.ui.open()` **fallisce** (`ctx.ui` è `undefined`). Per la UI che funziona oggi usa il fallback §7.5. Contratto target (Fase 2):
+**[DA COSTRUIRE — Fase 2]** (vedi §7). **Oggi NON esiste**: un progetto che chiama `ctx.ui.open()` **fallisce** (`ctx.ui` è `undefined`).
+
+> **Distinzione cruciale.** Il **pannello dei `settings` del manifest** è **[ESISTE OGGI]** ed è già renderizzato in VR (HTMLMesh, slider trascinabili col raggio del controller) — è la "STESSA UI su PC e in VR" del principio cardine. `ctx.ui` è un'**altra** cosa: il **menu principale generico DICHIARATIVO** (pannelli/pagine arbitrari decisi dal progetto oltre ai settings), che resta **[DA COSTRUIRE — Fase 2]**. Per i parametri regolabili, dichiara i `settings` (§10) e li hai già in VR. Per UI 3D libera oltre ai settings, oggi usa il fallback §7.5. Contratto target di `ctx.ui` (Fase 2):
 
 ```ts
 interface UIController {
@@ -492,11 +514,11 @@ interface UIController {
 
 ### 6.9 `ctx.events` — eventi
 
-**[DA COSTRUIRE]**. Bus per eventi di ciclo di vita / piattaforma.
+**[ESISTE OGGI]**: il runtime espone `ctx.events` con `on(name, cb)` (ritorna unsubscribe) ed `emit(name, payload)`.
 
 ```ts
 interface EventBus {
-  on(name: 'entervr'|'exitvr'|'settings:changed'|'dispose', cb:(payload)=>void): ()=>void;
+  on(name: string, cb:(payload)=>void): ()=>void;
   emit(name: string, payload?: any): void; // solo eventi nel namespace del tuo progetto
 }
 ```
@@ -517,19 +539,19 @@ interface EnvController {
 
 ### 6.11 Tabella riassuntiva `ctx`
 
-| Campo | Stato esposizione | Capacità sottostante nel codice |
+| Campo | Stato esposizione | Note |
 |---|---|---|
-| `THREE` | [DA COSTRUIRE] iniezione | importmap `three@0.165.0` [ESISTE] |
-| `loader` | [DA COSTRUIRE] wrapper | `new GLTFLoader()` no Meshopt/Draco/KTX2 [ESISTE] |
-| `assets` | [DA COSTRUIRE] resolver | `ASSET_BASE` in `loadAppConfig()` [ESISTE] |
-| `time` | [DA COSTRUIRE] (mirror di `update`) | `delta` nel loop `animate()` [ESISTE] |
-| `avatar` | [DA COSTRUIRE] espos. sola lettura | `playerWorld()`, `renderer.xr.isPresenting` [ESISTE] |
-| `input` | [DA COSTRUIRE] API filtrata | `getController`, `selectstart`, gamepad buttons [ESISTE] |
-| `settings` | **[DA COSTRUIRE]** | nuovo (guidato dal manifest) |
-| `ui` | **[DA COSTRUIRE — Fase 2]** | menu unico spaziale non esiste oggi |
-| `env` | **[DA COSTRUIRE — Fase 2]** | `setSeaEnvironment`, `applyLighting` [ESISTE] |
-| `events` | **[DA COSTRUIRE]** | nuovo |
-| `log` | [DA COSTRUIRE] | wrapper su `console` |
+| `THREE` | **[ESISTE OGGI]** | istanza `three@0.165.0` iniettata dal runtime |
+| `loader` | **[ESISTE OGGI]** | `loadAsync`, base no Meshopt/Draco/KTX2 |
+| `assets` | **[ESISTE OGGI]** | `base`=`ASSET_BASE`, `url(rel)`=concat |
+| `time` | **[ESISTE OGGI]** | `dt` (max 0.05), `elapsed`, `frame` |
+| `avatar` | **[ESISTE OGGI]** | sola lettura: `getWorldPosition`, `isPresentingVR`, `thirdPerson:false` |
+| `input` | **[ESISTE OGGI]** | `onButton('menu'\|'primary'\|'secondary')` filtrato |
+| `settings` | **[ESISTE OGGI]** | dal manifest; reso su PC+VR (HTMLMesh) |
+| `ui` | **[DA COSTRUIRE — Fase 2]** | menu DICHIARATIVO generico (≠ pannello settings) |
+| `env` | **[DA COSTRUIRE — Fase 2]** | `setSeaEnvironment`, `applyLighting` esistono ma non esposti |
+| `events` | **[ESISTE OGGI]** | `on`/`emit` |
+| `log` | **[ESISTE OGGI]** | `console.log('[progetto]', ...)` |
 
 ---
 
@@ -537,11 +559,23 @@ interface EnvController {
 
 ### 7.1 Stato reale, senza finzioni
 
-**[ESISTE OGGI]** dal report `interactables-ui`: esistono pannelli 3D specifici (quest tablet sul controller sinistro, pannello livelli, pannello quiz) realizzati con `CanvasTexture`/`CSS3D`. **MANCA** un **menu principale unico in VR**: il report lo dice esplicitamente ("Menu principale in VR — niente UI 3D di avvio. Deve essere un pannello 3D davanti alla camera, creato al primo selectstart").
+Ci sono **due cose distinte**, da non confondere:
 
-Quindi il "menu spaziale unico, di default chiuso, aperto da un pulsante" richiesto dal committente è **[DA COSTRUIRE LATO PIATTAFORMA — Fase 2]**. **`ctx.ui`, `UISpec` e tutto il modello dichiarativo della UI NON esistono oggi: un progetto che li usa fallisce.** Questo SDK ne definisce il **contratto target** così che, quando la piattaforma lo costruirà, i progetti custom funzionino senza modifiche. Per costruire UI **che funziona oggi**, vedi §7.5.
+**1. Pannello dei SETTINGS del manifest — [ESISTE OGGI], su PC E in VR.** Questo è il cuore del principio cardine "STESSA UI su PC e in VR". Il runtime `platform/viewer/custom.html`:
+- legge `manifest.settings` e genera dinamicamente i controlli (slider per `int`/`float`, checkbox per `bool`, select);
+- li mostra sul PC nel pannello `#editor` (inspector in alto a destra);
+- li mostra **in VR** rendendoli con `HTMLMesh` (DOM `#vrpanel` pulito, off-screen, scalato e renderizzato come mesh 3D) dentro un `InteractiveGroup`, così gli **slider si trascinano col raggio del controller**;
+- aggiorna `ctx.settings[key]` in tempo reale e fa `scheduleRebuild(keepPose=true)`.
+
+Quindi il "pannello VR con i controlli regolabili" richiesto dal committente **esiste già** e non richiede codice: basta dichiarare i `settings` nel manifest (§10). Si apre/chiude con **B/Y in VR** (tasto **M** da desktop), è posizionato davanti alla camera a ~1.1 unità, all'altezza Y dell'occhio, ruotato verso il player.
+
+**2. Menu principale generico DICHIARATIVO (`ctx.ui` / `UISpec`) — [DA COSTRUIRE — Fase 2].** Pannelli/pagine **arbitrari** decisi dal progetto OLTRE ai settings (menu multi-pagina, voci dinamiche, ecc.). **`ctx.ui`, `UISpec` e il modello dichiarativo della UI NON esistono oggi: un progetto che li usa fallisce.** Questo SDK ne definisce il **contratto target** (§7.2–7.4). Per UI 3D libera che funziona **oggi** oltre ai settings, vedi §7.5.
+
+> **Lezione appresa (importante per la Fase 2):** la UI VR è renderizzata via `HTMLMesh`, che è fragile con DOM complesso. Per questo il pannello settings usa un DOM **dedicato e pulito** (`#vrpanel`), non l'`#editor` ricco del PC: l'`#editor` inline causava stuttering in VR. Quando costruirai UI VR custom (Fase 2, o col fallback §7.5 via DOM→texture), usa **DOM pulito**: niente `backdrop-filter`, niente `<select>` nativi, niente gradienti/ombre CSS complessi — impallano `HTMLMesh`.
 
 ### 7.2 Comportamento prescritto (OBIETTIVO — Fase 2)
+
+> Questo descrive il **menu generico dichiarativo `ctx.ui`** (Fase 2), NON il pannello settings (che è già attivo oggi, §7.1).
 
 - **Default CHIUSO.** All'avvio del progetto la UI non è visibile.
 - **Apertura con UN pulsante del controller** (il "menu button"). Apre **UN UNICO** menu spaziale. Nessun proliferare di finestre.
@@ -606,7 +640,9 @@ const ui = {
 
 ### 7.5 UI che FUNZIONA OGGI — pannello `CanvasTexture` costruito dal progetto (workaround)
 
-Finché `ctx.ui` non esiste, **costruisci tu** il pannello dentro il **tuo** `root`. Il gancio è la `onActivate` di un interagibile (§5.3): la piattaforma la chiama, e lì dentro mostri/nascondi un pannello che hai creato con `THREE.CanvasTexture` + una `Mesh` (o `Sprite`). È più verboso del modello dichiarativo, ma è **reale e testabile oggi** (nell'harness e, una volta che il runtime carica il bundle, ospitato).
+> **Prima di usare questo workaround:** se ti servono solo **parametri regolabili** (numeri, on/off, scelte), NON costruire UI a mano — dichiarali come `settings` nel manifest (§10) e il runtime li rende automaticamente su PC E in VR (§7.1). Il fallback qui sotto serve solo per UI 3D **oltre** i settings (testi nel mondo, pannelli informativi, voci custom) finché `ctx.ui` (Fase 2) non esiste.
+
+Per UI custom oltre i settings, **costruisci tu** il pannello dentro il **tuo** `root`. Il gancio è la `onActivate` di un interagibile (§5.3): la piattaforma la chiama, e lì dentro mostri/nascondi un pannello che hai creato con `THREE.CanvasTexture` + una `Mesh` (o `Sprite`). È più verboso del modello dichiarativo, ma è **reale e testabile oggi** (nell'harness e, una volta che il runtime carica il bundle, ospitato).
 
 Snippet minimo — un pannello toggle:
 
@@ -715,7 +751,7 @@ Per un progetto custom, dichiari i collider nella tua `SceneAPI`:
 ```ts
 interface SceneAPI {
   // ...campi visti in §5...
-  colliders?: THREE.Object3D[]; // [DA COSTRUIRE: la piattaforma chiama toggleCollider su ciascuno]
+  colliders?: THREE.Object3D[]; // [ESISTE OGGI: il runtime chiama toggleCollider su ciascuno]
 }
 ```
 
@@ -742,7 +778,7 @@ return { root, /* ... */, colliders:[ground],
          entrances: [{ position: [0, 0, 0], yaw: 0, radius: 1.5 }] };
 ```
 
-**[DA COSTRUIRE]:** la piattaforma, dopo `createScene`, registra questi collider/entrances chiamando le sue funzioni esistenti (`toggleCollider`, `addEntrance` + `applySpawn`). Se non dichiari entrance, usa il fallback `defaultSceneSpawn()` (centro scena, raycast pavimento) [ESISTE OGGI].
+**[ESISTE OGGI]:** il runtime `custom.html`, dopo `createScene`, registra questi collider/entrances chiamando le funzioni della piattaforma (`toggleCollider`, `addEntrance` + `applySpawn`). Se non dichiari entrance, usa il fallback `defaultSceneSpawn()` (centro scena, raycast pavimento).
 
 > Spawn e teleport restano **dichiarativi**: è così che muovi il giocatore senza toccare la camera (§2).
 
@@ -763,7 +799,7 @@ mio-progetto/
 └── cover.png             # opzionale: copertina mostrata in piattaforma
 ```
 
-Quando lo carichi in piattaforma, zippi questa cartella (vedi §13). Il loader server salva lo zip sotto `<assetPrefix>/custom-bundle.zip` e segna `type:"custom"` (report `project-lifecycle` §6) — **[DA COSTRUIRE]** la rotta di upload.
+Quando lo carichi in piattaforma, zippi questa cartella (vedi §13). Il runtime ospitato (`platform/viewer/custom.html`) **[ESISTE OGGI]** carica il bundle e ne risolve gli asset relativi a `ASSET_BASE`.
 
 ### 10.2 Formato del MANIFEST `project.json`
 
@@ -875,9 +911,9 @@ Prima del publish, il revisore verifica che il bundle:
 
 ## 12. Harness di sviluppo locale
 
-### 12.1 Scopo — **[DA COSTRUIRE — è il deliverable principale dello SDK v1.0]**
+### 12.1 Scopo — **[harness locale offline: DA COSTRUIRE; runtime ospitato: ESISTE OGGI]**
 
-> **Niente di questa sezione esiste ancora.** L'harness è **il deliverable principale dello SDK v1.0**: il runtime locale che implementa `ctx` **esattamente** come lo implementerà la piattaforma ospitante, così che il progetto giri in locale **identico** a come girerà ospitato. È il modo in cui sviluppi e testi senza dover caricare ogni volta in piattaforma. **Non è scaricabile oggi**: questa sezione descrive *cosa fornirà*, non qualcosa che puoi usare adesso. (Senza l'harness — e senza il runtime ospitato, anch'esso da costruire — non hai ancora alcun modo di *eseguire* un progetto custom: lo scrivi contro il contratto e lo verifichi quando l'harness sarà pronto.)
+> **Il runtime OSPITATO esiste già** (`platform/viewer/custom.html`, [ESISTE OGGI]): puoi **eseguire e testare** un progetto custom oggi caricandolo in piattaforma e aprendolo nel viewer (§13). Quello che resta **[DA COSTRUIRE]** è l'**harness locale offline**: un runtime che replica `ctx` sulla tua macchina per iterare senza caricare ogni volta. Finché non c'è, il ciclo di test è: zippa il bundle → carica in piattaforma → apri nel viewer ospitato. Questa sezione descrive *cosa fornirà* l'harness locale, non un requisito per eseguire il progetto (che gira già ospitato).
 
 ### 12.2 Cosa fornirà
 
@@ -929,12 +965,8 @@ Tutti i punti d'innesto qui sotto poggiano su infrastruttura **[ESISTE OGGI]** (
 2. **Zippa** la tua cartella (`project.json` in root dello zip, `entry.js`, `models/`, ...).
 3. **"Carica progetto"** → `POST /api/projects/:slug/upload-custom` (multipart, campo `bundle`, `.zip`) **[DA COSTRUIRE]**. Il server salva lo zip in `<assetPrefix>/custom-bundle.zip` e marca `type:"custom"`, `customBundle:"/api/asset/<key>"`. (Il limite multer è 200 MB/file [ESISTE OGGI]; per bundle più grandi servirà chunking — vedi §15.)
 4. **Compare tra i progetti** in admin, con badge "Custom" **[DA COSTRUIRE]** (`type` nel summary del record **[DA COSTRUIRE]**), accanto ai nativi.
-5. **Apri nel viewer** `/?project=<slug>&edit` → `loadAppConfig()` riconosce `type:"custom"` e chiama `loadCustomProjectBundle(...)` **[DA COSTRUIRE]**: scarica lo zip (JSZip [ESISTE OGGI come dipendenza]), esegue **loadManifest** (parse `project.json`, valida `sdkVersion`, popola `ctx.settings` — §4.1), importa l'entry come ES module, costruisce `ctx`, chiama `createScene(ctx)`.
-6. **Editor RIDOTTO** (guidato dal manifest) **[DA COSTRUIRE]**: invece dell'editor completo (gizmo, posizionamento modelli), per i progetti custom mostra solo:
-   - **Punto d'entrata / qualità**: niente da posizionare; eventualmente preset qualità.
-   - **UI da visore**: i `settings` con `capability:"vrUi"` (posizione/scala/quale pulsante).
-   - **Settings del progetto**: tutti gli altri `settings[]` del manifest, come controlli (slider/checkbox/select).
-   I valori vengono salvati nel `sceneConfig` del record (`PUT /api/projects/:slug` [ESISTE OGGI]) sotto una chiave dedicata, es. `sceneConfig.customSettings`, e riletti in `ctx.settings` (§6.7). Cambiare un valore live → `dispose()`+`createScene()` (§4.5). Per i custom, `saveSceneToServer()` **non** chiama `buildSceneConfigObject()` (logica nativa) **[DA COSTRUIRE]**.
+5. **Apri nel viewer ospitato** → il runtime `platform/viewer/custom.html` **[ESISTE OGGI]**: `resolveBundle()` (fetch `project.json` da `/api/projects/<slug>/custom/` o path DEV), esegue **loadManifest** (valida `sdkVersion`, merge `ctx.settings` da default manifest + `sceneConfig.customSettings` — §4.1), importa l'entry come ES module, costruisce `ctx`, chiama `mod.createScene(ctx)`.
+6. **Pannello settings / editor ridotto** (guidato dal manifest) **[ESISTE OGGI]**: invece dell'editor completo, per i progetti custom il runtime genera dai `settings[]` del manifest i controlli (slider/checkbox/select) e li mostra **sia sul PC** (`#editor`) **sia in VR** (`#vrpanel` via HTMLMesh) — stessa UI. I valori si modificano live in entrambi i posti; il pulsante di apertura in VR è configurabile (`sceneConfig.vrMenuButton`, default B/Y). Cambiare un valore → aggiornamento `ctx.settings` + `scheduleRebuild(keepPose=true)` → `dispose()`+`createScene()` (§4.5). I valori persistono in `sceneConfig.customSettings` (`PUT /api/projects/:slug` [ESISTE OGGI]).
 7. **Publish**: bottone admin che fa `PUT` con `status:"published"` **[ESISTE OGGI]**, **dopo la revisione manuale** (§11). Da quel momento il progetto è pubblico.
 8. **Download**: lo `/api/projects/:slug/download` include `custom-bundle.zip` per i progetti custom **[DA COSTRUIRE]** (estensione del download ZIP [ESISTE OGGI]).
 
@@ -944,7 +976,7 @@ Tutti i punti d'innesto qui sotto poggiano su infrastruttura **[ESISTE OGGI]** (
 |---|---|---|
 | Record progetto + `type` | `server/store.js` `createProject/saveProject/summary` | estendere [DA COSTRUIRE] |
 | Upload bundle custom | `server/index.js` nuova rotta `/upload-custom` | [DA COSTRUIRE] su pattern multer [ESISTE] |
-| loadManifest + caricamento runtime | `viewer/index.html` `loadAppConfig()` → `loadCustomProjectBundle()` | [DA COSTRUIRE] |
+| loadManifest + caricamento runtime | `platform/viewer/custom.html` (`resolveBundle`, `loadProject`, `makeCtx`) | **[ESISTE OGGI]** |
 | Asset base | `viewer/index.html` `ASSET_BASE` | [ESISTE OGGI] |
 | Persistenza settings editor | `PUT /api/projects/:slug` `sceneConfig.customSettings` | [ESISTE OGGI] (nuova chiave) |
 | Publish | `admin.html` bottone "pub" + `status` | [ESISTE OGGI] |
@@ -1149,13 +1181,17 @@ const ui = {
 
 ### 14.4 Come testarlo
 
-> L'esecuzione richiede l'harness (§12, **[DA COSTRUIRE]**) o il runtime ospitato (§13, **[DA COSTRUIRE]**). I passi seguenti valgono **quando** uno dei due sarà disponibile.
+> Il **runtime ospitato esiste oggi** (`platform/viewer/custom.html`, §13): puoi testare caricando il bundle in piattaforma. L'harness locale offline (§12) è ancora [DA COSTRUIRE]; i passi 1-2 in corsivo valgono solo quando sarà disponibile.
 
-1. Metti `project.json` ed `entry.js` in `mr-sdk/projects/voliera/` (niente `models/` necessari: tutto procedurale).
-2. `npx serve .` dalla cartella `mr-sdk/`, apri `http://localhost:3000/harness/?project=voliera`.
-3. Cammina (WASD), avvicinati al centro: gli uccellini si allargano. Attiva il totem: si apre/chiude il pannello.
-4. Cambia `birdCount`/`speed` nel pannellino settings dell'harness: vedi l'effetto (emula l'editor ridotto, `dispose()`+`createScene()`).
-5. Zippa `voliera/`, caricala con "Carica progetto", aprila in `/?project=voliera&edit`, regola i settings, fai revisionare e **Publish**.
+**Test ospitato (FUNZIONA OGGI):**
+1. Crea il progetto dall'admin (`POST /api/projects`).
+2. Zippa la cartella `voliera/` (`project.json` ed `entry.js` in root dello zip; niente `models/`: tutto procedurale) e caricala con "Carica progetto".
+3. Apri il progetto nel viewer ospitato: il runtime `custom.html` carica il bundle e chiama `createScene`.
+4. Cammina (WASD su PC, stick sinistro in VR), avvicinati al centro: gli uccellini si allargano. Attiva il totem (F su PC, grilletto in VR): si apre/chiude il pannello.
+5. Apri il **pannello settings** (su PC l'editor; in VR il pulsante B/Y): cambia `birdCount`/`speed` con gli slider — su PC e in VR è la stessa UI — e vedi l'effetto (`dispose()`+`createScene()` con `keepPose`).
+6. Fai revisionare (§11) e **Publish**.
+>
+> *Test con harness locale (quando esisterà, §12): metti il progetto in `mr-sdk/projects/voliera/`, `npx serve .`, apri `http://localhost:3000/harness/?project=voliera`.*
 
 > Questo esempio è realistico e pronto da adattare: sostituisci il cono con un GLB di uccello **non compresso** caricato via `ctx.loader`, aggiungi clip di battito d'ali con un mixer (§8.1), e — in Fase 2 — migra il pannello a `ctx.ui`.
 
@@ -1169,20 +1205,21 @@ const ui = {
 | Camera figlia di `playerRig`, render loop | ✅ | — |
 | WebXR/VR: sessione, controller, trigger, grip, teleport ad arco, salto, locomozione, snap-turn | ✅ | — |
 | Avatar terza persona + follow-cam | ✅ | — |
-| Collider dichiarativi (`toggleCollider`) + raycast pavimento/muri | ✅ | binding `SceneAPI.colliders` → toggle |
-| Entrance/spawn dichiarativi (`applySpawn`) | ✅ | binding `SceneAPI.entrances` |
-| `GLTFLoader` (no Draco/Meshopt/KTX2) | ✅ | wrapper `ctx.loader` a promessa |
+| Collider dichiarativi (`toggleCollider`) + raycast pavimento/muri + **binding `SceneAPI.colliders`** | ✅ | — |
+| Entrance/spawn dichiarativi (`applySpawn`) + **binding `SceneAPI.entrances`** | ✅ | — |
+| `GLTFLoader` (no Draco/Meshopt/KTX2) + **wrapper `ctx.loader`** | ✅ | — |
 | AnimationMixer (autoplay) per modelli nativi | ✅ | mixer custom gestiti **da te** in `update` |
 | Ambiente Mare (`Water`) + luci/tone mapping/fog | ✅ | `ctx.env` controllato **(Fase 2)** |
-| Interagibili nativi (`addInteractable`, prossimità, sprite VR) | ✅ | binding al callback `onActivate` |
+| Interagibili (`addInteractable`, prossimità, sprite VR) + **binding al callback `onActivate`** | ✅ | — |
 | UI 3D via `CanvasTexture`/`Mesh` costruita dal progetto (§7.5) | ✅ (primitive Three) | — (workaround, nessun supporto extra) |
-| Storage R2/S3, record progetto, upload, presigned URL, publish, download ZIP | ✅ | rotta `/upload-custom`, campo `type`, download custom |
-| `ASSET_BASE` per progetto (presigned a livello di cartella) | ✅ | resolver `ctx.assets` |
-| **Runtime: contratto `createScene(ctx)` + ciclo di vita + loadManifest** | ❌ | **da costruire** (host/loader — il "pezzo zero") |
-| **`ctx` completo** (THREE, time, avatar-read, input filtrato, settings, ui, env, events) | parziale (capacità sì, esposizione no) | **da costruire** l'oggetto unificato |
-| **Menu spaziale UNICO in VR** (`ctx.ui`/`UISpec`, default chiuso, 1 pulsante) | ❌ (esistono pannelli specifici) | **da costruire (Fase 2)** |
-| **Editor RIDOTTO** guidato dal manifest (settings/UI visore/qualità) | ❌ | **da costruire** |
-| **Harness locale** che implementa `ctx` (+ `.d.ts` opzionali) | ❌ | **da costruire** (deliverable principale SDK v1.0) |
+| Storage R2/S3, record progetto, upload, presigned URL, publish, download ZIP | ✅ | rifiniture campo `type`/download custom |
+| `ASSET_BASE` per progetto + **resolver `ctx.assets`** | ✅ | — |
+| **Runtime `platform/viewer/custom.html`: `createScene(ctx)` + ciclo di vita + loadManifest** | ✅ | — |
+| **`ctx`** (THREE, loader, assets, time, avatar-read, input filtrato, settings, events, log) | ✅ | `ctx.ui`/`ctx.env` restano Fase 2 |
+| **Pannello SETTINGS reso su PC E in VR** (HTMLMesh, slider trascinabili) | ✅ | — |
+| **Locomozione VR** (stick move, snap-turn, salto+doppio salto, teleport ad arco) | ✅ | — |
+| **Menu spaziale DICHIARATIVO generico** (`ctx.ui`/`UISpec`, oltre ai settings) | ❌ | **da costruire (Fase 2)** |
+| **Harness locale OFFLINE** che replica `ctx` (+ `.d.ts` opzionali) | ❌ | **da costruire** (il runtime ospitato esiste già) |
 | Sandbox a prova di avversario | ❌ | **fuori scope** (trust interno, §2.1/§11) |
 
 ---
@@ -1191,7 +1228,7 @@ const ui = {
 
 ### 16.0 Check a load-time (RIFIUTO o OK)
 
-**[DA COSTRUIRE]** Al passo `loadManifest` (§4.1) la piattaforma confronta `project.json.sdkVersion` con la versione di SDK del runtime, **prima** di costruire `ctx` o chiamare `createScene`:
+**[ESISTE OGGI]** Al passo `loadManifest` (§4.1) il runtime `custom.html` verifica `project.json.sdkVersion`, **prima** di costruire `ctx` o chiamare `createScene`:
 
 - **Major del progetto > major del runtime** → il progetto è **RIFIUTATO**: non viene caricato (`ctx` incompatibile garantito). Messaggio: "aggiorna la piattaforma". Il publish è bloccato finché non si abbassa `sdkVersion` o si aggiorna il runtime.
 - **Major uguale e minor del progetto ≤ minor del runtime** → **OK**, caricato (retro-compatibile per costruzione, §16.2).
@@ -1226,4 +1263,4 @@ Come parte dell'harness (§12.2), lo SDK fornirà file `.d.ts` **opzionali** per
 
 ---
 
-*Fine del documento. Questo file è il contratto: se segui le firme (§5), usi solo `ctx` (§6), non tocchi la camera (§2), dichiari collider/entrance/interagibili (§9, §5.3) e — finché `ctx.ui` non esiste — costruisci la UI col fallback `CanvasTexture` (§7.5), il tuo progetto girerà identico nell'harness locale e ospitato in piattaforma, desktop e VR, **non appena il runtime [DA COSTRUIRE] sarà implementato e testabile tramite l'harness**.*
+*Fine del documento. Questo file è il contratto: se segui le firme (§5), usi solo `ctx` (§6), non tocchi la camera (§2), dichiari collider/entrance/interagibili (§9, §5.3), dichiari i parametri regolabili come `settings` nel manifest (§10) — resi automaticamente IDENTICI su PC e in VR — e, per UI 3D oltre i settings finché `ctx.ui` (Fase 2) non esiste, usi il fallback `CanvasTexture` (§7.5), il tuo progetto **gira oggi** ospitato nel runtime `platform/viewer/custom.html`, desktop e VR. Resta da costruire solo il `ctx.ui` dichiarativo, `ctx.env` e l'harness locale offline (Fase 2).*
