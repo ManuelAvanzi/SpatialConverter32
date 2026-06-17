@@ -200,6 +200,7 @@
       <div><h1>Progetti</h1><p id="sub">…</p></div>
       <div class="topbar-actions">
         <button id="themeBtn" title="Tema chiaro / scuro"></button>
+        <label class="btn" id="customBtn" style="cursor:pointer" title="Carica un progetto custom (.zip dell'SDK)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 8z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Progetto custom (.zip)<input type="file" id="customFile" accept=".zip,application/zip" style="display:none"></label>
         <button class="btn primary" id="newBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg> Nuovo progetto</button>
       </div>
     </div>
@@ -246,6 +247,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const api = (p, o) => fetch(p, Object.assign({ headers: { 'Content-Type': 'application/json' } }, o));
@@ -281,6 +283,40 @@ function applyTheme(t) {
 applyTheme(document.documentElement.dataset.theme);
 $('#themeBtn').onclick = () =>
   applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+/* ── Carica progetto custom (.zip dell'SDK): crea progetto → scompatta → carica i file → apre l'editor custom ── */
+if ($('#customFile')) $('#customFile').addEventListener('change', uploadCustomProject);
+async function uploadCustomProject(e) {
+  const file = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  if (typeof JSZip === 'undefined') { alert('JSZip non disponibile (connessione?)'); return; }
+  let zip; try { zip = await JSZip.loadAsync(file); } catch { alert('ZIP non valido'); return; }
+  let mEntry = null;   // il project.json più "in alto" nello zip
+  zip.forEach((path, entry) => { if (!entry.dir && /(^|\/)project\.json$/i.test(path) && (!mEntry || path.length < mEntry.name.length)) mEntry = entry; });
+  if (!mEntry) { alert('Manca project.json nel bundle'); return; }
+  let manifest; try { manifest = JSON.parse(await mEntry.async('string')); } catch { alert('project.json non valido'); return; }
+  const baseDir = mEntry.name.replace(/project\.json$/i, '');   // cartella che contiene il manifest
+  const files = [];
+  zip.forEach((path, entry) => { if (!entry.dir && path.startsWith(baseDir)) files.push({ rel: path.slice(baseDir.length), entry }); });
+  if (!files.length) { alert('Bundle vuoto'); return; }
+  const name = manifest.name || file.name.replace(/\.zip$/i, '');
+  $('#sub').textContent = 'Creo il progetto custom…';
+  const cr = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name, tags: ['custom'] }) });
+  if (!cr.ok) { alert('Creazione progetto fallita (' + cr.status + ')'); load(); return; }
+  const slug = (await cr.json()).slug;
+  let done = 0;
+  for (const f of files) {
+    if (!f.rel) continue;
+    $('#sub').textContent = `Carico bundle… ${++done}/${files.length} · ${f.rel}`;
+    const blob = await f.entry.async('blob');
+    const fd = new FormData();
+    fd.append('file', new File([blob], f.rel.split('/').pop(), { type: 'application/octet-stream' }));
+    fd.append('path', f.rel);
+    const up = await fetch('/api/projects/' + encodeURIComponent(slug) + '/custom-file', { method: 'POST', body: fd });
+    if (!up.ok) { alert('Upload fallito: ' + f.rel + ' (' + up.status + ')'); load(); return; }
+  }
+  location.href = '/custom.html?project=' + encodeURIComponent(slug) + '&edit';
+}
 
 async function refresh() {
   const me = await (await api('/api/me')).json();
@@ -329,13 +365,14 @@ function render() {
     const coverHtml = p.cover
       ? `<div class="thumb" style="background-image:url('${p.cover.replace(/'/g, '%27')}')"></div>`
       : `<div class="thumb ph">${I.box}</div>`;
+    const ev = p.custom ? '/custom.html?project=' : '/?project=';   // i custom si aprono in custom.html
     card.innerHTML = coverHtml +
-        `<div class="top"><div><div class="name"></div><div class="meta">${p.slug} · ${date}</div></div>`
+        `<div class="top"><div><div class="name"></div><div class="meta">${p.slug} · ${date}${p.custom ? ' · custom' : ''}</div></div>`
       +   `<span class="status ${p.status}">${p.status === 'published' ? 'Pubblicato' : 'Bozza'}</span></div>`
       + `<div class="tags">${tagsHtml}</div>`
       + `<div class="actions first">`
-      +   `<a class="btn sm accent" href="/?project=${encodeURIComponent(p.slug)}&edit">${I.pencil} Editor</a>`
-      +   `<a class="btn sm" href="/?project=${encodeURIComponent(p.slug)}" target="_blank">${I.play} Play</a>`
+      +   `<a class="btn sm accent" href="${ev}${encodeURIComponent(p.slug)}&edit">${I.pencil} Editor</a>`
+      +   `<a class="btn sm" href="${ev}${encodeURIComponent(p.slug)}" target="_blank">${I.play} Play</a>`
       + `</div>`
       + `<div class="actions mid">`
       +   `<button class="btn sm" data-a="dup">${I.copy} Duplica</button>`
