@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MetaReality SDK — Harness locale</title>
+<style>
+  :root{ --bg:#0c1119; --pan:rgba(12,18,28,.92); --acc:#4aa3ff; --txt:#e8eef5; --mut:#8ea0b8; --bord:rgba(255,255,255,.12); }
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:system-ui,Segoe UI,sans-serif}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  /* pannello sinistro = mini-editor */
+  #dev{position:fixed;left:12px;top:12px;width:300px;max-height:calc(100vh - 24px);overflow:auto;z-index:10;
+    background:var(--pan);backdrop-filter:blur(10px);border:1px solid var(--bord);border-radius:14px;padding:13px 15px;box-sizing:border-box}
+  #dev h1{font-size:14px;margin:0 0 2px;letter-spacing:.02em}
+  #dev .sub{font-size:11px;color:var(--mut);margin-bottom:11px}
+  .sec{border-top:1px solid var(--bord);padding-top:10px;margin-top:11px}
+  .sec h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 8px}
+  .set{margin-bottom:11px}
+  .set label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:#cdd8e6}
+  .set label b{color:var(--acc);font-variant-numeric:tabular-nums}
+  .set input[type=range]{width:100%;accent-color:var(--acc)}
+  .set input[type=number],.set input[type=text]{width:100%;background:#0a121c;border:1px solid var(--bord);color:var(--txt);border-radius:7px;padding:5px 7px;font-size:12px;box-sizing:border-box}
+  .btn{display:block;width:100%;text-align:center;cursor:pointer;border:1px solid var(--bord);background:rgba(255,255,255,.06);
+    color:var(--txt);border-radius:8px;padding:7px 0;font-size:12.5px;margin-top:7px}
+  .btn:hover{background:rgba(255,255,255,.13)}
+  .btn.on{background:rgba(74,163,255,.22);border-color:rgba(74,163,255,.6);color:var(--acc)}
+  .hint{font-size:11px;color:var(--mut);line-height:1.5}
+  .kbd{display:inline-block;background:#0a121c;border:1px solid var(--bord);border-radius:4px;padding:0 5px;font:11px monospace;color:#cdd8e6}
+  #stat{font:11px monospace;color:var(--mut);white-space:pre-line}
+  #err{color:#ff9a9a}
+  /* prompt interagibile + crosshair */
+  #prompt{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:9;display:none;
+    background:rgba(9,15,23,.85);border:1px solid var(--bord);border-radius:9px;padding:7px 13px;font-size:13px}
+  #prompt .k{color:var(--acc);font-weight:700}
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,255,255,.5);z-index:8;pointer-events:none}
+  #vrbtn-holder{position:fixed;right:14px;bottom:14px;z-index:10}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="dev">
+  <h1>MetaReality · Harness</h1>
+  <div class="sub">Runtime locale dell'SDK Progetti Custom · <b id="pname">—</b></div>
+  <div class="sec"><h2>Impostazioni progetto (editor ridotto)</h2><div id="settings"></div>
+    <div class="hint" id="nosettings" style="display:none">Nessuna impostazione dichiarata nel manifest.</div></div>
+  <div class="sec"><h2>Esecuzione</h2>
+    <button class="btn" id="reload">↻ Ricarica progetto</button>
+    <button class="btn" id="simvr">◐ Simula VR (off)</button>
+    <div class="hint" style="margin-top:8px">Cambia un'impostazione → il progetto viene ricostruito (<span class="kbd">dispose()</span> + <span class="kbd">createScene()</span>), come farà l'editor ridotto in piattaforma.</div>
+  </div>
+  <div class="sec"><h2>Comandi</h2>
+    <div class="hint"><span class="kbd">W A S D</span> cammina · trascina il <span class="kbd">mouse</span> per guardarti intorno · <span class="kbd">F</span> interagisci · <span class="kbd">M</span> pulsante "menu"</div>
+  </div>
+  <div class="sec"><h2>Stato</h2><div id="stat">avvio…</div></div>
+</div>
+<div id="cross"></div>
+<div id="prompt"><span class="k">F</span> · <span id="prompttxt"></span></div>
+<div id="vrbtn-holder"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+const SDK_VERSION = '1.0.0';
+const $ = s => document.querySelector(s);
+const statEl = $('#stat');
+function setStat(html){ statEl.innerHTML = html; }
+function fail(msg){ setStat('<span id="err">⚠ ' + msg + '</span>'); console.error('[harness]', msg); }
+
+// ─────────────── piattaforma: renderer / scena / camera / rig (POSSEDUTI dalla piattaforma) ───────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fc0dd);
+scene.fog = new THREE.Fog(0x9fc0dd, 60, 260);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+renderer.xr.enabled = true;                 // VR reale se c'è un visore
+$('#app').appendChild(renderer.domElement);
+$('#vrbtn-holder').appendChild(VRButton.createButton(renderer));
+
+scene.add(new THREE.HemisphereLight(0xdfeeff, 0x44566b, 1.2));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.0); sun.position.set(40, 80, 30);
+sun.castShadow = true; sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-60; sun.shadow.camera.right=60; sun.shadow.camera.top=60; sun.shadow.camera.bottom=-60;
+scene.add(sun);
+
+// rig del giocatore: la camera è FIGLIA del rig (come in piattaforma). I progetti NON la toccano.
+const playerRig = new THREE.Group(); scene.add(playerRig);
+const EYE = 1.6;
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.05, 4000);
+camera.position.set(0, EYE, 0);
+playerRig.add(camera);
+let pitch = 0;                              // pitch sulla camera, yaw sul rig
+addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+// ─────────────── locomozione desktop (WASD + drag-look) — gestita dalla PIATTAFORMA ───────────────
+const keys = {};
+addEventListener('keydown', e=>{ keys[e.code]=true; });
+addEventListener('keyup',   e=>{ keys[e.code]=false; });
+let dragging=false, lastX=0, lastY=0;
+renderer.domElement.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+addEventListener('pointerup', ()=>{ dragging=false; });
+addEventListener('pointermove', e=>{ if(!dragging) return;
+  playerRig.rotation.y -= (e.clientX-lastX)*0.0026;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY-lastY)*0.0026));
+  camera.rotation.x = pitch; lastX=e.clientX; lastY=e.clientY;
+});
+const _fwd = new THREE.Vector3(), _rgt = new THREE.Vector3();
+function moveAvatar(dt){
+  if (renderer.xr.isPresenting) return;     // in VR muove il visore/controller, non WASD
+  const sp = (keys['ShiftLeft']?9:4.5)*dt;
+  _fwd.set(0,0,-1).applyQuaternion(playerRig.quaternion); _fwd.y=0; _fwd.normalize();
+  _rgt.set(1,0,0).applyQuaternion(playerRig.quaternion);  _rgt.y=0; _rgt.normalize();
+  if(keys['KeyW']) playerRig.position.addScaledVector(_fwd, sp);
+  if(keys['KeyS']) playerRig.position.addScaledVector(_fwd,-sp);
+  if(keys['KeyD']) playerRig.position.addScaledVector(_rgt, sp);
+  if(keys['KeyA']) playerRig.position.addScaledVector(_rgt,-sp);
+  groundPlayer();
+}
+// grounding: raycast verso il basso sui collider dichiarati dal progetto
+const _down = new THREE.Vector3(0,-1,0), _ray = new THREE.Raycaster(), _origin = new THREE.Vector3();
+let colliders = [];
+function groundPlayer(){
+  if(!colliders.length) return;
+  _origin.copy(playerRig.position); _origin.y += 5;
+  _ray.set(_origin, _down); _ray.far = 20;
+  const hit = _ray.intersectObjects(colliders, true)[0];
+  if(hit) playerRig.position.y = hit.point.y;
+}
+
+// ─────────────── input "menu" (M su desktop) ───────────────
+const buttonSubs = { menu:[], primary:[], secondary:[] };
+addEventListener('keydown', e=>{
+  if(e.repeat) return;
+  if(e.code==='KeyM') buttonSubs.menu.forEach(cb=>{try{cb({source:'desktop'})}catch(err){console.error(err)}});
+  if(e.code==='KeyE') buttonSubs.primary.forEach(cb=>{try{cb({source:'desktop'})}catch(err){console.error(err)}});
+});
+
+// ─────────────── ctx: il contratto verso il progetto (§6) ───────────────
+let ASSET_BASE = '';
+let _time = { dt:0, elapsed:0, frame:0 };
+let _simVR = false;
+const _loader = new GLTFLoader();   // niente Meshopt/Draco/KTX2 — come la piattaforma reale
+function makeCtx(settings){
+  return {
+    THREE,
+    loader: { load:(url)=> _loader.loadAsync(url) },
+    assets: { base: ASSET_BASE, url:(rel)=> ASSET_BASE + String(rel).replace(/^\//,'') },
+    time: _time,
+    avatar: {
+      getWorldPosition:(target)=> playerRig.getWorldPosition(target || new THREE.Vector3()),
+      get isPresentingVR(){ return renderer.xr.isPresenting || _simVR; },
+      thirdPerson: false,
+    },
+    input: {
+      onButton:(button, cb)=>{ const a=buttonSubs[button]; if(!a) return ()=>{}; a.push(cb); return ()=>{ const i=a.indexOf(cb); if(i>=0)a.splice(i,1); }; },
+      // raycastFromController: opzionale, non implementato nell'harness MVP
+    },
+    settings,
+    // ui / env = [DA COSTRUIRE — Fase 2]: volutamente assenti (undefined), come in piattaforma oggi.
+    events: (()=>{ const m={}; return {
+      on:(n,cb)=>{ (m[n]=m[n]||[]).push(cb); return ()=>{ const a=m[n]||[]; const i=a.indexOf(cb); if(i>=0)a.splice(i,1);} },
+      emit:(n,p)=>{ (m[n]||[]).forEach(cb=>{try{cb(p)}catch(e){console.error(e)}}); },
+    }; })(),
+    log:(...a)=> console.log('%c[progetto]','color:#4aa3ff', ...a),
+  };
+}
+
+// ─────────────── interagibili (la piattaforma li registra e chiama onActivate) ───────────────
+let interactables = [];   // {id,position,text,radius,visibility,onActivate, _marker, _vec}
+const markerGroup = new THREE.Group(); scene.add(markerGroup);
+function makeMarker(){
+  const g = new THREE.Group();
+  const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 28);
+  const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color:0x4aa3ff }));
+  ring.rotation.x = Math.PI/2; g.add(ring);
+  const dotGeo = new THREE.SphereGeometry(0.12, 12, 12);
+  g.add(new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color:0xffffff })));
+  return g;
+}
+function buildInteractables(list){
+  interactables.forEach(it=> it._marker && markerGroup.remove(it._marker));
+  interactables = (list||[]).map(it=>{
+    const marker = makeMarker();
+    marker.position.set(it.position[0], it.position[1], it.position[2]);
+    markerGroup.add(marker);
+    return Object.assign({}, it, { _marker:marker, _vec:new THREE.Vector3() });
+  });
+}
+const _pp = new THREE.Vector3();
+let nearest = null;
+function updateInteractables(elapsed){
+  playerRig.getWorldPosition(_pp);
+  nearest = null; let nd = Infinity;
+  for(const it of interactables){
+    it._marker.position.set(it.position[0], it.position[1], it.position[2]);
+    it._marker.children[0].rotation.z = elapsed*1.4;                 // ruota l'anello
+    const d = Math.hypot(it.position[0]-_pp.x, it.position[2]-_pp.z);
+    const vis = it.visibility ?? 14;
+    it._marker.visible = d < vis;
+    const rad = it.radius ?? 3;
+    if(d < rad && d < nd){ nd = d; nearest = it; }
+  }
+  const prompt = $('#prompt');
+  if(nearest){ $('#prompttxt').textContent = nearest.text || 'Interagisci'; prompt.style.display='block'; }
+  else prompt.style.display='none';
+}
+addEventListener('keydown', e=>{ if(e.code==='KeyF' && nearest && !e.repeat){ try{ nearest.onActivate({source:'desktop'}); }catch(err){ console.error(err); } } });
+// click sul marker = attiva (raycast dal centro schermo)
+renderer.domElement.addEventListener('click', ()=>{
+  if(dragging) return;
+  _ray.setFromCamera({x:0,y:0}, camera);
+  const hit = _ray.intersectObjects(markerGroup.children, true)[0];
+  if(hit){ let m=hit.object; while(m && !m.parent.isScene && m.parent!==markerGroup) m=m.parent;
+    const it = interactables.find(i=>i._marker===m); if(it){ try{ it.onActivate({source:'desktop'}); }catch(err){ console.error(err); } } }
+});
+
+// ─────────────── caricamento progetto (passi §4) ───────────────
+let api = null, mod = null, manifest = null, ctx = null;
+function semverMajor(v){ return parseInt(String(v||'0').split('.')[0],10)||0; }
+
+async function loadProject(name){
+  // 1) manifest
+  const projUrl = new URL('../projects/'+name+'/', import.meta.url);
+  ASSET_BASE = projUrl.href;
+  manifest = await (await fetch(projUrl.href + 'project.json', {cache:'no-store'})).json();
+  $('#pname').textContent = manifest.name || name;
+  // 2) check sdkVersion (§16.0)
+  if(semverMajor(manifest.sdkVersion) > semverMajor(SDK_VERSION))
+    throw new Error('sdkVersion '+manifest.sdkVersion+' > harness '+SDK_VERSION+' (progetto rifiutato)');
+  // 3) settings iniziali = default del manifest
+  const settings = {};
+  (manifest.settings||[]).forEach(s=> settings[s.key] = s.default);
+  ctx = makeCtx(settings);
+  // 4) importa entry e costruisci la scena
+  mod = await import(/* @vite-ignore */ projUrl.href + (manifest.entry||'entry.js'));
+  if(typeof mod.createScene !== 'function') throw new Error('entry.js non esporta createScene');
+  buildSettingsUI();
+  await rebuild();
+}
+
+async function rebuild(){
+  if(api){ try{ api.dispose && api.dispose(); }catch(e){ console.error(e); } if(api.root) scene.remove(api.root); }
+  _time = { dt:0, elapsed:0, frame:0 }; ctx.time = _time;
+  api = await mod.createScene(ctx);
+  if(!api || !api.root) throw new Error('createScene non ha restituito { root }');
+  scene.add(api.root);
+  colliders = api.colliders || [];
+  buildInteractables(api.interactables);
+  // spawn
+  const e = (api.entrances && api.entrances[0]) || { position:[0,0,8], yaw:0 };
+  playerRig.position.set(e.position[0], e.position[1], e.position[2]);
+  playerRig.rotation.y = e.yaw || 0; pitch = 0; camera.rotation.x = 0;
+  groundPlayer();
+}
+
+// ─────────────── editor ridotto: UI dei settings dal manifest ───────────────
+function buildSettingsUI(){
+  const box = $('#settings'); box.innerHTML = '';
+  const list = manifest.settings || [];
+  $('#nosettings').style.display = list.length ? 'none' : 'block';
+  list.forEach(s=>{
+    const wrap = document.createElement('div'); wrap.className='set';
+    const val = ctx.settings[s.key];
+    if(s.type==='int' || s.type==='float'){
+      const step = s.type==='int' ? 1 : 0.05;
+      wrap.innerHTML = `<label>${s.label||s.key} <b id="v_${s.key}">${val}</b></label>
+        <input type="range" min="${s.min ?? 0}" max="${s.max ?? 100}" step="${step}" value="${val}">`;
+      const inp = wrap.querySelector('input');
+      inp.addEventListener('input', ()=>{ const n = s.type==='int'?parseInt(inp.value,10):parseFloat(inp.value);
+        ctx.settings[s.key]=n; $('#v_'+s.key).textContent=n; scheduleRebuild(); });
+    } else if(s.type==='bool'){
+      wrap.innerHTML = `<label><input type="checkbox" ${val?'checked':''}> ${s.label||s.key}</label>`;
+      wrap.querySelector('input').addEventListener('change', e=>{ ctx.settings[s.key]=e.target.checked; scheduleRebuild(); });
+    } else {
+      wrap.innerHTML = `<label>${s.label||s.key}</label><input type="text" value="${val ?? ''}">`;
+      wrap.querySelector('input').addEventListener('input', e=>{ ctx.settings[s.key]=e.target.value; scheduleRebuild(); });
+    }
+    box.appendChild(wrap);
+  });
+}
+let _rebTimer=null;
+function scheduleRebuild(){ clearTimeout(_rebTimer); _rebTimer=setTimeout(()=>rebuild().catch(e=>fail(e.message)), 120); }
+
+// ─────────────── bottoni ───────────────
+$('#reload').addEventListener('click', ()=> rebuild().catch(e=>fail(e.message)));
+$('#simvr').addEventListener('click', ()=>{
+  _simVR = !_simVR; const b=$('#simvr'); b.textContent = '◐ Simula VR ('+(_simVR?'on':'off')+')'; b.classList.toggle('on',_simVR);
+  try{ if(_simVR) api && api.onEnterVR && api.onEnterVR(); else api && api.onExitVR && api.onExitVR(); }catch(e){ console.error(e); }
+});
+// VR reale: inoltra enter/exit ai callback del progetto (§4.2)
+renderer.xr.addEventListener('sessionstart', ()=>{ try{ api && api.onEnterVR && api.onEnterVR(); }catch(e){console.error(e);} });
+renderer.xr.addEventListener('sessionend',   ()=>{ try{ api && api.onExitVR && api.onExitVR(); }catch(e){console.error(e);} });
+
+// ─────────────── loop (la piattaforma chiama update del progetto) ───────────────
+let _last = 0, _frames=0, _facc=0, _fps=0;
+renderer.setAnimationLoop((ts)=>{
+  const dt = _last ? Math.min((ts-_last)/1000, 0.05) : 0; _last = ts;
+  moveAvatar(dt);
+  if(api){
+    _time.dt = dt; _time.elapsed += dt; _time.frame++;
+    if(api.update){ try{ api.update(dt, _time.elapsed); }catch(e){ fail('update(): '+e.message); console.error(e); } }
+    updateInteractables(_time.elapsed);
+  }
+  _facc+=dt; _frames++; if(_facc>=0.5){ _fps=Math.round(_frames/_facc); _frames=0; _facc=0;
+    setStat(`progetto: ${manifest? (manifest.name):'—'}\nSDK ${SDK_VERSION} · ${_fps} FPS\ninteragibili: ${interactables.length} · VR: ${(renderer.xr.isPresenting?'reale':(_simVR?'simulata':'no'))}`); }
+  renderer.render(scene, camera);
+});
+
+// ─────────────── avvio ───────────────
+const projectName = new URLSearchParams(location.search).get('project') || 'voliera';
+loadProject(projectName).catch(e=> fail(e.message));
+window.__harness = { get api(){return api;}, ctx:()=>ctx, scene, renderer, rebuild };
+</script>
+</body>
+</html>

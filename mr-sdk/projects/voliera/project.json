@@ -1,0 +1,13 @@
+{
+  "name": "Voliera Demo",
+  "version": "1.0.0",
+  "sdkVersion": "1.0.0",
+  "entry": "entry.js",
+  "type": "custom",
+  "assets": { "models": [] },
+  "capabilities": ["scene", "update", "interactables", "colliders", "entrances", "avatarRead"],
+  "settings": [
+    { "key": "birdCount", "type": "int",   "label": "Numero di uccellini", "default": 16, "min": 1, "max": 80 },
+    { "key": "speed",     "type": "float", "label": "Velocità di volo",    "default": 1.0, "min": 0.2, "max": 3.0 }
+  ]
+}
