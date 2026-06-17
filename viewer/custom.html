@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MetaReality — Progetto custom</title>
+<style>
+  :root{ --bg:#0b1018; --pan:rgba(10,16,26,.93); --acc:#4aa3ff; --ok:#39c07a; --txt:#e8eef5; --mut:#8ea0b8; --bord:rgba(255,255,255,.12); }
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:system-ui,Segoe UI,sans-serif}
+  #app{position:fixed;inset:0} canvas{display:block}
+  /* editor ridotto (a destra, come l'Inspector nativo) */
+  #editor{position:fixed;right:12px;top:12px;width:288px;max-height:calc(100vh - 24px);overflow:auto;z-index:10;
+    background:var(--pan);backdrop-filter:blur(10px);border:1px solid var(--bord);border-radius:14px;padding:13px 15px;box-sizing:border-box}
+  #editor.hidden{display:none}
+  #editor h1{font-size:13.5px;margin:0 0 2px;letter-spacing:.02em}
+  #editor .sub{font-size:11px;color:var(--mut);margin-bottom:11px}
+  .sec{border-top:1px solid var(--bord);padding-top:10px;margin-top:11px}
+  .sec h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 8px}
+  .set{margin-bottom:11px}
+  .set label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:#cdd8e6}
+  .set label b{color:var(--acc);font-variant-numeric:tabular-nums}
+  .set input[type=range]{width:100%;accent-color:var(--acc)}
+  .set input[type=number],.set input[type=text]{width:100%;background:#0a121c;border:1px solid var(--bord);color:var(--txt);border-radius:7px;padding:5px 7px;font-size:12px;box-sizing:border-box}
+  .row{display:flex;gap:7px}
+  .btn{flex:1;text-align:center;cursor:pointer;border:1px solid var(--bord);background:rgba(255,255,255,.06);color:var(--txt);border-radius:8px;padding:7px 0;font-size:12.5px;margin-top:7px}
+  .btn:hover{background:rgba(255,255,255,.13)}
+  .btn.accent{background:rgba(74,163,255,.2);border-color:rgba(74,163,255,.55);color:var(--acc)}
+  .btn.ok{background:rgba(57,192,122,.18);border-color:rgba(57,192,122,.5);color:var(--ok)}
+  .hint{font-size:11px;color:var(--mut);line-height:1.5}
+  .kbd{display:inline-block;background:#0a121c;border:1px solid var(--bord);border-radius:4px;padding:0 5px;font:11px monospace;color:#cdd8e6}
+  #stat{font:11px monospace;color:var(--mut);white-space:pre-line}
+  #err{color:#ff9a9a}
+  /* prompt interagibile */
+  #prompt{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:9;display:none;
+    background:rgba(9,15,23,.85);border:1px solid var(--bord);border-radius:9px;padding:7px 13px;font-size:13px}
+  #prompt .k{color:var(--acc);font-weight:700}
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,255,255,.5);z-index:8;pointer-events:none}
+  #toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:20;background:rgba(9,15,23,.92);border:1px solid var(--bord);
+    border-radius:9px;padding:8px 15px;font-size:13px;display:none}
+  #vrbtn{position:fixed;right:14px;bottom:14px;z-index:10}
+  /* barra play/editor in alto (in modalità editor) */
+  #topbar{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:11;display:flex;gap:8px}
+  #topbar button{cursor:pointer;border:1px solid var(--bord);background:rgba(10,16,26,.9);color:var(--txt);border-radius:9px;padding:6px 13px;font-size:12.5px}
+  #topbar button.on{background:rgba(74,163,255,.22);border-color:rgba(74,163,255,.6);color:var(--acc)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="topbar"></div>
+<div id="editor">
+  <h1>Editor · progetto custom</h1>
+  <div class="sub"><b id="pname">—</b></div>
+  <div class="sec"><h2>Impostazioni</h2><div id="settings"></div>
+    <div class="hint" id="nosettings" style="display:none">Il manifest non dichiara impostazioni.</div></div>
+  <div class="sec"><h2>Visore / UI</h2>
+    <div class="set"><label>Pulsante apertura menu</label>
+      <select id="vrbtn-sel" style="width:100%;background:#0a121c;border:1px solid var(--bord);color:var(--txt);border-radius:7px;padding:5px 7px;font-size:12px">
+        <option value="menu">Menu (predefinito)</option><option value="primary">Primario (A/X)</option><option value="secondary">Secondario (B/Y)</option>
+      </select></div>
+    <div class="hint">La UI da visore è chiusa di default e si apre con questo pulsante. (Il menu spaziale dichiarativo è Fase 2; oggi vale per <span class="kbd">ctx.input.onButton</span>.)</div>
+  </div>
+  <div class="sec"><h2>Spawn</h2>
+    <button class="btn" id="usehere">Usa la mia posizione come entrata</button>
+    <div class="hint" id="spawninfo" style="margin-top:6px"></div>
+  </div>
+  <div class="sec">
+    <div class="row"><button class="btn ok" id="save">Salva</button><button class="btn accent" id="publish">Pubblica</button></div>
+  </div>
+  <div class="sec"><h2>Stato</h2><div id="stat">avvio…</div></div>
+</div>
+<div id="cross"></div>
+<div id="prompt"><span class="k">F</span> · <span id="prompttxt"></span></div>
+<div id="toast"></div>
+<div id="vrbtn"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+const SDK_VERSION = '1.0.0';
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const SLUG = params.get('project');           // progetto ospitato
+const DEV  = params.get('dev');                // path locale per test (es. ../mr-sdk/projects/voliera)
+const EDIT = params.has('edit');
+const stat = $('#stat');
+function setStat(h){ stat.innerHTML = h; }
+function fail(m){ setStat('<span id="err">⚠ '+m+'</span>'); console.error('[custom]', m); }
+function toast(m, ms=1800){ const t=$('#toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none', ms); }
+
+// ─────────── piattaforma: renderer / scena / rig / VR (POSSEDUTI dalla piattaforma) ───────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fc0dd);
+scene.fog = new THREE.Fog(0x9fc0dd, 60, 280);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+renderer.xr.enabled = true;
+$('#app').appendChild(renderer.domElement);
+$('#vrbtn').appendChild(VRButton.createButton(renderer));
+scene.add(new THREE.HemisphereLight(0xdfeeff, 0x44566b, 1.2));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.0); sun.position.set(40, 80, 30);
+sun.castShadow = true; sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-60; sun.shadow.camera.right=60; sun.shadow.camera.top=60; sun.shadow.camera.bottom=-60; scene.add(sun);
+
+const playerRig = new THREE.Group(); scene.add(playerRig);
+const EYE = 1.6;
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.05, 4000);
+camera.position.set(0, EYE, 0); playerRig.add(camera);
+let pitch = 0;
+addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+// ─────────── controller VR (raggio + select per attivare gli interagibili) ───────────
+const ctrlFactory = new XRControllerModelFactory();
+const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1)]);
+const controllers = [];
+for(let i=0;i<2;i++){
+  const c = renderer.xr.getController(i); playerRig.add(c);
+  const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color:0x4aa3ff })); ray.scale.z = 5; c.add(ray);
+  c.addEventListener('selectstart', ()=> onVRSelect(c));
+  controllers.push(c);
+  const grip = renderer.xr.getControllerGrip(i); grip.add(ctrlFactory.createControllerModel(grip)); playerRig.add(grip);
+}
+const _ctrlMat = new THREE.Matrix4();
+function onVRSelect(c){
+  _ctrlMat.identity().extractRotation(c.matrixWorld);
+  _ray.ray.origin.setFromMatrixPosition(c.matrixWorld);
+  _ray.ray.direction.set(0,0,-1).applyMatrix4(_ctrlMat);
+  const hit = _ray.intersectObjects(markerGroup.children, true)[0];
+  if(hit){ const it = findInteractableByObject(hit.object); if(it){ try{ it.onActivate({source:'vr', controller:c}); }catch(e){ console.error(e); } } }
+}
+
+// ─────────── locomozione desktop (WASD + drag-look) ───────────
+const keys = {};
+addEventListener('keydown', e=>{ keys[e.code]=true; });
+addEventListener('keyup', e=>{ keys[e.code]=false; });
+let dragging=false, lx=0, ly=0;
+renderer.domElement.addEventListener('pointerdown', e=>{ dragging=true; lx=e.clientX; ly=e.clientY; });
+addEventListener('pointerup', ()=> dragging=false);
+addEventListener('pointermove', e=>{ if(!dragging) return;
+  playerRig.rotation.y -= (e.clientX-lx)*0.0026;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY-ly)*0.0026)); camera.rotation.x = pitch; lx=e.clientX; ly=e.clientY; });
+const _fwd=new THREE.Vector3(), _rgt=new THREE.Vector3();
+function moveAvatar(dt){ if(renderer.xr.isPresenting) return;
+  const sp=(keys['ShiftLeft']?9:4.5)*dt;
+  _fwd.set(0,0,-1).applyQuaternion(playerRig.quaternion); _fwd.y=0; _fwd.normalize();
+  _rgt.set(1,0,0).applyQuaternion(playerRig.quaternion); _rgt.y=0; _rgt.normalize();
+  if(keys['KeyW']) playerRig.position.addScaledVector(_fwd, sp);
+  if(keys['KeyS']) playerRig.position.addScaledVector(_fwd,-sp);
+  if(keys['KeyD']) playerRig.position.addScaledVector(_rgt, sp);
+  if(keys['KeyA']) playerRig.position.addScaledVector(_rgt,-sp);
+  groundPlayer();
+}
+const _down=new THREE.Vector3(0,-1,0), _ray=new THREE.Raycaster(), _org=new THREE.Vector3();
+let colliders=[];
+function groundPlayer(){ if(!colliders.length) return; _org.copy(playerRig.position); _org.y+=5; _ray.set(_org,_down); _ray.far=20;
+  const hit=_ray.intersectObjects(colliders,true)[0]; if(hit) playerRig.position.y=hit.point.y; }
+
+// ─────────── input "menu" ───────────
+const buttonSubs = { menu:[], primary:[], secondary:[] };
+let _menuButton = 'menu';
+addEventListener('keydown', e=>{ if(e.repeat) return;
+  if(e.code==='KeyM') buttonSubs[_menuButton].forEach(cb=>{try{cb({source:'desktop'})}catch(err){console.error(err)}}); });
+
+// ─────────── ctx (§6) ───────────
+let ASSET_BASE='', _time={dt:0,elapsed:0,frame:0}, _simVR=false;
+const _loader = new GLTFLoader();
+function makeCtx(settings){ return {
+  THREE,
+  loader: { load:(url)=> _loader.loadAsync(url) },
+  assets: { base:ASSET_BASE, url:(rel)=> ASSET_BASE + String(rel).replace(/^\//,'') },
+  time: _time,
+  avatar: { getWorldPosition:(t)=> playerRig.getWorldPosition(t||new THREE.Vector3()),
+    get isPresentingVR(){ return renderer.xr.isPresenting || _simVR; }, thirdPerson:false },
+  input: { onButton:(b,cb)=>{ const a=buttonSubs[b]; if(!a) return ()=>{}; a.push(cb); return ()=>{ const i=a.indexOf(cb); if(i>=0)a.splice(i,1);} } },
+  settings,
+  // ui / env = Fase 2 (undefined)
+  events: (()=>{ const m={}; return { on:(n,cb)=>{(m[n]=m[n]||[]).push(cb); return ()=>{const a=m[n]||[];const i=a.indexOf(cb);if(i>=0)a.splice(i,1);}}, emit:(n,p)=>{(m[n]||[]).forEach(cb=>{try{cb(p)}catch(e){console.error(e)}});} }; })(),
+  log:(...a)=> console.log('%c[progetto]','color:#4aa3ff',...a),
+}; }
+
+// ─────────── interagibili ───────────
+let interactables=[]; const markerGroup=new THREE.Group(); scene.add(markerGroup);
+function makeMarker(){ const g=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.5,0.05,8,28), new THREE.MeshBasicMaterial({color:0x4aa3ff})); ring.rotation.x=Math.PI/2; g.add(ring);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.12,12,12), new THREE.MeshBasicMaterial({color:0xffffff}))); return g; }
+function buildInteractables(list){
+  interactables.forEach(it=> it._marker && markerGroup.remove(it._marker));
+  interactables = (list||[]).map(it=>{ const m=makeMarker(); m.position.set(it.position[0],it.position[1],it.position[2]); markerGroup.add(m); return Object.assign({},it,{_marker:m}); });
+}
+function findInteractableByObject(obj){ let m=obj; while(m && m.parent!==markerGroup) m=m.parent; return interactables.find(i=>i._marker===m); }
+const _pp=new THREE.Vector3(); let nearest=null;
+function updateInteractables(elapsed){
+  playerRig.getWorldPosition(_pp); nearest=null; let nd=Infinity;
+  for(const it of interactables){ it._marker.children[0].rotation.z=elapsed*1.4;
+    const d=Math.hypot(it.position[0]-_pp.x, it.position[2]-_pp.z); it._marker.visible=d<(it.visibility??14);
+    if(d<(it.radius??3)&&d<nd){nd=d;nearest=it;} }
+  const p=$('#prompt'); if(nearest && !renderer.xr.isPresenting){ $('#prompttxt').textContent=nearest.text||'Interagisci'; p.style.display='block'; } else p.style.display='none';
+}
+addEventListener('keydown', e=>{ if(e.code==='KeyF'&&nearest&&!e.repeat){ try{ nearest.onActivate({source:'desktop'}); }catch(err){console.error(err);} } });
+renderer.domElement.addEventListener('click', ()=>{ if(dragging) return; _ray.setFromCamera({x:0,y:0},camera);
+  const hit=_ray.intersectObjects(markerGroup.children,true)[0]; if(hit){ const it=findInteractableByObject(hit.object); if(it){ try{ it.onActivate({source:'desktop'}); }catch(e){console.error(e);} } } });
+
+// ─────────── caricamento progetto ───────────
+let api=null, mod=null, manifest=null, ctx=null, projectRecord=null;
+function semverMajor(v){ return parseInt(String(v||'0').split('.')[0],10)||0; }
+
+async function resolveBundle(){
+  if(DEV){ ASSET_BASE = new URL(DEV.replace(/\/?$/,'/'), location.href).href; manifest = await (await fetch(ASSET_BASE+'project.json',{cache:'no-store'})).json(); return; }
+  if(SLUG){ projectRecord = await (await fetch('/api/projects/'+encodeURIComponent(SLUG),{cache:'no-store'})).json();
+    ASSET_BASE = '/api/projects/'+encodeURIComponent(SLUG)+'/custom/';   // rotta proxy same-origin (no CORS/redirect)
+    manifest = await (await fetch(ASSET_BASE+'project.json',{cache:'no-store'})).json(); return; }
+  throw new Error('manca ?project=<slug> o ?dev=<path>');
+}
+
+async function loadProject(){
+  await resolveBundle();
+  $('#pname').textContent = (manifest.name||SLUG||'progetto');
+  if(semverMajor(manifest.sdkVersion) > semverMajor(SDK_VERSION)) throw new Error('sdkVersion '+manifest.sdkVersion+' > runtime '+SDK_VERSION);
+  // settings = default del manifest, sovrascritti dai valori salvati (sceneConfig.customSettings)
+  const settings={}; (manifest.settings||[]).forEach(s=> settings[s.key]=s.default);
+  const saved = (projectRecord && projectRecord.sceneConfig && projectRecord.sceneConfig.customSettings) || readLocalSettings();
+  if(saved) Object.assign(settings, saved);
+  ctx = makeCtx(settings);
+  mod = await import(/* @vite-ignore */ ASSET_BASE + (manifest.entry||'entry.js'));
+  if(typeof mod.createScene!=='function') throw new Error('entry.js non esporta createScene');
+  _menuButton = (projectRecord && projectRecord.sceneConfig && projectRecord.sceneConfig.vrMenuButton) || 'menu';
+  $('#vrbtn-sel').value = _menuButton;
+  buildSettingsUI();
+  await rebuild();
+}
+async function rebuild(){
+  if(api){ try{ api.dispose&&api.dispose(); }catch(e){console.error(e);} if(api.root) scene.remove(api.root); }
+  _time={dt:0,elapsed:0,frame:0}; ctx.time=_time;
+  api = await mod.createScene(ctx);
+  if(!api||!api.root) throw new Error('createScene non ha restituito { root }');
+  scene.add(api.root); colliders=api.colliders||[]; buildInteractables(api.interactables);
+  const e=(api.entrances&&api.entrances[0])|| (savedSpawn()) || {position:[0,0,8],yaw:0};
+  playerRig.position.set(e.position[0],e.position[1],e.position[2]); playerRig.rotation.y=e.yaw||0; pitch=0; camera.rotation.x=0; groundPlayer();
+  $('#spawninfo').textContent = 'entrata: ['+ (e.position.map(n=>+n.toFixed(1)).join(', ')) +']';
+}
+
+// ─────────── editor ridotto ───────────
+function buildSettingsUI(){
+  const box=$('#settings'); box.innerHTML=''; const list=manifest.settings||[];
+  $('#nosettings').style.display = list.length?'none':'block';
+  list.forEach(s=>{ const w=document.createElement('div'); w.className='set'; const val=ctx.settings[s.key];
+    if(s.type==='int'||s.type==='float'){ const step=s.type==='int'?1:0.05;
+      w.innerHTML=`<label>${s.label||s.key} <b id="v_${s.key}">${val}</b></label><input type="range" min="${s.min??0}" max="${s.max??100}" step="${step}" value="${val}">`;
+      const inp=w.querySelector('input'); inp.addEventListener('input',()=>{ const n=s.type==='int'?parseInt(inp.value,10):parseFloat(inp.value); ctx.settings[s.key]=n; $('#v_'+s.key).textContent=n; markDirty(); scheduleRebuild(); });
+    } else if(s.type==='bool'){ w.innerHTML=`<label><input type="checkbox" ${val?'checked':''}> ${s.label||s.key}</label>`;
+      w.querySelector('input').addEventListener('change',e=>{ ctx.settings[s.key]=e.target.checked; markDirty(); scheduleRebuild(); });
+    } else { w.innerHTML=`<label>${s.label||s.key}</label><input type="text" value="${val??''}">`;
+      w.querySelector('input').addEventListener('input',e=>{ ctx.settings[s.key]=e.target.value; markDirty(); scheduleRebuild(); }); }
+    box.appendChild(w); });
+}
+let _rt=null; function scheduleRebuild(){ clearTimeout(_rt); _rt=setTimeout(()=>rebuild().catch(e=>fail(e.message)),140); }
+let _dirty=false; function markDirty(){ _dirty=true; }
+
+$('#vrbtn-sel').addEventListener('change', e=>{ _menuButton=e.target.value; markDirty(); });
+$('#usehere').addEventListener('click', ()=>{ const p=playerRig.position; _spawnOverride={position:[+p.x.toFixed(2),+p.y.toFixed(2),+p.z.toFixed(2)],yaw:+playerRig.rotation.y.toFixed(3)}; $('#spawninfo').textContent='entrata: ['+_spawnOverride.position.join(', ')+'] (non salvata)'; markDirty(); });
+let _spawnOverride=null;
+function savedSpawn(){ if(_spawnOverride) return _spawnOverride; const sc=projectRecord&&projectRecord.sceneConfig; return sc&&sc.customSpawn||null; }
+
+// salva / pubblica (server se SLUG, altrimenti localStorage in dev)
+function LKEY(){ return 'mr-custom::'+(SLUG||DEV); }
+function readLocalSettings(){ try{ const o=JSON.parse(localStorage.getItem(LKEY())||'null'); return o&&o.customSettings; }catch{ return null; } }
+async function doSave(){
+  const payload = { customSettings: Object.assign({}, ctx.settings), vrMenuButton:_menuButton };
+  if(_spawnOverride) payload.customSpawn=_spawnOverride;
+  if(SLUG){
+    const sc = Object.assign({version:1}, (projectRecord&&projectRecord.sceneConfig)||{}, { custom:true, customEntry: manifest.entry||'entry.js' }, payload);
+    const r = await fetch('/api/projects/'+encodeURIComponent(SLUG),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sceneConfig:sc})});
+    if(!r.ok){ toast(r.status===401?'Accedi dalla dashboard':'Salvataggio fallito ('+r.status+')'); return; }
+    projectRecord.sceneConfig = sc; _dirty=false; toast('Salvato');
+  } else { localStorage.setItem(LKEY(), JSON.stringify(payload)); _dirty=false; toast('Salvato (locale)'); }
+}
+async function doPublish(){
+  if(!SLUG){ toast('Pubblica disponibile solo sul progetto in piattaforma'); return; }
+  await doSave();
+  const r = await fetch('/api/projects/'+encodeURIComponent(SLUG),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'published'})});
+  toast(r.ok?'Pubblicato ✓':'Pubblicazione fallita ('+r.status+')');
+}
+$('#save').addEventListener('click', ()=> doSave().catch(e=>toast(e.message)));
+$('#publish').addEventListener('click', ()=> doPublish().catch(e=>toast(e.message)));
+
+// ─────────── barra alto: Editor / Anteprima ───────────
+function buildTopbar(){
+  const tb=$('#topbar');
+  if(!EDIT){ tb.style.display='none'; $('#editor').classList.add('hidden'); return; }
+  const bEd=document.createElement('button'); bEd.textContent='Editor'; bEd.className='on';
+  const bPv=document.createElement('button'); bPv.textContent='Anteprima';
+  bEd.onclick=()=>{ $('#editor').classList.remove('hidden'); bEd.classList.add('on'); bPv.classList.remove('on'); };
+  bPv.onclick=()=>{ $('#editor').classList.add('hidden'); bPv.classList.add('on'); bEd.classList.remove('on'); };
+  tb.append(bEd,bPv);
+}
+
+// ─────────── loop ───────────
+let _last=0,_frames=0,_acc=0,_fps=0;
+renderer.setAnimationLoop(ts=>{
+  const dt=_last?Math.min((ts-_last)/1000,0.05):0; _last=ts;
+  moveAvatar(dt);
+  if(api){ _time.dt=dt; _time.elapsed+=dt; _time.frame++;
+    if(api.update){ try{ api.update(dt,_time.elapsed); }catch(e){ fail('update(): '+e.message); console.error(e);} }
+    updateInteractables(_time.elapsed); }
+  _acc+=dt; _frames++; if(_acc>=0.5){ _fps=Math.round(_frames/_acc); _frames=0; _acc=0;
+    setStat(`${manifest?manifest.name:'—'}\nSDK ${SDK_VERSION} · ${_fps} FPS · ${EDIT?'editor':'play'}${_dirty?' · *non salvato':''}\nVR: ${renderer.xr.isPresenting?'reale':(_simVR?'sim':'no')}`); }
+  renderer.render(scene,camera);
+});
+renderer.xr.addEventListener('sessionstart', ()=>{ try{ api&&api.onEnterVR&&api.onEnterVR(); }catch(e){console.error(e);} });
+renderer.xr.addEventListener('sessionend',   ()=>{ try{ api&&api.onExitVR&&api.onExitVR(); }catch(e){console.error(e);} });
+
+// ─────────── avvio ───────────
+buildTopbar();
+loadProject().catch(e=> fail(e.message));
+window.__custom = { get api(){return api;}, ctx:()=>ctx, scene, renderer, rebuild };
+</script>
+</body>
+</html>
